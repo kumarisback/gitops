@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: order-service
+  namespace: production
+
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: order-service
+
+  template:
+    metadata:
+      labels:
+        app: order-service
+
+    spec:
+      containers:
+      - name: order-service
+
+        image: 602367507570.dkr.ecr.us-east-1.amazonaws.com/myapp-order-service:latest
+
+        env:
+
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: DB_HOST
+
+        - name: SPRING_DATASOURCE_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: DB_USERNAME
+
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: DB_PASSWORD
+        
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:mysql://$(DB_HOST):3306/user_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true"
+
+
+        ports:
+        - containerPort: 8080
+
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+
+          limits:
+            cpu: 500m
+            memory: 1Gi
