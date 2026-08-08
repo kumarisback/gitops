@@ -8,10 +8,10 @@ spec:
   source:
     repoURL: https://github.com/kumarisback/gitops.git
     targetRevision: HEAD
-    path: .
+    path: apps/dev
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
+    namespace: development
   syncPolicy:
     automated:
       prune: true
