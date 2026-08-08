@@ -21,7 +21,7 @@ spec:
       containers:
       - name: order-service
 
-        image: 602367507570.dkr.ecr.us-east-1.amazonaws.com/myapp-order-service:latest
+        image: 602367507570.dkr.ecr.us-east-1.amazonaws.com/order-service:latest
 
         env:
 

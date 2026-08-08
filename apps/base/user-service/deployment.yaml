@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
       - name: user-service
-        image: 602367507570.dkr.ecr.us-east-1.amazonaws.com/myapp-user-service:latest
+        image: 602367507570.dkr.ecr.us-east-1.amazonaws.com/user-service:latest
 
         env:
 
