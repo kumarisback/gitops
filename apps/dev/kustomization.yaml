@@ -6,3 +6,11 @@ resources:
   - ../base
 
 namespace: development
+
+images:
+  # Update the newTag value to deploy a new version of the frontend service
+  - name: 602367507570.dkr.ecr.us-east-1.amazonaws.com/frontend
+    newTag: "latest"
+  # You can add other services here like order-service or user-service
+  # - name: 602367507570.dkr.ecr.us-east-1.amazonaws.com/order-service
+  #   newTag: "latest"
