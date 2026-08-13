@@ -6,6 +6,25 @@ If you have already run the **Terraform** repository, ArgoCD is currently watchi
 
 ---
 
+## Accessing ArgoCD, and finding a service's URL
+
+ArgoCD has no public UI — see the Terraform repo's
+[README, "Accessing Jenkins, ArgoCD, and Deployed Services"](https://github.com/kumarisback/terraform#step-4-accessing-jenkins-argocd-and-deployed-services)
+for the `kubectl port-forward` flow (and the Jenkins-tunnel variant for
+staging/prod).
+
+`frontend` is the only Service exposed publicly today (`type: LoadBalancer`
+in `apps/base/frontend/service.yaml`). After ArgoCD syncs it, get its URL
+with:
+```bash
+kubectl get svc frontend -n <development|staging|production> \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+```
+`order-service` and `user-service` are `ClusterIP` — reachable only from
+inside the cluster (other pods), not externally.
+
+---
+
 ## Repository Structure
 
 - `apps/`: Contains the actual microservices (Frontend, Order Service, etc.) broken down by environment (`dev`, `staging`, `prod`).
