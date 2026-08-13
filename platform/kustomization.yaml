@@ -1,5 +1,9 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+
+# The AWS Load Balancer Controller is installed via Terraform/Helm in
+# infrastructure/app-cluster/02-services (tf repo), not through GitOps —
+# it needs an IRSA role that only Terraform can create, so it's provisioned
+# alongside the cluster rather than as a manifest here.
 resources:
-  - aws-lb-controller.yaml
   - external-secrets.yaml
