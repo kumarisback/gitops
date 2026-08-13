@@ -104,3 +104,9 @@ If you created a completely new microservice (e.g., `payment-service`) and want 
    git push origin main
    ```
    ArgoCD will immediately deploy your new microservice across the environments.
+
+5. **Needs its own AWS permissions, or to be reachable from outside the cluster?**
+   Don't widen the node role or open things up broadly — see the Terraform
+   repo's README, ["Granting Roles/Policies, and Making Things Public"](https://github.com/kumarisback/terraform#step-5-granting-rolespolicies-and-making-things-public),
+   for how to give a service its own scoped IRSA role and how to expose it
+   via a `LoadBalancer` Service or an `Ingress`.
