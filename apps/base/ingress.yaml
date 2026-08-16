@@ -1,0 +1,44 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+
+metadata:
+  name: app-ingress
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+
+spec:
+  ingressClassName: alb
+
+  rules:
+    - http:
+        paths:
+          # Order Microservice — must come before the /api catch-all below,
+          # since order-service's context-path is /api/orders (more specific
+          # than user-service's plain /api).
+          - path: /api/orders
+            pathType: Prefix
+            backend:
+              service:
+                name: order-service
+                port:
+                  number: 80
+
+          # User Microservice — auth (/api/auth/signin, /api/auth/signup) and
+          # tasks (/api/tasks) both live under user-service's /api context-path.
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: user-service
+                port:
+                  number: 80
+
+          # Frontend UI — everything else.
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

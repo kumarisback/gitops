@@ -13,15 +13,18 @@ ArgoCD has no public UI — see the Terraform repo's
 for the `kubectl port-forward` flow (and the Jenkins-tunnel variant for
 staging/prod).
 
-`frontend` is the only Service exposed publicly today (`type: LoadBalancer`
-in `apps/base/frontend/service.yaml`). After ArgoCD syncs it, get its URL
-with:
+`frontend`, `order-service`, and `user-service` are all `ClusterIP` — none of them is
+individually reachable from outside the cluster. Public access goes through one shared
+`Ingress` (`apps/base/ingress.yaml`), provisioned as an ALB by the AWS Load Balancer
+Controller, which routes `/api/orders` → `order-service`, everything else under `/api`
+(auth, tasks) → `user-service`, and `/` → `frontend`. This exists because the frontend
+calls its own backend with same-origin relative paths (e.g. `fetch("/api/auth/signin")`) —
+without this Ingress, those calls have nowhere correct to land. After ArgoCD syncs it, get
+the URL with:
 ```bash
-kubectl get svc frontend -n <development|staging|production> \
+kubectl get ingress app-ingress -n <development|staging|production> \
   -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
 ```
-`order-service` and `user-service` are `ClusterIP` — reachable only from
-inside the cluster (other pods), not externally.
 
 ---
 

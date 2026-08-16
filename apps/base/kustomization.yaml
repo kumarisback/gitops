@@ -4,3 +4,4 @@ resources:
   - frontend/
   - order-service/
   - user-service/
+  - ingress.yaml

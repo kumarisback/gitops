@@ -4,13 +4,14 @@ kind: Service
 metadata:
   name: frontend
   namespace: production
-  annotations:
-    service.beta.kubernetes.io/aws-load-balancer-type: "external"
-    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "instance"
-    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
 
 spec:
-  type: LoadBalancer
+  # ClusterIP, not LoadBalancer: the Ingress in ingress.yaml is now the single
+  # public entrypoint (ALB) for frontend + /api routing to order-service and
+  # user-service. A separate LoadBalancer here would give the frontend its
+  # own NLB with no path routing, so any same-origin `/api/...` fetch from
+  # the browser would hit that NLB directly and never reach a backend.
+  type: ClusterIP
 
   selector:
     app: frontend
