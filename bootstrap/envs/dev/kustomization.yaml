@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Entry point for dev's ArgoCD root Application (see
+# environments/app-cluster/dev.tfvars -> argocd_gitops_repo_path in the tf
+# repo). Deploys only dev's app set plus the shared platform components —
+# NOT staging/prod. Every environment's cluster gets its own root
+# Application pointed at its own bootstrap/envs/<env> directory, so no
+# cluster ever deploys more than one environment's workloads.
+resources:
+  - ../../projects/platform.yaml
+  - ../../projects/dev.yaml

@@ -1,14 +1,26 @@
+# Not used by any Terraform-managed cluster — the tf repo's 02-services
+# layer creates its own root-app Application via Helm chart values
+# (argocd_gitops_repo_path), pointed at an environment-specific path
+# (bootstrap/envs/<env>), not the shared bootstrap/projects directory below.
+# Pointing any real cluster's root app at bootstrap/projects directly (as
+# this file does) deploys dev's, staging's, and prod's full app sets into
+# that ONE cluster simultaneously — that was a real bug in this repo,
+# already hit and fixed for the Terraform-managed path. Kept only as a
+# manual/example reference; if you ever apply this by hand, point `path` at
+# bootstrap/envs/<env> instead.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: root-app
   namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
   source:
     repoURL: https://github.com/kumarisback/gitops.git
     targetRevision: HEAD
-    path: bootstrap/projects
+    path: bootstrap/envs/dev
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Entry point for staging's ArgoCD root Application (see
+# environments/app-cluster/staging.tfvars -> argocd_gitops_repo_path in the
+# tf repo). Deploys only staging's app set plus the shared platform
+# components — NOT dev/prod.
+resources:
+  - ../../projects/platform.yaml
+  - ../../projects/staging.yaml
