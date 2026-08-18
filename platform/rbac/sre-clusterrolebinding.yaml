@@ -1,0 +1,15 @@
+# Cluster-wide, deliberately: SRE needs to see and debug across namespaces.
+# Bind the "sre" k8s group to a real IAM principal via kubernetes_groups on
+# that principal's EKS access entry.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: sre
+subjects:
+- kind: Group
+  name: sre
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: sre
+  apiGroup: rbac.authorization.k8s.io

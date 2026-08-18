@@ -1,0 +1,14 @@
+# Read-only access for developers: pods, logs, services, deployments,
+# configmaps. No Secrets, no write verbs. Bound namespace-scoped (see
+# developer-readonly-rolebinding.yaml), never cluster-wide.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: developer-readonly
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "services", "configmaps", "endpoints"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch"]
