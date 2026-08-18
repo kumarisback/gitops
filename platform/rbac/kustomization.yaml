@@ -6,3 +6,5 @@ resources:
   - developer-readonly-rolebinding.yaml
   - sre-clusterrole.yaml
   - sre-clusterrolebinding.yaml
+  - sre-exec-role.yaml
+  - sre-exec-rolebinding.yaml

@@ -1,6 +1,10 @@
-# Cluster-wide read access plus exec/port-forward for on-call debugging.
-# Still no write access to Deployments/Secrets — that's what eks_admin_users
+# Cluster-wide READ ONLY — on-call needs to see every namespace to triage.
+# No write access to Deployments/Secrets — that's what eks_admin_users
 # (AmazonEKSClusterAdminPolicy) is for, and it should stay a short list.
+# exec/port-forward are deliberately NOT here: granting them cluster-wide
+# would let sre exec into pods in kube-system/other namespaces (ArgoCD, ESO)
+# that hold real credentials. See sre-exec-role.yaml for the namespace-scoped
+# grant instead.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -9,9 +13,6 @@ rules:
 - apiGroups: [""]
   resources: ["pods", "pods/log", "services", "configmaps", "endpoints", "events", "nodes"]
   verbs: ["get", "list", "watch"]
-- apiGroups: [""]
-  resources: ["pods/exec", "pods/portforward"]
-  verbs: ["create"]
 - apiGroups: ["apps"]
   resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
   verbs: ["get", "list", "watch"]
