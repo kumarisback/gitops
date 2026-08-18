@@ -5,6 +5,8 @@ resources:
   - namespace.yaml
   - ../base
   - app-secrets.yaml
+  - resourcequota.yaml
+  - limitrange.yaml
 
 namespace: development
 

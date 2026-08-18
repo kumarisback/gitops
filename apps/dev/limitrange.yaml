@@ -1,0 +1,17 @@
+# Applies only to containers that don't set their own requests/limits.
+# All three services already set explicit values, so this is a safety net
+# for anything added later.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: development-limits
+  namespace: development
+spec:
+  limits:
+  - type: Container
+    defaultRequest:
+      cpu: 100m
+      memory: 128Mi
+    default:
+      cpu: 250m
+      memory: 256Mi

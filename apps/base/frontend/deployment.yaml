@@ -18,6 +18,8 @@ spec:
         app: frontend
 
     spec:
+      serviceAccountName: frontend
+
       containers:
       - name: frontend
 

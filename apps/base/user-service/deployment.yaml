@@ -18,6 +18,8 @@ spec:
         app: user-service
 
     spec:
+      serviceAccountName: user-service
+
       containers:
       - name: user-service
         image: 602367507570.dkr.ecr.us-east-1.amazonaws.com/user-service:latest

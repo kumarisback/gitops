@@ -1,0 +1,21 @@
+# Grants developer-readonly ONLY inside the development namespace, even
+# though the ClusterRole it references is cluster-scoped. A RoleBinding
+# referencing a ClusterRole is namespace-scoped by the binding, not the role.
+#
+# "developer-readonly" is a Kubernetes group name. To actually put a human in
+# this group, their EKS access entry needs kubernetes_groups = ["developer-readonly"]
+# (see modules/eks — this isn't wired to a real user yet, it's the RBAC half
+# of the pattern; the IAM-to-group mapping is the other half).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: developer-readonly
+  namespace: development
+subjects:
+- kind: Group
+  name: developer-readonly
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: developer-readonly
+  apiGroup: rbac.authorization.k8s.io

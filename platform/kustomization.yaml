@@ -7,3 +7,4 @@ kind: Kustomization
 # alongside the cluster rather than as a manifest here.
 resources:
   - external-secrets.yaml
+  - rbac

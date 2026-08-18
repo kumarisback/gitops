@@ -1,0 +1,17 @@
+# Cluster-wide read access plus exec/port-forward for on-call debugging.
+# Still no write access to Deployments/Secrets — that's what eks_admin_users
+# (AmazonEKSClusterAdminPolicy) is for, and it should stay a short list.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: sre
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "services", "configmaps", "endpoints", "events", "nodes"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods/exec", "pods/portforward"]
+  verbs: ["create"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+  verbs: ["get", "list", "watch"]
