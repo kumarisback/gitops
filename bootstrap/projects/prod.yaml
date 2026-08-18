@@ -11,6 +11,11 @@ spec:
     repoURL: https://github.com/kumarisback/gitops.git
     targetRevision: HEAD
     path: apps/prod
+    # apps/prod/kustomization.yaml references ../base, above this
+    # Application's own path — kustomize's default load restrictor blocks
+    # that unless relaxed here.
+    kustomize:
+      buildOptions: --load-restrictor LoadRestrictionsNone
   destination:
     server: https://kubernetes.default.svc
     namespace: production
