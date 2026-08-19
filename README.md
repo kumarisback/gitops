@@ -31,8 +31,9 @@ kubectl get ingress app-ingress -n <development|staging|production> \
 ## Repository Structure
 
 - `apps/`: Contains the actual microservices (Frontend, Order Service, etc.) broken down by environment (`dev`, `staging`, `prod`).
-- `platform/`: Contains cluster-level add-ons (like the External Secrets Operator which securely pulls database passwords from AWS).
-- `bootstrap/`: The App-of-Apps master configurations that tell ArgoCD to deploy everything above.
+- `platform/`: Cluster-level add-ons that don't need per-environment values — RBAC (`platform/rbac/`) and the `ClusterSecretStore` that tells External Secrets Operator where to pull database passwords from in AWS.
+- `bootstrap/projects/`: One Application manifest per thing ArgoCD deploys — the per-environment app sets (`dev.yaml`, `staging.yaml`, `prod.yaml`), the shared `platform.yaml`, and the platform *controllers themselves* (`aws-lb-controller-dev.yaml`, `external-secrets-operator-dev.yaml`) — these install the AWS Load Balancer Controller and External Secrets Operator as ArgoCD Applications, not via Terraform, and are env-specific (a `-staging`/`-prod` sibling is needed once those environments exist — see the TODO comments in `bootstrap/envs/staging|prod/kustomization.yaml`).
+- `bootstrap/envs/`: The App-of-Apps master configurations, one per environment, that tell each environment's ArgoCD which of the manifests above to deploy.
 
 ---
 
