@@ -5,6 +5,11 @@ kind: Kustomization
 # environments/app-cluster/prod.tfvars -> argocd_gitops_repo_path in the tf
 # repo). Deploys only prod's app set plus the shared platform components —
 # NOT dev/staging.
+#
+# TODO before prod is actually turned on: add aws-lb-controller-prod.yaml and
+# external-secrets-operator-prod.yaml (copy the -dev.yaml versions, update
+# clusterName to microservices-prod-eks-cluster) and list them here — see
+# bootstrap/envs/dev/kustomization.yaml for the pattern.
 resources:
   - ../../projects/platform.yaml
   - ../../projects/prod.yaml

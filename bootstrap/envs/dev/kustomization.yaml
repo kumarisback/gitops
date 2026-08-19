@@ -9,4 +9,6 @@ kind: Kustomization
 # cluster ever deploys more than one environment's workloads.
 resources:
   - ../../projects/platform.yaml
+  - ../../projects/aws-lb-controller-dev.yaml
+  - ../../projects/external-secrets-operator-dev.yaml
   - ../../projects/dev.yaml

@@ -1,0 +1,47 @@
+# Moved here from the tf repo's helm_release — Terraform's state and Helm's
+# own release bookkeeping are two separate sources of truth that kept
+# drifting apart whenever an apply was interrupted ("cannot reuse a name
+# that is still in use"). ArgoCD's reconciliation loop is idempotent and
+# self-healing, so it doesn't share that failure mode.
+#
+# sync-wave -10: deploy before the app workloads (wave 0, default), and —
+# since ArgoCD deletes in REVERSE wave order — get deleted LAST. Ingress
+# objects create real AWS ALBs that only this controller knows how to tear
+# down; deleting the controller before the Ingresses it manages orphans
+# those ALBs (a real ALB with a live ENI, which then blocks VPC/subnet
+# teardown in Terraform with a DependencyViolation error).
+#
+# clusterName is dev-specific and hardcoded — this needs an equivalent
+# -staging.yaml/-prod.yaml (with that environment's cluster name) added to
+# bootstrap/envs/staging|prod/ when those environments actually get turned
+# on. vpcId is intentionally omitted: the controller auto-detects it from
+# the EC2 instance metadata of the node it runs on.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: aws-load-balancer-controller
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://aws.github.io/eks-charts
+    chart: aws-load-balancer-controller
+    targetRevision: 1.8.1
+    helm:
+      values: |
+        clusterName: microservices-dev-eks-cluster
+        region: us-east-1
+        serviceAccount:
+          create: false
+          name: aws-load-balancer-controller
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
