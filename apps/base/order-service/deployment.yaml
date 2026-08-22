@@ -19,6 +19,26 @@ spec:
 
     spec:
       serviceAccountName: order-service
+      # preStop sleep + this need to cover: LB deregistration delay, plus
+      # however long Spring takes to drain in-flight requests on SIGTERM.
+      # NOTE: the app itself doesn't set server.shutdown=graceful yet (see
+      # application.properties in the order-service source repo), so today
+      # it will NOT actually finish in-flight requests on SIGTERM — this is
+      # the k8s-side half of graceful shutdown only, not the whole fix.
+      terminationGracePeriodSeconds: 30
+
+      securityContext:
+        # No runAsUser override needed — the image's own Dockerfile already
+        # sets USER spring:spring, so it never runs as root to begin with.
+        runAsNonRoot: true
+
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: order-service
 
       containers:
       - name: order-service
@@ -45,7 +65,7 @@ spec:
         #     secretKeyRef:
         #       name: app-secrets
         #       key: DB_PASSWORD
-        
+
         - name: SPRING_DATA_MONGODB_URI
           valueFrom:
             secretKeyRef:
@@ -58,6 +78,40 @@ spec:
         ports:
         - containerPort: 8080
 
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+
+        lifecycle:
+          preStop:
+            exec:
+              command: ["sh", "-c", "sleep 5"]
+
+        # server.servlet.context-path=/api/orders (application.properties) —
+        # actuator's base path nests under it when sharing the app's port.
+        startupProbe:
+          httpGet:
+            path: /api/orders/actuator/health
+            port: 8080
+          periodSeconds: 5
+          failureThreshold: 24
+
+        readinessProbe:
+          httpGet:
+            path: /api/orders/actuator/health/readiness
+            port: 8080
+          periodSeconds: 5
+          failureThreshold: 3
+
+        livenessProbe:
+          httpGet:
+            path: /api/orders/actuator/health/liveness
+            port: 8080
+          periodSeconds: 10
+          failureThreshold: 3
+
         resources:
           requests:
             cpu: 250m
@@ -66,3 +120,13 @@ spec:
           limits:
             cpu: 500m
             memory: 1Gi
+
+        volumeMounts:
+        # readOnlyRootFilesystem forces the JVM's tmp dir out of the image's
+        # root filesystem.
+        - name: tmp
+          mountPath: /tmp
+
+      volumes:
+      - name: tmp
+        emptyDir: {}

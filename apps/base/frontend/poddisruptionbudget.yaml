@@ -1,0 +1,13 @@
+# Protects against voluntary disruption only (node drain, upgrade) — not
+# crashes/OOMKills. With replicas: 2, minAvailable: 1 is the only value that
+# doesn't either do nothing (0) or block all disruption (2).
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend
+  namespace: production
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: frontend

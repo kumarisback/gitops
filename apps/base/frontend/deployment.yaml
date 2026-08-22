@@ -19,6 +19,24 @@ spec:
 
     spec:
       serviceAccountName: frontend
+      terminationGracePeriodSeconds: 15
+
+      # nginx's official image runs as uid/gid 101 ("nginx") when not root;
+      # this app's Dockerfile has no USER line so it'd otherwise default to
+      # root, which runAsNonRoot below would reject at container start.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: frontend
 
       containers:
       - name: frontend
@@ -28,6 +46,42 @@ spec:
         ports:
         - containerPort: 80
 
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+            # Master process needs this to bind port 80 as a non-root user.
+            add: ["NET_BIND_SERVICE"]
+
+        lifecycle:
+          preStop:
+            exec:
+              # Gives kube-proxy/LB time to stop routing here before nginx
+              # actually receives SIGTERM.
+              command: ["sh", "-c", "sleep 5"]
+
+        startupProbe:
+          httpGet:
+            path: /
+            port: 80
+          periodSeconds: 2
+          failureThreshold: 15
+
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          periodSeconds: 5
+          failureThreshold: 3
+
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          periodSeconds: 10
+          failureThreshold: 3
+
         resources:
           requests:
             cpu: 100m
@@ -36,3 +90,22 @@ spec:
           limits:
             cpu: 250m
             memory: 512Mi
+
+        volumeMounts:
+        # readOnlyRootFilesystem forces these three out of the image's
+        # root filesystem — nginx writes its temp/cache dirs and pid file
+        # here even for a purely static site.
+        - name: nginx-cache
+          mountPath: /var/cache/nginx
+        - name: nginx-run
+          mountPath: /var/run
+        - name: tmp
+          mountPath: /tmp
+
+      volumes:
+      - name: nginx-cache
+        emptyDir: {}
+      - name: nginx-run
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}
