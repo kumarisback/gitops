@@ -25,9 +25,12 @@ spec:
       terminationGracePeriodSeconds: 30
 
       securityContext:
-        # No runAsUser override needed — the image's own Dockerfile already
-        # sets USER spring:spring.
+        # Dockerfile pins USER 1000:1000 explicitly (was a name-based
+        # "spring" user before, which kubelet can't statically verify as
+        # non-root without this).
         runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
 
       topologySpreadConstraints:
       - maxSkew: 1
