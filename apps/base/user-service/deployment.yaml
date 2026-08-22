@@ -89,9 +89,12 @@ spec:
 
         # server.servlet.context-path=/api (application.properties) —
         # actuator's base path nests under it when sharing the app's port.
+        # Uses the liveness group, not the full aggregate health, so a Mongo
+        # outage at boot can't restart-loop a pod that's otherwise fine —
+        # same reasoning as livenessProbe below, just for the startup gate.
         startupProbe:
           httpGet:
-            path: /api/actuator/health
+            path: /api/actuator/health/liveness
             port: 8080
           periodSeconds: 5
           failureThreshold: 24
