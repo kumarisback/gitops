@@ -12,3 +12,5 @@ resources:
   - ../../projects/aws-lb-controller-dev.yaml
   - ../../projects/external-secrets-operator-dev.yaml
   - ../../projects/dev.yaml
+  - ../../projects/metrics-server.yaml # <-- Add this line
+  - ../../projects/karpenter-dev.yaml # <-- Add this line
