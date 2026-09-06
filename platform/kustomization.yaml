@@ -8,3 +8,4 @@ kind: Kustomization
 resources:
   - external-secrets.yaml
   - rbac
+  - karpenter-config.yaml

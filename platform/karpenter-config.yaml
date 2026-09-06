@@ -1,0 +1,40 @@
+apiVersion: karpenter.sh/v1beta1
+kind: NodePool
+metadata:
+  name: default
+spec:
+  template:
+    spec:
+      requirements:
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot", "on-demand"] # Spot first, falls back to on-demand
+        - key: karpenter.k8s.aws/instance-category
+          operator: In
+          values: ["c", "m", "r", "t"] # Standard compute/memory instance classes
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+      nodeClassRef:
+        name: default
+  limits:
+    cpu: 100 # Maximum cumulative CPUs this Karpenter pool is allowed to provision
+  disruption:
+    consolidationPolicy: WhenUnderutilized # Automatically merges/shrinks under-utilized nodes
+    expireAfter: 720h # Automatically recycle nodes every 30 days
+---
+apiVersion: karpenter.k8s.aws/v1beta1
+kind: EC2NodeClass
+metadata:
+  name: default
+spec:
+  amiFamily: AL2 # Amazon Linux 2
+  role: microservices-dev-karpenter-node-role # The Node IAM role built in Phase 2
+  subnetSelectorTerms:
+    - tags:
+        # Targets subnets with EKS tags created by your network module
+        kubernetes.io/role/internal-elb: "1"
+  securityGroupSelectorTerms:
+    - tags:
+        # Targets your control plane security group created by EKS
+        Name: "microservices-dev-eks-cluster-sg"

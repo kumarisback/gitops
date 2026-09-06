@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: karpenter
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: karpenter
+    repoURL: oci://public.ecr.aws/karpenter/karpenter
+    targetRevision: 1.0.1
+    helm:
+      values: |
+        serviceAccount:
+          create: false
+          name: karpenter
+        settings:
+          clusterName: microservices-dev-eks-cluster
+          interruptionQueue: microservices-dev-karpenter-interruption
+        controller:
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
