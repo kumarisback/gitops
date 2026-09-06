@@ -14,3 +14,7 @@ resources:
   - ../../projects/dev.yaml
   - ../../projects/metrics-server.yaml # <-- Add this line
   - ../../projects/karpenter-dev.yaml # <-- Add this line
+    # Add the PLG stack below:
+  - ../../projects/prometheus-stack.yaml
+  - ../../projects/loki.yaml
+  - ../../projects/promtail.yaml

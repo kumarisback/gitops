@@ -1,0 +1,28 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: backend-microservices-monitor
+  namespace: production # Or development depending on overlay
+spec:
+  # Matches the label selector of your Services
+  selector:
+    matchLabels:
+      app: user-service # Also create one matching order-service!
+  endpoints:
+    - port: http # Must match the port name in service.yaml
+      path: /api/actuator/prometheus # Path for user-service
+      interval: 15s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: order-service-monitor
+  namespace: production
+spec:
+  selector:
+    matchLabels:
+      app: order-service
+  endpoints:
+    - port: http
+      path: /api/orders/actuator/prometheus # Path for order-service
+      interval: 15s

@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: order-service-monitor
+  namespace: production
+  labels:
+    release: prometheus # Matches your Prometheus release selection criteria
+spec:
+  selector:
+    matchLabels:
+      app: order-service # Targets the order-service Pods
+  endpoints:
+  - port: http      # Matches the port name 'http' you added to the Service [1]
+    path: /api/orders/actuator/prometheus # Spring Boot Actuator endpoint [1]
+    interval: 15s

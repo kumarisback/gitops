@@ -1,0 +1,51 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: loki
+    repoURL: https://grafana.github.io/helm-charts
+    targetRevision: 6.6.2
+    helm:
+      values: |
+        loki:
+          auth_enabled: false
+          commonConfig:
+            replication_factor: 1
+
+          # Use S3 as the storage backend
+          storage:
+            type: s3
+            bucketNames:
+              chunks: <your-loki-s3-bucket-name>
+            s3:
+              region: <your-aws-region>
+              s3ForcePathStyle: false
+
+          # Use the pre-created, IRSA-linked ServiceAccount
+          serviceAccount:
+            create: false
+            name: loki
+
+        # Run single binary/monolithic mode for development efficiency
+        singleBinary:
+          replicas: 1
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1.5Gi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

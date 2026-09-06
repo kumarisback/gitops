@@ -1,0 +1,17 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: user-service-monitor
+  namespace: production
+  labels:
+    # Most Prometheus installations require a specific label to discover ServiceMonitors.
+    # If using kube-prometheus-stack, this usually matches the release name:
+    release: prometheus 
+spec:
+  selector:
+    matchLabels:
+      app: user-service # Targets the user-service Pods
+  endpoints:
+  - port: http      # Matches the port name 'http' you added to the Service [1]
+    path: /api/actuator/prometheus # Spring Boot Actuator endpoint [1]
+    interval: 15s
