@@ -1,0 +1,38 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - ../base
+  - app-secrets.yaml
+  - resourcequota.yaml
+  - limitrange.yaml
+
+namespace: development
+
+# 100% Local: Do NOT pull from AWS ECR. Use images loaded directly into KinD.
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+  - target:
+      kind: Deployment
+      name: order-service
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: MANAGEMENT_ENDPOINT_HEALTH_VALIDATE_GROUP_MEMBERSHIP
+          value: "false"
+  - target:
+      kind: Deployment
+      name: user-service
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: MANAGEMENT_ENDPOINT_HEALTH_VALIDATE_GROUP_MEMBERSHIP
+          value: "false"
