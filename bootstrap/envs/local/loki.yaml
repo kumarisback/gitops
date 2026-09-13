@@ -28,6 +28,7 @@ spec:
                   period: 24h
           storage:
             type: filesystem
+        deploymentMode: SingleBinary
         singleBinary:
           replicas: 1
           resources:
@@ -38,6 +39,10 @@ spec:
               cpu: 500m
               memory: 768Mi
         gateway:
+          enabled: false
+        chunksCache:
+          enabled: false
+        resultsCache:
           enabled: false
         read:
           replicas: 0
