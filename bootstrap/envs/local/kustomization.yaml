@@ -4,9 +4,9 @@ kind: Kustomization
 # Local environment overlay for KinD
 # Deploys the local microservices, metrics-server, and Prometheus/Grafana stack
 resources:
-  - ../../projects/local-apps.yaml
-  - ../../projects/metrics-server.yaml
-  - ../../projects/prometheus-stack.yaml
+  - local-apps.yaml
+  - metrics-server.yaml
+  - prometheus-stack.yaml
   # Uncomment when testing logging locally:
   # - ../../projects/loki.yaml
   # - ../../projects/promtail.yaml
