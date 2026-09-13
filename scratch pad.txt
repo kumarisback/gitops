@@ -1,0 +1,93 @@
+
+c# Local GitOps lab notes
+
+## Access
+
+# Frontend plus API through local NGINX Ingress.
+# Do not port-forward svc/frontend, because that bypasses /api routing.
+open http://localhost
+
+# ArgoCD UI.
+kubectl port-forward svc/argocd-server 8443:443 -n argocd
+open https://localhost:8443
+
+# Grafana UI.
+kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n monitoring
+open http://localhost:3000
+
+# Prometheus UI and targets.
+kubectl port-forward svc/kube-prometheus-stack-prometheus 9090:9090 -n monitoring
+open http://localhost:9090/targets
+
+# If port 9090 is already busy, use another local port.
+kubectl port-forward svc/kube-prometheus-stack-prometheus 9091:9090 -n monitoring
+
+## Local Secret
+
+# apps/local/app-secrets.env is ignored and must never be committed.
+kubectl create secret generic app-secrets \
+	-n development \
+	--from-env-file=apps/local/app-secrets.env \
+	--dry-run=client -o yaml | kubectl apply -f -
+
+## Problems Fixed
+
+# 1. MongoDB URI had mmongodb+srv:// instead of mongodb+srv://.
+#    The services exited with code 1 during Spring startup.
+# 2. Argo could not read the ignored local app-secrets.env file.
+#    The Secret is now created separately in the local cluster.
+# 3. Argo Kustomize rejected bootstrap files outside its source directory.
+#    Local Application manifests now live under bootstrap/envs/local/.
+# 4. Frontend port-forwarding returned 405 for POST /api/auth/signup.
+#    Direct frontend Nginx was receiving the API request, so local NGINX
+#    Ingress now routes /api to user-service and / to frontend.
+# 5. Browser requests returned 403 because http://localhost:8000 was missing
+#    from backend CORS allowed origins. The user-service image was rebuilt and
+#    pushed to Docker Hub as kumarisback/user-service:latest.
+# 6. Grafana had no data while Prometheus had no Pod or Service endpoint.
+#    Restarting the Prometheus Operator reconciled the Prometheus resource.
+
+## Grafana Beginner Workflow
+
+# 1. Open http://localhost:3000 and sign in with the configured Grafana user.
+# 2. Select the compass icon (Explore) in the left sidebar.
+# 3. Select the Prometheus data source.
+# 4. Enter a PromQL query and click Run query.
+# 5. Change the visualization from Table to Time series when useful.
+
+# Check whether Kubernetes targets are up.
+up
+
+# List application Pods that are Ready.
+kube_pod_status_ready{namespace="development",pod=~"(frontend|user-service|order-service)-.*"}
+
+# CPU usage for the three application Pods.
+rate(container_cpu_usage_seconds_total{namespace="development",pod=~"(frontend|user-service|order-service)-.*",container!="POD",container!=""}[5m])
+
+# Memory usage for the three application Pods.
+container_memory_working_set_bytes{namespace="development",pod=~"(frontend|user-service|order-service)-.*",container!="POD",container!=""}
+
+# HTTP request rate from Spring Boot services, when application metrics exist.
+sum by (job, uri, method, status) (rate(http_server_requests_seconds_count{namespace="development"}[5m]))
+
+# In Grafana, use Dashboard > New dashboard > Add visualization for a panel.
+# Use the queries above, set the time range to Last 15 minutes, and save the
+# dashboard as "Local Microservices".
+
+# If Explore reports "unsupported protocol scheme \"\"", select the datasource
+# named "Loki" with a capital L. Remove any older lowercase "loki" datasource
+# whose URL is empty. The correct URL is the in-cluster Loki Service URL:
+# http://loki.monitoring.svc.cluster.local:3100
+# Trace IDs are kept in the log text rather than indexed as labels. Filter them
+# with: {namespace="development"} |= "trace-id-here"
+
+## Troubleshooting
+
+kubectl get pods -n development
+kubectl get pods -n monitoring
+kubectl get servicemonitor -A
+kubectl get endpoints kube-prometheus-stack-prometheus -n monitoring
+
+# Expected monitoring state:
+# Prometheus Pod Running, Prometheus Service has an endpoint, and Argo shows
+# kube-prometheus-stack as Synced and Healthy.
