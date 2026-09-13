@@ -7,6 +7,5 @@ resources:
   - local-apps.yaml
   - metrics-server.yaml
   - prometheus-stack.yaml
-  # Uncomment when testing logging locally:
-  # - ../../projects/loki.yaml
-  # - ../../projects/promtail.yaml
+  - loki.yaml
+  - promtail.yaml
