@@ -308,6 +308,18 @@ docker stop dev-lab-control-plane dev-lab-worker dev-lab-worker2
 # Resume cluster:
 docker start dev-lab-control-plane dev-lab-worker dev-lab-worker2
 ```
+
+To permanently delete the local cluster and all Kubernetes data, including
+Pods, Secrets, PVCs, and monitoring history, run:
+```bash
+./scripts/clean-lab.sh
+```
+Confirm by typing `DELETE`. Use `./scripts/clean-lab.sh --yes` for automation.
+This does not delete repository files or the ignored `apps/local/app-secrets.env`.
+After cleanup, `./scripts/start-lab.sh` recreates the cluster and installs ArgoCD
+and the local NGINX Ingress Controller. Apply the local root Application again
+to restore the workloads.
+
 Or destroy and recreate in 30 seconds:
 ```bash
 kind delete cluster --name dev-lab

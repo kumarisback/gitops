@@ -46,7 +46,12 @@ kubectl apply -n argocd --server-side --force-conflicts -f https://raw.githubuse
 echo "⏳ Waiting for ArgoCD server to be ready..."
 kubectl wait --for=condition=available deployment/argocd-server -n argocd --timeout=180s || true
 
-# 5. Retrieve admin password
+# 5. Ensure local NGINX Ingress is installed for frontend/API routing
+echo "🌐 Ensuring local NGINX Ingress Controller is installed..."
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.1/deploy/static/provider/kind/deploy.yaml > /dev/null
+kubectl rollout status deployment/ingress-nginx-controller -n ingress-nginx --timeout=180s
+
+# 6. Retrieve admin password
 echo "🔑 Retrieving ArgoCD initial admin password..."
 ARGOCD_PASS=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" 2>/dev/null | base64 -d 2>/dev/null || echo "admin")
 
@@ -68,7 +73,7 @@ echo "  kubectl port-forward svc/argocd-server -n argocd 8443:443"
 echo "  Then open https://localhost:8443"
 echo ""
 echo "To enable local frontend/API routing, install NGINX Ingress once:"
-echo "  kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.1/deploy/static/provider/kind/deploy.yaml"
+echo "  (already installed by this script)"
 echo ""
 echo "To deploy your local apps and monitoring stack via ArgoCD:"
 echo "  kubectl apply -f ${REPO_ROOT}/bootstrap/root-app-local.yaml"
