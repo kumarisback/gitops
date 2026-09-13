@@ -57,18 +57,36 @@ nodes:
 - role: worker
 ```
 
-#### How to access services in your current cluster:
-You can access any service directly using port forwarding:
+#### How to access services in the ingress-ready cluster:
+The repository's `kind-config.yaml` already maps host ports 80 and 443 to the
+control-plane node. After installing the local NGINX Ingress Controller and
+syncing the local applications, the frontend is available without a frontend
+port-forward:
 ```bash
-# Frontend
-kubectl port-forward svc/frontend 8080:80 -n development
+# Frontend and API routes
+open http://localhost
+```
 
+Install the controller once per KinD cluster:
+```bash
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.1/deploy/static/provider/kind/deploy.yaml
+kubectl rollout status deployment/ingress-nginx-controller -n ingress-nginx --timeout=180s
+```
+
+ArgoCD is not part of the application Ingress, so keep a separate secure
+port-forward for its UI:
+```bash
 # ArgoCD UI
 kubectl port-forward svc/argocd-server 8443:443 -n argocd
+open https://localhost:8443
 
 # Grafana UI
-kubectl port-forward svc/prometheus-grafana 3000:80 -n monitoring
+kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n monitoring
 ```
+
+Do not port-forward `svc/frontend` when using `http://localhost`; that bypasses
+the Ingress and sends `/api/*` requests to the static NGINX frontend, producing
+`405 Method Not Allowed` responses.
 
 #### Upgrading to an Ingress-Ready Cluster (Optional, for Step 03 / Step 16):
 If you want to access workloads directly via `http://localhost` and `http://localhost/api` without manual port forwards, use this configuration:
@@ -141,19 +159,16 @@ In `Gitops/bootstrap/envs/dev`, your setup includes cloud-dependent controllers:
 
 ### Recommended: Add a Local Overlay
 
-Create `bootstrap/envs/local/kustomization.yaml`:
+The repository already contains `bootstrap/envs/local/kustomization.yaml`:
 
 ```yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - ../../projects/platform.yaml
-  - ../../projects/dev.yaml
-  - ../../projects/metrics-server.yaml
-  - ../../projects/prometheus-stack.yaml
-  - ../../projects/loki.yaml
-  - ../../projects/promtail.yaml
+  - local-apps.yaml
+  - metrics-server.yaml
+  - prometheus-stack.yaml
 ```
 
 This ensures your local KinD cluster runs the core applications and observability stack without crashing on AWS-specific IAM controllers.
