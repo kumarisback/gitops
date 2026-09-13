@@ -4,11 +4,18 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - ../base
-  - app-secrets.yaml
   - resourcequota.yaml
   - limitrange.yaml
 
 namespace: development
+
+secretGenerator:
+  - name: app-secrets
+    envs:
+      - app-secrets.env
+
+generatorOptions:
+  disableNameSuffixHash: true
 
 # 100% Local: Do NOT pull from AWS ECR. Use images loaded directly into KinD.
 patches:
