@@ -158,6 +158,18 @@ resources:
 
 This ensures your local KinD cluster runs the core applications and observability stack without crashing on AWS-specific IAM controllers.
 
+The local application workloads expect an `app-secrets` Secret, but Argo CD does not manage that Secret because it contains local-only credentials. Create it directly in the cluster from an ignored file before syncing the local application:
+
+```bash
+cp apps/local/app-secrets.env.example apps/local/app-secrets.env
+# Edit apps/local/app-secrets.env with the local MongoDB URI.
+kubectl create namespace development --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic app-secrets \
+  --namespace development \
+  --from-env-file=apps/local/app-secrets.env \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
 ---
 
 ## 4. Phase-by-Phase Roadmap Execution in KinD
