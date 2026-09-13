@@ -12,6 +12,27 @@ namespace: development
 # 100% Local: Do NOT pull from AWS ECR. Use images loaded directly into KinD.
 patches:
   - target:
+      kind: Deployment
+      name: frontend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target:
+      kind: Deployment
+      name: order-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target:
+      kind: Deployment
+      name: user-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target:
       kind: Ingress
       name: app-ingress
     patch: |-
