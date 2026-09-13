@@ -12,6 +12,13 @@ namespace: development
 # 100% Local: Do NOT pull from AWS ECR. Use images loaded directly into KinD.
 patches:
   - target:
+      kind: Ingress
+      name: app-ingress
+    patch: |-
+      - op: replace
+        path: /spec/ingressClassName
+        value: nginx
+  - target:
       kind: Deployment
     patch: |-
       - op: add
