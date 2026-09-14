@@ -47,6 +47,14 @@ spec:
           annotations:
             summary: "Local API latency is high"
             description: "The 95th percentile API latency is above one second."
+        - alert: LocalMetricsMissing
+          expr: absent_over_time(up{namespace="development",service=~"order-service|user-service"}[10m])
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Local application metrics are missing"
+            description: "Prometheus has not scraped one or more backend services for at least 10 minutes."
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -69,6 +77,10 @@ data:
         {"type":"timeseries","title":"API Request Rate","gridPos":{"h":8,"w":12,"x":0,"y":8},"targets":[{"expr":"sum by (job, method, status) (rate(http_server_requests_seconds_count{namespace=\"development\"}[5m]))","refId":"A"}]},
         {"type":"timeseries","title":"API 5xx Rate","gridPos":{"h":8,"w":12,"x":12,"y":8},"targets":[{"expr":"sum by (job, status) (rate(http_server_requests_seconds_count{namespace=\"development\",status=~\"5..\"}[5m]))","refId":"A"}]},
         {"type":"stat","title":"Ready Pods","gridPos":{"h":5,"w":8,"x":0,"y":16},"targets":[{"expr":"sum(kube_pod_status_ready{namespace=\"development\",condition=\"true\",pod=~\"(frontend|user-service|order-service)-.*\"})","refId":"A"}]},
-        {"type":"timeseries","title":"API P95 Latency","gridPos":{"h":8,"w":16,"x":8,"y":16},"targets":[{"expr":"histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{namespace=\"development\"}[5m])))","refId":"A"}]}
+        {"type":"timeseries","title":"API P95 Latency","gridPos":{"h":8,"w":16,"x":8,"y":16},"targets":[{"expr":"histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{namespace=\"development\"}[5m])))","refId":"A"}]},
+        {"type":"timeseries","title":"Container Restarts","gridPos":{"h":7,"w":12,"x":0,"y":24},"targets":[{"expr":"sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"development\",pod=~\"(frontend|user-service|order-service)-.*\"}[15m]))","refId":"A"}]},
+        {"type":"logs","title":"Application Logs","gridPos":{"h":7,"w":12,"x":12,"y":24},"datasource":{"type":"loki","uid":"Loki"},"targets":[{"expr":"{namespace=\"development\", container=~\"frontend|user-service|order-service\"}","refId":"A"}]},
+        {"type":"timeseries","title":"Collector Accepted Spans","gridPos":{"h":7,"w":12,"x":0,"y":31},"targets":[{"expr":"sum(rate(otelcol_receiver_accepted_spans[5m]))","refId":"A"}]},
+        {"type":"stat","title":"Missing Backend Scrapes","gridPos":{"h":7,"w":12,"x":12,"y":31},"targets":[{"expr":"absent_over_time(up{namespace=\"development\",service=~\"order-service|user-service\"}[10m])","refId":"A"}]}
       ]
     }
