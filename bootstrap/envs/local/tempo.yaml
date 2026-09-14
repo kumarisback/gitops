@@ -32,8 +32,8 @@ spec:
                   endpoint: 0.0.0.0:4318
         persistence:
           enabled: true
-          storageClassName: gp3
-          size: 5Gi
+          storageClassName: standard
+          size: 2Gi
         replicas: 1
   destination:
     server: https://kubernetes.default.svc

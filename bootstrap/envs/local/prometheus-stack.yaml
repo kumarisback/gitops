@@ -16,6 +16,8 @@ spec:
         prometheus:
           prometheusSpec:
             serviceMonitorSelectorNilUsesHelmValues: false
+            retention: 24h
+            retentionSize: 4GB
             resources:
               requests:
                 cpu: 250m
@@ -42,8 +44,8 @@ spec:
               isDefault: false
           persistence:
             enabled: true
-            storageClassName: "gp3"
-            size: 10Gi
+            storageClassName: "standard"
+            size: 2Gi
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
