@@ -8,6 +8,6 @@ resources:
   - metrics-server.yaml
   - prometheus-stack.yaml
   - loki.yaml
-  - promtail.yaml
+  - alloy.yaml
   - tempo.yaml
   - otel-collector.yaml
