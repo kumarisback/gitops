@@ -6,6 +6,7 @@ resources:
   - ../base
   - resourcequota.yaml
   - limitrange.yaml
+  - observability.yaml
 
 namespace: development
 
@@ -127,6 +128,12 @@ patches:
       - op: replace
         path: /spec/ingressClassName
         value: nginx
+      - op: add
+        path: /metadata/annotations/nginx.ingress.kubernetes.io~1enable-opentelemetry
+        value: "true"
+      - op: add
+        path: /metadata/annotations/nginx.ingress.kubernetes.io~1opentelemetry-trust-incoming-span
+        value: "true"
   - target:
       kind: Deployment
     patch: |-

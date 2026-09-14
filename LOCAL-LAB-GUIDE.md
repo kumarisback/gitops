@@ -189,6 +189,63 @@ kubectl create secret generic app-secrets \
 
 ## 4. Phase-by-Phase Roadmap Execution in KinD
 
+### 4.0 Local Observability Flow
+
+```mermaid
+flowchart LR
+  B[Browser] --> I[NGINX Ingress]
+  I --> F[Frontend NGINX]
+  I --> U[user-service]
+  I --> O[order-service]
+  U --> O
+  U --> M[(MongoDB)]
+  O --> M
+
+  F -. stdout/stderr .-> P[Promtail DaemonSet]
+  U -. stdout/stderr .-> P
+  O -. stdout/stderr .-> P
+  I -. controller logs .-> P
+  P --> L[Loki]
+  G[Grafana] --> L
+
+  U -. OpenTelemetry Java agent .-> C[OTel Collector]
+  O -. OpenTelemetry Java agent .-> C
+  C --> T[Tempo]
+  G --> T
+
+  U -. Actuator metrics .-> R[Prometheus]
+  O -. Actuator metrics .-> R
+  K[Kubernetes exporters] --> R
+  G --> R
+```
+
+What each component does:
+
+| Component | Responsibility |
+|---|---|
+| NGINX Ingress | Routes `/` to frontend and `/api` to backend services. |
+| Promtail | Reads container stdout/stderr from every KinD node and sends logs to Loki. |
+| Loki | Stores and searches logs; use LogQL in Grafana. |
+| OpenTelemetry Java agent | Creates HTTP, MongoDB, and downstream-client spans without custom filters. |
+| OpenTelemetry Collector | Receives OTLP traces and forwards them to Tempo. |
+| Tempo | Stores and searches distributed traces. |
+| Prometheus | Scrapes Kubernetes and Spring Boot metrics. |
+| Grafana | Queries Prometheus, Loki, and Tempo in one UI. |
+
+Typical request flow:
+
+```text
+Browser -> Ingress -> user-service -> order-service -> MongoDB
+       |          |              |
+       |          |              +-- span -> Collector -> Tempo
+       |          +----------------- span -> Collector -> Tempo
+       +-- access log -> Promtail -> Loki
+```
+
+The browser request may not include W3C trace context until the frontend is
+instrumented. Backend requests still create real OpenTelemetry traces. The
+static frontend and NGINX Ingress currently provide logs, not application spans.
+
 ### Phase A: Core Kubernetes (Steps 01 – 06)
 
 | Step | Topic | Local KinD Execution |

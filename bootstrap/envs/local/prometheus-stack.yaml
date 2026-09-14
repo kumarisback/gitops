@@ -25,6 +25,10 @@ spec:
                 memory: 2Gi
         grafana:
           adminPassword: "admin"
+          sidecar:
+            dashboards:
+              enabled: true
+              searchNamespace: ALL
           additionalDataSources:
             - name: Loki
               type: loki

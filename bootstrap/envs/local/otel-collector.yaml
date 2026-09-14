@@ -33,6 +33,10 @@ spec:
                 http:
                   endpoint: 0.0.0.0:4318
           processors:
+            memory_limiter:
+              check_interval: 5s
+              limit_mib: 192
+              spike_limit_mib: 48
             batch: {}
           exporters:
             otlp:
@@ -47,7 +51,7 @@ spec:
             pipelines:
               traces:
                 receivers: [otlp]
-                processors: [batch]
+                processors: [memory_limiter, batch]
                 exporters: [otlp]
   destination:
     server: https://kubernetes.default.svc
