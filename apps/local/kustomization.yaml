@@ -60,6 +60,31 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:
+          name: OTEL_TRACES_EXPORTER
+          value: otlp
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_METRICS_EXPORTER
+          value: none
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_LOGS_EXPORTER
+          value: none
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_PROPAGATORS
+          value: tracecontext,baggage
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_RESOURCE_ATTRIBUTES
+          value: deployment.environment=local,k8s.namespace.name=development
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
           name: OTEL_INSTRUMENTATION_LOGBACK_MDC_TRACE_ID
           value: "true"
   - target:
@@ -89,8 +114,38 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:
+          name: OTEL_TRACES_EXPORTER
+          value: otlp
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_METRICS_EXPORTER
+          value: none
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_LOGS_EXPORTER
+          value: none
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_PROPAGATORS
+          value: tracecontext,baggage
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_RESOURCE_ATTRIBUTES
+          value: deployment.environment=local,k8s.namespace.name=development
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
           name: OTEL_INSTRUMENTATION_LOGBACK_MDC_TRACE_ID
           value: "true"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: ORDER_SERVICE_URL
+          value: http://order-service
   - target:
       kind: HorizontalPodAutoscaler
       name: frontend-hpa
