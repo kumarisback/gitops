@@ -51,7 +51,36 @@ echo "🌐 Ensuring local NGINX Ingress Controller is installed..."
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.1/deploy/static/provider/kind/deploy.yaml > /dev/null
 kubectl rollout status deployment/ingress-nginx-controller -n ingress-nginx --timeout=180s
 
-# 6. Retrieve admin password
+# 6. Load locally built application images into KinD
+echo "📦 Loading local application images into KinD..."
+ECR_REGISTRY="602367507570.dkr.ecr.us-east-1.amazonaws.com"
+for service in frontend order-service user-service; do
+  image="${ECR_REGISTRY}/${service}:latest"
+  if docker image inspect "${image}" > /dev/null 2>&1; then
+    kind load docker-image "${image}" --name "${CLUSTER_NAME}" > /dev/null
+    echo "  Loaded ${service}"
+  else
+    echo "  ⚠️  Missing ${image}; run ./scripts/build-and-push.sh first."
+  fi
+done
+
+# 7. Restore the local-only Secret when the ignored file exists
+if [ -f "${REPO_ROOT}/apps/local/app-secrets.env" ]; then
+  echo "🔐 Restoring local app Secret..."
+  kubectl create namespace development --dry-run=client -o yaml | kubectl apply -f - > /dev/null
+  kubectl create secret generic app-secrets \
+    --namespace development \
+    --from-env-file="${REPO_ROOT}/apps/local/app-secrets.env" \
+    --dry-run=client -o yaml | kubectl apply -f - > /dev/null
+else
+  echo "⚠️  Missing apps/local/app-secrets.env; services requiring MongoDB will not start."
+fi
+
+# 8. Restore the local Argo app-of-apps
+echo "🚀 Applying local Argo root application..."
+kubectl apply -f "${REPO_ROOT}/bootstrap/root-app-local.yaml" > /dev/null
+
+# 9. Retrieve admin password
 echo "🔑 Retrieving ArgoCD initial admin password..."
 ARGOCD_PASS=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" 2>/dev/null | base64 -d 2>/dev/null || echo "admin")
 
@@ -76,5 +105,5 @@ echo "To enable local frontend/API routing, install NGINX Ingress once:"
 echo "  (already installed by this script)"
 echo ""
 echo "To deploy your local apps and monitoring stack via ArgoCD:"
-echo "  kubectl apply -f ${REPO_ROOT}/bootstrap/root-app-local.yaml"
+echo "  (root-app-local is applied automatically by this script)"
 echo "========================================================"

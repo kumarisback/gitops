@@ -316,9 +316,11 @@ Pods, Secrets, PVCs, and monitoring history, run:
 ```
 Confirm by typing `DELETE`. Use `./scripts/clean-lab.sh --yes` for automation.
 This does not delete repository files or the ignored `apps/local/app-secrets.env`.
-After cleanup, `./scripts/start-lab.sh` recreates the cluster and installs ArgoCD
-and the local NGINX Ingress Controller. Apply the local root Application again
-to restore the workloads.
+After cleanup, `./scripts/start-lab.sh` recreates the cluster, loads any locally
+built application images, restores `apps/local/app-secrets.env` when present,
+installs ArgoCD and the local NGINX Ingress Controller, and applies the local
+root Application automatically. If an image is missing, build it first with
+`./scripts/build-and-push.sh`.
 
 Or destroy and recreate in 30 seconds:
 ```bash
