@@ -9,3 +9,5 @@ resources:
   - prometheus-stack.yaml
   - loki.yaml
   - promtail.yaml
+  - tempo.yaml
+  - otel-collector.yaml
