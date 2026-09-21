@@ -157,6 +157,13 @@ patches:
         value:
           name: LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB_FILTER_COMMONSREQUESTLOGGINGFILTER
           value: "DEBUG"
+      # --- ADDED: FORCE ENTIRE ROOT LEVEL TO DEBUG TO BYPASS LOGBACK RESTRICTIONS ---
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: LOGGING_LEVEL_ROOT
+          value: "DEBUG"
+
   - target:
       kind: HorizontalPodAutoscaler
       name: frontend-hpa
