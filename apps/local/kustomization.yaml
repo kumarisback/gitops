@@ -146,6 +146,17 @@ patches:
         value:
           name: ORDER_SERVICE_URL
           value: http://order-service
+      # --- ADDED: RUNTIME LOG FILTERS FOR DISPATCHER REQUESTS ---
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB_SERVLET_DISPATCHERSERVLET
+          value: "DEBUG"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB_FILTER_COMMONSREQUESTLOGGINGFILTER
+          value: "DEBUG"
   - target:
       kind: HorizontalPodAutoscaler
       name: frontend-hpa
