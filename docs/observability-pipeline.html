@@ -1,0 +1,519 @@
+<title>Observability Pipeline Map</title>
+<style>
+  :root {
+    --bg: #eef1f5;
+    --surface: #ffffff;
+    --surface-2: #f6f8fa;
+    --text: #1a2230;
+    --text-muted: #5b6472;
+    --border: #d9dfe6;
+    --border-strong: #b9c2cd;
+    --accent-logs: #a8660f;
+    --accent-logs-soft: #fbeee0;
+    --accent-traces: #6949c4;
+    --accent-traces-soft: #efe9fb;
+    --accent-metrics: #16807c;
+    --accent-metrics-soft: #e2f4f2;
+    --code-bg: #10141c;
+    --code-text: #dfe6f0;
+    --code-border: #262d3a;
+    --shadow: 0 1px 2px rgba(20, 26, 37, 0.06), 0 8px 24px rgba(20, 26, 37, 0.05);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e121a;
+      --surface: #161b26;
+      --surface-2: #1c2230;
+      --text: #e7eaf0;
+      --text-muted: #97a1b0;
+      --border: #2a3140;
+      --border-strong: #3a4457;
+      --accent-logs: #e6a94a;
+      --accent-logs-soft: #2c2213;
+      --accent-traces: #ab93f0;
+      --accent-traces-soft: #211c33;
+      --accent-metrics: #52d0c8;
+      --accent-metrics-soft: #12292a;
+      --code-bg: #0a0d13;
+      --code-text: #d7deea;
+      --code-border: #232a38;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 12px 28px rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #0e121a;
+    --surface: #161b26;
+    --surface-2: #1c2230;
+    --text: #e7eaf0;
+    --text-muted: #97a1b0;
+    --border: #2a3140;
+    --border-strong: #3a4457;
+    --accent-logs: #e6a94a;
+    --accent-logs-soft: #2c2213;
+    --accent-traces: #ab93f0;
+    --accent-traces-soft: #211c33;
+    --accent-metrics: #52d0c8;
+    --accent-metrics-soft: #12292a;
+    --code-bg: #0a0d13;
+    --code-text: #d7deea;
+    --code-border: #232a38;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 12px 28px rgba(0, 0, 0, 0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
+    padding: 0 20px;
+    padding-block: 28px 56px;
+  }
+
+  .wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+
+  h1, h2, h3 { font-family: 'Manrope', -apple-system, sans-serif; text-wrap: balance; margin: 0; }
+
+  code, .mono, pre { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+
+  /* ---------- header ---------- */
+  header { display: flex; flex-direction: column; gap: 10px; }
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  h1 { font-size: clamp(28px, 4vw, 38px); font-weight: 800; letter-spacing: -0.01em; }
+  header p { margin: 0; max-width: 68ch; color: var(--text-muted); font-size: 16px; line-height: 1.55; }
+  .repo-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 12.5px;
+    color: var(--text-muted); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 3px 9px; width: fit-content;
+  }
+
+  /* ---------- section shell ---------- */
+  section { display: flex; flex-direction: column; gap: 16px; }
+  .section-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .section-head h2 { font-size: 20px; font-weight: 700; }
+  .section-head span { font-size: 13.5px; color: var(--text-muted); }
+
+  /* ---------- diagram ---------- */
+  .diagram-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 20px; box-shadow: var(--shadow);
+  }
+  .diagram-scroll { overflow-x: auto; }
+  .diagram-scroll svg { display: block; max-width: 100%; height: auto; min-width: 760px; }
+
+  text { font-family: 'Source Sans 3', sans-serif; }
+  .t-title { font-family: 'Manrope', sans-serif; font-weight: 700; font-size: 15px; fill: var(--text); }
+  .t-title-sm { font-family: 'Manrope', sans-serif; font-weight: 700; font-size: 13.5px; fill: var(--text); }
+  .t-mono { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; fill: var(--text-muted); }
+  .t-mono-accent-logs { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; fill: var(--accent-logs); font-weight: 500; }
+  .t-mono-accent-traces { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; fill: var(--accent-traces); font-weight: 500; }
+  .t-mono-accent-metrics { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; fill: var(--accent-metrics); font-weight: 500; }
+  .t-bullet { font-family: 'Source Sans 3', sans-serif; font-size: 11.5px; fill: var(--text-muted); }
+  .t-arrow-label { font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+  .t-lane-label { font-family: 'Manrope', sans-serif; font-weight: 700; font-size: 11.5px; letter-spacing: 0.06em; }
+
+  .box-neutral { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.4; }
+  .box-logs { fill: var(--accent-logs-soft); stroke: var(--accent-logs); stroke-width: 1.6; }
+  .box-traces { fill: var(--accent-traces-soft); stroke: var(--accent-traces); stroke-width: 1.6; }
+  .box-metrics { fill: var(--accent-metrics-soft); stroke: var(--accent-metrics); stroke-width: 1.6; }
+  .box-grafana { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.6; }
+  .box-annotation { fill: var(--surface); stroke: var(--border-strong); stroke-width: 1.2; stroke-dasharray: 4 3; }
+
+  .arrow-logs { stroke: var(--accent-logs); }
+  .arrow-traces { stroke: var(--accent-traces); }
+  .arrow-metrics { stroke: var(--accent-metrics); }
+  .arrow-neutral { stroke: var(--border-strong); }
+  .arrow-logs, .arrow-traces, .arrow-metrics, .arrow-neutral { stroke-width: 2; fill: none; }
+  .arrow-dashed { stroke-dasharray: 3 3; stroke-width: 1.6; }
+
+  /* ---------- quick verify ---------- */
+  .verify-grid {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;
+  }
+  @media (max-width: 760px) { .verify-grid { grid-template-columns: 1fr; } }
+  .verify-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 18px 16px; display: flex; flex-direction: column; gap: 10px;
+    border-top: 3px solid var(--border-strong);
+  }
+  .verify-card[data-lane="logs"] { border-top-color: var(--accent-logs); }
+  .verify-card[data-lane="traces"] { border-top-color: var(--accent-traces); }
+  .verify-card[data-lane="metrics"] { border-top-color: var(--accent-metrics); }
+  .verify-card h3 { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .swatch { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .verify-card[data-lane="logs"] .swatch { background: var(--accent-logs); }
+  .verify-card[data-lane="traces"] .swatch { background: var(--accent-traces); }
+  .verify-card[data-lane="metrics"] .swatch { background: var(--accent-metrics); }
+  .verify-card p.desc { margin: 0; font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+
+  .code-block {
+    position: relative; background: var(--code-bg); border: 1px solid var(--code-border);
+    border-radius: 8px; padding: 10px 40px 10px 12px; overflow-x: auto;
+  }
+  .code-block code {
+    color: var(--code-text); font-size: 12.5px; line-height: 1.6; white-space: pre; display: block;
+  }
+  .copy-btn {
+    position: absolute; top: 7px; right: 7px; width: 26px; height: 26px;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; border: 1px solid var(--code-border); border-radius: 6px;
+    color: var(--code-text); cursor: pointer; opacity: 0.7; transition: opacity 0.15s;
+  }
+  .copy-btn:hover { opacity: 1; }
+  .copy-btn:focus-visible { outline: 2px solid var(--accent-metrics); outline-offset: 1px; }
+  .copy-btn svg { width: 13px; height: 13px; }
+  .copy-btn.copied { color: var(--accent-metrics); border-color: var(--accent-metrics); opacity: 1; }
+
+  /* ---------- file map table ---------- */
+  .table-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    overflow-x: auto; box-shadow: var(--shadow);
+  }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; }
+  th, td { text-align: left; padding: 10px 14px; font-size: 13.5px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-family: 'Manrope', sans-serif; font-size: 11.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); background: var(--surface-2); }
+  tbody tr:last-child td { border-bottom: none; }
+  td .mono { font-size: 12.5px; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; display: inline-block; }
+  td .note { color: var(--text-muted); font-size: 12.5px; }
+  .lane-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
+  .lane-dot.logs { background: var(--accent-logs); }
+  .lane-dot.traces { background: var(--accent-traces); }
+  .lane-dot.metrics { background: var(--accent-metrics); }
+
+  footer { padding-top: 8px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 12.5px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<div class="wrap">
+
+  <header>
+    <span class="eyebrow">gitops · observability reference</span>
+    <h1>Observability Pipeline Map</h1>
+    <p>How API logs, server logs, traces, and metrics get from <code class="mono">order-service</code> / <code class="mono">user-service</code> to Grafana — every hop, port, Helm chart, and the exact repo file that configures it, so a new environment can be wired up and verified without re-deriving any of it.</p>
+    <span class="repo-tag">⎇ github.com/kumarisback/gitops · branch 05-storage-statefulsets</span>
+  </header>
+
+  <section aria-labelledby="diagram-h">
+    <div class="section-head">
+      <h2 id="diagram-h">End-to-end signal flow</h2>
+      <span>three lanes converge on one Grafana</span>
+    </div>
+    <div class="diagram-card">
+      <div class="diagram-scroll">
+        <svg viewBox="0 0 1580 740" role="img" aria-label="Diagram showing three parallel pipelines — logs, traces, and metrics — each running from order-service and user-service through a shipping or collection stage, into a storage backend, and converging on a shared Grafana instance. The logs lane forks at the shipping stage between Alloy in the local environment and Promtail in dev, staging, and production.">
+
+          <!-- ===================== LANE LABELS ===================== -->
+          <text x="20" y="14" class="t-lane-label" fill="var(--accent-logs)">LOGS</text>
+          <text x="20" y="224" class="t-lane-label" fill="var(--accent-traces)">TRACES</text>
+          <text x="20" y="484" class="t-lane-label" fill="var(--accent-metrics)">METRICS</text>
+
+          <!-- column headers -->
+          <text x="145" y="700" text-anchor="middle" class="t-mono" fill="var(--text-muted)">app instrumentation</text>
+          <text x="565" y="700" text-anchor="middle" class="t-mono" fill="var(--text-muted)">ship / collect</text>
+          <text x="975" y="700" text-anchor="middle" class="t-mono" fill="var(--text-muted)">store</text>
+          <text x="1430" y="700" text-anchor="middle" class="t-mono" fill="var(--text-muted)">visualize</text>
+
+          <!-- ===================== GRAFANA (shared, spans all lanes) ===================== -->
+          <rect x="1300" y="20" width="260" height="640" rx="10" class="box-grafana"/>
+          <text x="1430" y="50" text-anchor="middle" class="t-title">Grafana</text>
+          <text x="1430" y="66" text-anchor="middle" class="t-mono">kube-prometheus-stack subchart</text>
+
+          <rect x="1318" y="86" width="224" height="44" rx="6" fill="var(--accent-logs-soft)" stroke="var(--accent-logs)" stroke-width="1"/>
+          <text x="1430" y="102" text-anchor="middle" class="t-mono-accent-logs">Loki datasource</text>
+          <text x="1430" y="116" text-anchor="middle" class="t-mono">uid: Loki · LogQL</text>
+
+          <rect x="1318" y="296" width="224" height="44" rx="6" fill="var(--accent-traces-soft)" stroke="var(--accent-traces)" stroke-width="1"/>
+          <text x="1430" y="312" text-anchor="middle" class="t-mono-accent-traces">Tempo datasource</text>
+          <text x="1430" y="326" text-anchor="middle" class="t-mono">uid: Tempo · TraceQL</text>
+
+          <rect x="1318" y="556" width="224" height="44" rx="6" fill="var(--accent-metrics-soft)" stroke="var(--accent-metrics)" stroke-width="1"/>
+          <text x="1430" y="572" text-anchor="middle" class="t-mono-accent-metrics">Prometheus datasource</text>
+          <text x="1430" y="586" text-anchor="middle" class="t-mono">default · PromQL</text>
+
+          <text x="1430" y="622" text-anchor="middle" class="t-bullet">Dashboards: ConfigMap</text>
+          <text x="1430" y="636" text-anchor="middle" class="t-bullet">label grafana_dashboard=1</text>
+          <text x="1430" y="650" text-anchor="middle" class="t-bullet">Alerts: PrometheusRule CRD</text>
+
+          <!-- ===================== ROW 1 : LOGS (y 20-190, center 105) ===================== -->
+          <rect x="20" y="20" width="250" height="170" rx="10" class="box-logs"/>
+          <text x="40" y="44" class="t-title-sm">order-service</text>
+          <text x="40" y="60" class="t-title-sm">user-service</text>
+          <line x1="40" y1="70" x2="250" y2="70" stroke="var(--accent-logs)" stroke-width="1" opacity="0.35"/>
+          <text x="40" y="88" class="t-mono-accent-logs">↳ API: access.&lt;svc&gt;.http</text>
+          <text x="40" y="103" class="t-bullet">RequestLoggingFilter, kv(method/path/status/ms)</text>
+          <text x="40" y="122" class="t-mono-accent-logs">↳ Server: class / audit.* loggers</text>
+          <text x="40" y="137" class="t-bullet">GlobalExceptionHandler, business audit logs</text>
+          <text x="40" y="160" class="t-mono">logback-spring.xml → 1-line JSON → stdout</text>
+          <text x="40" y="176" class="t-bullet">encoder needs &lt;arguments/&gt; provider for kv() fields</text>
+
+          <path d="M270,105 H420" class="arrow-logs" marker-end="url(#arrow-logs-head)"/>
+          <text x="345" y="97" text-anchor="middle" class="t-arrow-label t-mono-accent-logs">stdout</text>
+
+          <rect x="420" y="20" width="250" height="170" rx="10" class="box-logs"/>
+          <text x="440" y="44" class="t-title-sm">Log shipper</text>
+          <text x="440" y="66" class="t-mono-accent-logs">Alloy 1.11.1</text>
+          <text x="440" y="80" class="t-bullet">local env</text>
+          <text x="440" y="102" class="t-mono-accent-logs">Promtail 6.15.5</text>
+          <text x="440" y="116" class="t-bullet">dev · staging · prod</text>
+          <line x1="440" y1="128" x2="650" y2="128" stroke="var(--accent-logs)" stroke-width="1" opacity="0.35"/>
+          <text x="440" y="146" class="t-mono">multiline stage</text>
+          <text x="440" y="161" class="t-bullet">firstline: ^\{ (JSON = new entry,</text>
+          <text x="440" y="175" class="t-bullet">anything else joins previous line)</text>
+
+          <path d="M670,105 H820" class="arrow-logs" marker-end="url(#arrow-logs-head)"/>
+          <text x="745" y="97" text-anchor="middle" class="t-arrow-label t-mono-accent-logs">POST :3100</text>
+          <text x="745" y="120" text-anchor="middle" class="t-bullet">/loki/api/v1/push</text>
+
+          <rect x="820" y="20" width="230" height="170" rx="10" class="box-logs"/>
+          <text x="840" y="44" class="t-title-sm">Loki 6.6.2</text>
+          <text x="840" y="62" class="t-bullet">SingleBinary mode</text>
+          <text x="840" y="84" class="t-mono-accent-logs">filesystem</text>
+          <text x="840" y="98" class="t-bullet">local env</text>
+          <text x="840" y="120" class="t-mono-accent-logs">S3 (bucket/region TODO)</text>
+          <text x="840" y="134" class="t-bullet">dev · staging · prod</text>
+          <text x="840" y="160" class="t-bullet">gateway disabled — shipper</text>
+          <text x="840" y="174" class="t-bullet">pushes straight to :3100</text>
+
+          <path d="M1050,105 H1300" class="arrow-logs" marker-end="url(#arrow-logs-head)"/>
+
+          <!-- ===================== ROW 2 : TRACES (y 230-400, center 315) ===================== -->
+          <rect x="20" y="230" width="250" height="170" rx="10" class="box-traces"/>
+          <text x="40" y="254" class="t-title-sm">order-service</text>
+          <text x="40" y="270" class="t-title-sm">user-service</text>
+          <line x1="40" y1="280" x2="250" y2="280" stroke="var(--accent-traces)" stroke-width="1" opacity="0.35"/>
+          <text x="40" y="300" class="t-mono-accent-traces">OTel Java agent v2.13.3</text>
+          <text x="40" y="315" class="t-bullet">-javaagent, auto-instruments</text>
+          <text x="40" y="329" class="t-bullet">Spring MVC, Mongo, RestTemplate</text>
+          <text x="40" y="351" class="t-mono">OTEL_INSTRUMENTATION_LOGBACK_MDC_TRACE_ID</text>
+          <text x="40" y="366" class="t-bullet">injects trace_id/span_id into MDC</text>
+          <text x="40" y="380" class="t-bullet">→ correlates with the JSON logs above</text>
+
+          <path d="M270,315 H420" class="arrow-traces" marker-end="url(#arrow-traces-head)"/>
+          <text x="345" y="307" text-anchor="middle" class="t-arrow-label t-mono-accent-traces">OTLP :4318</text>
+          <text x="345" y="330" text-anchor="middle" class="t-bullet">http/protobuf</text>
+
+          <rect x="420" y="230" width="250" height="170" rx="10" class="box-traces"/>
+          <text x="440" y="254" class="t-title-sm">OTel Collector</text>
+          <text x="440" y="273" class="t-mono-accent-traces">opentelemetry-collector 0.173.1</text>
+          <line x1="440" y1="286" x2="650" y2="286" stroke="var(--accent-traces)" stroke-width="1" opacity="0.35"/>
+          <text x="440" y="306" class="t-mono">receivers.otlp (4317 grpc / 4318 http)</text>
+          <text x="440" y="326" class="t-mono">memory_limiter → batch</text>
+          <text x="440" y="346" class="t-mono">exporters.otlp → tempo.monitoring:4317</text>
+          <text x="440" y="368" class="t-bullet">same collector in every environment</text>
+
+          <path d="M670,315 H820" class="arrow-traces" marker-end="url(#arrow-traces-head)"/>
+          <text x="745" y="307" text-anchor="middle" class="t-arrow-label t-mono-accent-traces">OTLP :4317</text>
+          <text x="745" y="330" text-anchor="middle" class="t-bullet">gRPC</text>
+
+          <rect x="820" y="230" width="230" height="170" rx="10" class="box-traces"/>
+          <text x="840" y="254" class="t-title-sm">Tempo 1.24.4</text>
+          <text x="840" y="273" class="t-bullet">OTLP receiver, 1 replica</text>
+          <text x="840" y="295" class="t-mono-accent-traces">local disk storage</text>
+          <text x="840" y="309" class="t-bullet">all environments today</text>
+          <text x="840" y="331" class="t-bullet">S3 trace backend planned</text>
+          <text x="840" y="345" class="t-bullet">(same pattern as Loki's)</text>
+
+          <path d="M1050,315 H1300" class="arrow-traces" marker-end="url(#arrow-traces-head)"/>
+
+          <!-- ===================== ROW 3 : METRICS ===================== -->
+          <!-- annotation box (ServiceMonitor) sits above the direct scrape arrow -->
+          <rect x="560" y="410" width="240" height="52" rx="8" class="box-annotation"/>
+          <text x="680" y="430" text-anchor="middle" class="t-title-sm">ServiceMonitor (CRD)</text>
+          <text x="680" y="446" text-anchor="middle" class="t-bullet">discovery config only — not in the data path</text>
+          <path d="M680,462 V500" class="arrow-neutral arrow-dashed" marker-end="url(#arrow-neutral-head)"/>
+
+          <rect x="20" y="490" width="250" height="170" rx="10" class="box-metrics"/>
+          <text x="40" y="514" class="t-title-sm">order-service</text>
+          <text x="40" y="530" class="t-title-sm">user-service</text>
+          <line x1="40" y1="540" x2="250" y2="540" stroke="var(--accent-metrics)" stroke-width="1" opacity="0.35"/>
+          <text x="40" y="560" class="t-mono-accent-metrics">Micrometer</text>
+          <text x="40" y="575" class="t-bullet">+ Spring Boot Actuator</text>
+          <text x="40" y="597" class="t-mono">/actuator/prometheus</text>
+          <text x="40" y="612" class="t-bullet">user-service: /api/actuator/prometheus</text>
+          <text x="40" y="626" class="t-bullet">order-service: /api/orders/actuator/prometheus</text>
+          <text x="40" y="646" class="t-bullet">(context-path prefixes the endpoint)</text>
+
+          <path d="M270,575 H1050" class="arrow-metrics" marker-end="url(#arrow-metrics-head)"/>
+          <text x="660" y="567" text-anchor="middle" class="t-arrow-label t-mono-accent-metrics">GET :8080 · pull, every 15s</text>
+
+          <rect x="820" y="490" width="230" height="170" rx="10" class="box-metrics"/>
+          <text x="840" y="514" class="t-title-sm">Prometheus</text>
+          <text x="840" y="533" class="t-mono-accent-metrics">kube-prometheus-stack 61.3.0</text>
+          <line x1="840" y1="546" x2="1030" y2="546" stroke="var(--accent-metrics)" stroke-width="1" opacity="0.35"/>
+          <text x="840" y="566" class="t-bullet">+ Alertmanager</text>
+          <text x="840" y="581" class="t-bullet">+ kube-state-metrics</text>
+          <text x="840" y="596" class="t-bullet">+ node-exporter (per node)</text>
+          <text x="840" y="618" class="t-mono">serviceMonitorSelectorNilUses</text>
+          <text x="840" y="632" class="t-mono">HelmValues: false</text>
+          <text x="840" y="646" class="t-bullet">→ discovers ServiceMonitors cluster-wide</text>
+
+          <path d="M1050,575 H1300" class="arrow-metrics" marker-end="url(#arrow-metrics-head)"/>
+
+          <!-- ===================== markers ===================== -->
+          <defs>
+            <marker id="arrow-logs-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--accent-logs)"/>
+            </marker>
+            <marker id="arrow-traces-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--accent-traces)"/>
+            </marker>
+            <marker id="arrow-metrics-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--accent-metrics)"/>
+            </marker>
+            <marker id="arrow-neutral-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--border-strong)"/>
+            </marker>
+          </defs>
+
+        </svg>
+      </div>
+      <figcaption style="margin-top:14px; font-size:13px; color:var(--text-muted); max-width:80ch;">
+        Logs and traces are <strong>pushed</strong> through an intermediary (a shipper, a collector); metrics are <strong>pulled</strong> straight from the app by Prometheus, with the ServiceMonitor CRD only telling it where to look. "API logs" and "server logs" aren't separate pipelines — they're the same JSON stream, split by SLF4J logger name and pulled apart again at query time (see below).
+      </figcaption>
+    </div>
+  </section>
+
+  <section aria-labelledby="verify-h">
+    <div class="section-head">
+      <h2 id="verify-h">Verify a signal in under a minute</h2>
+      <span>run against any env — swap the namespace</span>
+    </div>
+    <div class="verify-grid">
+
+      <div class="verify-card" data-lane="logs">
+        <h3><span class="swatch"></span>API logs</h3>
+        <p class="desc">Per-request access log lines only — method, path, status, duration.</p>
+        <div class="code-block"><code id="c1">kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n monitoring</code><button class="copy-btn" data-target="c1" aria-label="Copy command" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
+        <p class="desc" style="margin-top:2px">Grafana → Explore → <strong>Loki</strong>:</p>
+        <div class="code-block"><code id="c2">{namespace="development", container=~"order-service|user-service"}
+  | json
+  | logger=~"access\..*"</code><button class="copy-btn" data-target="c2" aria-label="Copy query" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
+      </div>
+
+      <div class="verify-card" data-lane="logs">
+        <h3><span class="swatch"></span>Server logs</h3>
+        <p class="desc">Everything except the access log — startup, business logic, unhandled exceptions.</p>
+        <p class="desc" style="margin-top:2px">Same datasource, inverted filter:</p>
+        <div class="code-block"><code id="c3">{namespace="development", container=~"order-service|user-service"}
+  | json
+  | logger!~"access\..*"</code><button class="copy-btn" data-target="c3" aria-label="Copy query" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
+        <p class="desc" style="margin-top:2px">A real exception should render as <strong>one</strong> log line with a populated <code class="mono">exception</code> field — if it's split across several lines, the encoder or the shipper's multiline stage needs a look.</p>
+      </div>
+
+      <div class="verify-card" data-lane="traces">
+        <h3><span class="swatch"></span>Traces</h3>
+        <p class="desc">Confirm a request's spans reached Tempo and log correlation is wired up.</p>
+        <p class="desc" style="margin-top:2px">Grafana → Explore → <strong>Tempo</strong> → TraceQL:</p>
+        <div class="code-block"><code id="c4">{ resource.service.name = "order-service" }</code><button class="copy-btn" data-target="c4" aria-label="Copy query" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
+        <p class="desc" style="margin-top:2px">Then in Loki, confirm a matching <code class="mono">trace_id</code> field shows up on the log lines from that same request.</p>
+      </div>
+
+      <div class="verify-card" data-lane="metrics">
+        <h3><span class="swatch"></span>Metrics</h3>
+        <p class="desc">Confirm Prometheus is actually scraping both services.</p>
+        <p class="desc" style="margin-top:2px">Grafana → Explore → <strong>Prometheus</strong>:</p>
+        <div class="code-block"><code id="c5">up{namespace="development", job=~"order-service|user-service"}</code><button class="copy-btn" data-target="c5" aria-label="Copy query" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
+        <div class="code-block"><code id="c6">rate(http_server_requests_seconds_count{namespace="development"}[5m])</code><button class="copy-btn" data-target="c6" aria-label="Copy query" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
+      </div>
+
+    </div>
+  </section>
+
+  <section aria-labelledby="files-h">
+    <div class="section-head">
+      <h2 id="files-h">Where each hop is configured</h2>
+      <span>gitops repo, relative paths</span>
+    </div>
+    <div class="table-card">
+      <table>
+        <thead><tr><th style="width:26%">Stage</th><th style="width:38%">File</th><th>What to check</th></tr></thead>
+        <tbody>
+          <tr><td><span class="lane-dot logs"></span>JSON encoder</td><td><span class="mono">app/order-service/src/main/resources/logback-spring.xml</span><br><span class="mono">app/user-service/…/logback-spring.xml</span></td><td class="note">Provider list must include <span class="mono">&lt;arguments/&gt;</span> or <span class="mono">kv()</span> fields silently vanish.</td></tr>
+          <tr><td><span class="lane-dot logs"></span>API access log filter</td><td><span class="mono">app/*/…/web/RequestLoggingFilter.java</span></td><td class="note">Logger name <span class="mono">access.&lt;service&gt;.http</span>, <span class="mono">@Order(HIGHEST_PRECEDENCE)</span>.</td></tr>
+          <tr><td><span class="lane-dot logs"></span>Unhandled exception log</td><td><span class="mono">app/*/…/web/GlobalExceptionHandler.java</span></td><td class="note"><span class="mono">@RestControllerAdvice</span> — routes exceptions through the JSON encoder instead of Spring's default handler.</td></tr>
+          <tr><td><span class="lane-dot logs"></span>Log shipper</td><td><span class="mono">gitops/bootstrap/envs/local/alloy.yaml</span> (local)<br><span class="mono">gitops/bootstrap/projects/promtail.yaml</span> (dev/staging/prod)</td><td class="note">Multiline stage: <span class="mono">firstline: '^\{'</span>.</td></tr>
+          <tr><td><span class="lane-dot logs"></span>Log storage</td><td><span class="mono">gitops/bootstrap/envs/local/loki.yaml</span><br><span class="mono">gitops/bootstrap/projects/loki.yaml</span></td><td class="note">Non-local envs need a real S3 bucket/region filled in — currently a placeholder.</td></tr>
+          <tr><td><span class="lane-dot traces"></span>Tracing agent</td><td><span class="mono">app/*/Dockerfile</span></td><td class="note"><span class="mono">-javaagent:/app/opentelemetry-javaagent.jar</span>, auto-instrumentation only — no manual spans required.</td></tr>
+          <tr><td><span class="lane-dot traces"></span>OTEL env vars</td><td><span class="mono">gitops/apps/&lt;env&gt;/kustomization.yaml</span></td><td class="note"><span class="mono">OTEL_EXPORTER_OTLP_ENDPOINT</span>, <span class="mono">OTEL_TRACES_SAMPLER</span>, <span class="mono">OTEL_INSTRUMENTATION_LOGBACK_MDC_TRACE_ID</span>.</td></tr>
+          <tr><td><span class="lane-dot traces"></span>Collector + storage</td><td><span class="mono">gitops/bootstrap/envs/local/{otel-collector,tempo}.yaml</span><br><span class="mono">gitops/bootstrap/projects/{otel-collector,tempo}.yaml</span></td><td class="note">Same chart, same config in every environment.</td></tr>
+          <tr><td><span class="lane-dot metrics"></span>Scrape target</td><td><span class="mono">gitops/apps/base/order-service/servicemonitor.yaml</span><br><span class="mono">gitops/apps/base/user-service/servicemonitor.yaml</span></td><td class="note">Path must include the service's context-path prefix.</td></tr>
+          <tr><td><span class="lane-dot metrics"></span>Prometheus + Grafana</td><td><span class="mono">gitops/bootstrap/envs/local/prometheus-stack.yaml</span><br><span class="mono">gitops/bootstrap/projects/prometheus-stack.yaml</span></td><td class="note">Also where Grafana's Loki/Tempo <span class="mono">additionalDataSources</span> (with explicit <span class="mono">uid</span>) live.</td></tr>
+          <tr><td>Deploy mechanism</td><td><span class="mono">gitops/bootstrap/envs/&lt;env&gt;/kustomization.yaml</span> (ArgoCD)<br><span class="mono">gitops/scripts/sync-local-stack.rb</span> (direct helm, local fallback)</td><td class="note">Controls which of the above actually gets wired into a given environment.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="env-h">
+    <div class="section-head">
+      <h2 id="env-h">What differs by environment</h2>
+      <span>everything else above is identical across all four</span>
+    </div>
+    <div class="table-card">
+      <table>
+        <thead><tr><th>Environment</th><th>Log shipper</th><th>Loki storage</th><th>Trace sampler</th><th>Deployed via</th></tr></thead>
+        <tbody>
+          <tr><td><strong>local</strong></td><td>Alloy 1.11.1</td><td>filesystem</td><td>always_on</td><td><span class="mono">sync-local-stack.rb</span></td></tr>
+          <tr><td><strong>dev</strong></td><td>Promtail 6.15.5</td><td>S3 (placeholder)</td><td>always_on</td><td>ArgoCD</td></tr>
+          <tr><td><strong>staging</strong></td><td>Promtail 6.15.5</td><td>S3 (placeholder)</td><td>50% ratio</td><td>ArgoCD</td></tr>
+          <tr><td><strong>prod</strong></td><td>Promtail 6.15.5</td><td>S3 (placeholder)</td><td>10% ratio</td><td>ArgoCD</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <span>Reflects the observability fixes landed on <span class="mono">05-storage-statefulsets</span>.</span>
+    <span>Update this page when a chart version, port, or file path changes.</span>
+  </footer>
+
+</div>
+
+<script>
+  document.querySelectorAll('.copy-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var target = document.getElementById(btn.getAttribute('data-target'));
+      if (!target) return;
+      var text = target.textContent;
+      var done = function () {
+        btn.classList.add('copied');
+        setTimeout(function () { btn.classList.remove('copied'); }, 1400);
+      };
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done).catch(fallback);
+        } else {
+          fallback();
+        }
+      } catch (e) {
+        fallback();
+      }
+      function fallback() {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          done();
+        } catch (e2) { /* clipboard unavailable, silently no-op */ }
+      }
+    });
+  });
+</script>
