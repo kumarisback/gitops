@@ -55,4 +55,12 @@ for svc in "${SERVICES[@]}"; do
 done
 
 echo "▶️  Handing off to start-lab.sh for the rest of the setup..."
-exec "${SCRIPT_DIR}/with-podman.sh" start
+"${SCRIPT_DIR}/with-podman.sh" start
+
+# ArgoCD's own reconcile loop has proven unreliable on this machine (repo-server
+# fetches to github.com / Helm chart repos intermittently or consistently time
+# out - almost certainly corporate network traffic inspection, see
+# sync-local-stack.rb's header for detail). Deploy directly instead of waiting
+# on ArgoCD to sync; ArgoCD stays installed for its UI/history.
+echo ""
+"${SCRIPT_DIR}/sync-local-stack.rb"
