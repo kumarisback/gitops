@@ -25,7 +25,20 @@ spec:
                 cpu: 1000m
                 memory: 2Gi
         grafana:
-          adminPassword: "admin" # Replace with an ExternalSecrets reference in production!
+          # No hardcoded default password: this environment's Grafana reads its
+          # admin credentials from a pre-existing Secret in the monitoring
+          # namespace instead. Until this is wired through ExternalSecrets
+          # (matching the apps/<env>/app-secrets.yaml pattern), create it once
+          # per cluster out-of-band, e.g.:
+          #   kubectl create secret generic grafana-admin-credentials \
+          #     -n monitoring \
+          #     --from-literal=admin-user=admin \
+          #     --from-literal=admin-password='<a real generated password>'
+          # Grafana will fail to start until this Secret exists.
+          admin:
+            existingSecret: grafana-admin-credentials
+            userKey: admin-user
+            passwordKey: admin-password
           additionalDataSources:
             - name: Loki
               type: loki
