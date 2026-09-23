@@ -13,3 +13,10 @@ kind: Kustomization
 resources:
   - ../../projects/platform.yaml
   - ../../projects/staging.yaml
+  # Observability stack: logs (Loki/Promtail), metrics (kube-prometheus-stack),
+  # and traces (Tempo/OTel Collector) — same pattern as bootstrap/envs/dev.
+  - ../../projects/prometheus-stack.yaml
+  - ../../projects/loki.yaml
+  - ../../projects/promtail.yaml
+  - ../../projects/tempo.yaml
+  - ../../projects/otel-collector.yaml

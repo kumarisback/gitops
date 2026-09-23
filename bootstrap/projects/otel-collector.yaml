@@ -1,0 +1,82 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: otel-collector
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: opentelemetry-collector
+    repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+    targetRevision: 0.173.1
+    helm:
+      values: |
+        mode: deployment
+        image:
+          repository: otel/opentelemetry-collector-contrib
+        replicaCount: 1
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+        ports:
+          metrics:
+            enabled: true
+        serviceMonitor:
+          enabled: true
+          extraLabels:
+            release: kube-prometheus-stack
+          metricsEndpoints:
+            - port: metrics
+              interval: 30s
+        alternateConfig:
+          receivers:
+            otlp:
+              protocols:
+                grpc:
+                  endpoint: 0.0.0.0:4317
+                http:
+                  endpoint: 0.0.0.0:4318
+          processors:
+            memory_limiter:
+              check_interval: 5s
+              limit_mib: 192
+              spike_limit_mib: 48
+            batch: {}
+          exporters:
+            otlp:
+              endpoint: tempo.monitoring:4317
+              tls:
+                insecure: true
+          extensions:
+            health_check:
+              endpoint: 0.0.0.0:13133
+          service:
+            extensions: [health_check]
+            telemetry:
+              metrics:
+                readers:
+                  - pull:
+                      exporter:
+                        prometheus:
+                          host: ${env:MY_POD_IP}
+                          port: 8888
+            pipelines:
+              traces:
+                receivers: [otlp]
+                processors: [memory_limiter, batch]
+                exporters: [otlp]
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

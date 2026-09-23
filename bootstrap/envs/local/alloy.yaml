@@ -50,7 +50,20 @@ spec:
 
               loki.source.kubernetes "pod_logs" {
                 targets    = discovery.relabel.pod_logs.output
+                forward_to = [loki.process.pod_logs.receiver]
+              }
+
+              // Logs are single-line JSON (net.logstash.logback encoder writing to
+              // stdout), so a new entry starts at "{" and any line that doesn't
+              // start with "{" is joined onto the previous entry instead of being
+              // shipped as its own broken log line.
+              loki.process "pod_logs" {
                 forward_to = [loki.write.local.receiver]
+
+                stage.multiline {
+                  firstline     = "^\\{"
+                  max_wait_time = "3s"
+                }
               }
 
               loki.write "local" {

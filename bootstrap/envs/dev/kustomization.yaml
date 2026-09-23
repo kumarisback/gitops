@@ -18,3 +18,5 @@ resources:
   - ../../projects/prometheus-stack.yaml
   - ../../projects/loki.yaml
   - ../../projects/promtail.yaml
+  - ../../projects/tempo.yaml
+  - ../../projects/otel-collector.yaml

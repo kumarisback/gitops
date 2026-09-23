@@ -146,41 +146,6 @@ patches:
         value:
           name: ORDER_SERVICE_URL
           value: http://order-service
-      # --- ADDED: RUNTIME LOG FILTERS FOR DISPATCHER REQUESTS ---
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB_SERVLET_DISPATCHERSERVLET
-          value: "DEBUG"
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB_FILTER_COMMONSREQUESTLOGGINGFILTER
-          value: "DEBUG"
-      # --- ADDED: FORCE ENTIRE ROOT LEVEL TO DEBUG TO BYPASS LOGBACK RESTRICTIONS ---
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: LOGGING_LEVEL_ROOT
-          value: "DEBUG"
-      # --- ADDED: CLEAR THE TEXT PATTERN TO ALLOW THE JSON ENCODER TO RUN ---
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: LOGGING_PATTERN_CONSOLE
-          value: ""
-      # --- ADDED: EXPLICITLY TELL SPRING TO PRINT EVERY WEB REQUEST HITTING THE DISPATCHER ---
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: SPRING_MVC_LOG_RESOLVED_EXCEPTION
-          value: "true"
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: SPRING_HTTP_LOG_REQUEST_DETAILS
-          value: "true"
-
 
   - target:
       kind: HorizontalPodAutoscaler

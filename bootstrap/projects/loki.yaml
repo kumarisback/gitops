@@ -18,7 +18,11 @@ spec:
           commonConfig:
             replication_factor: 1
 
-          # Use S3 as the storage backend
+          # TODO: placeholder values — fill in the real bucket name, region, and
+          # create the IRSA-annotated `loki` ServiceAccount for each environment
+          # (dev/staging/prod) before this Application is synced there. Until
+          # these are real, Loki will crash-loop on startup and nothing will be
+          # ingested.
           storage:
             type: s3
             bucketNames:
@@ -32,7 +36,10 @@ spec:
             create: false
             name: loki
 
-        # Run single binary/monolithic mode for development efficiency
+        # Run single binary/monolithic mode (matches bootstrap/envs/local/loki.yaml).
+        # deploymentMode must be set explicitly — the chart otherwise defaults to
+        # SimpleScalable and ignores the singleBinary tuning below.
+        deploymentMode: SingleBinary
         singleBinary:
           replicas: 1
           resources:
@@ -42,6 +49,14 @@ spec:
             limits:
               cpu: 1000m
               memory: 1.5Gi
+        gateway:
+          enabled: false
+        read:
+          replicas: 0
+        write:
+          replicas: 0
+        backend:
+          replicas: 0
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring

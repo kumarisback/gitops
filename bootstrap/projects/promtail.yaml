@@ -14,9 +14,22 @@ spec:
     helm:
       values: |
         config:
-          # Automatically point to the loki server in the same namespace
+          # Automatically point to the loki server in the same namespace.
+          # Loki here runs with gateway.enabled: false (see projects/loki.yaml),
+          # so push directly to the singlebinary service rather than the gateway.
           clients:
-            - url: http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push
+            - url: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
+          snippets:
+            pipelineStages:
+              - cri: {}
+              # Logs are single-line JSON (net.logstash.logback encoder writing to
+              # stdout), so a new entry starts at "{" and any line that doesn't
+              # start with "{" (e.g. a JVM/Spring Boot startup message that bypasses
+              # the JSON encoder) is joined onto the previous entry instead of being
+              # shipped as its own broken log line.
+              - multiline:
+                  firstline: '^\{'
+                  max_wait_time: 3s
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring

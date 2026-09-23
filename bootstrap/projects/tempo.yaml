@@ -1,0 +1,49 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tempo
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: tempo
+    repoURL: https://grafana.github.io/helm-charts
+    targetRevision: 1.24.4
+    helm:
+      values: |
+        tempo:
+          reportingEnabled: false
+          retention: 24h
+          # TODO: local-disk trace storage on a PVC works but doesn't scale past a
+          # single replica — consider an S3 backend (same IRSA pattern as loki.yaml)
+          # once real bucket/region values are available for this environment.
+          storage:
+            trace:
+              backend: local
+              local:
+                path: /var/tempo/traces
+              wal:
+                path: /var/tempo/wal
+          receivers:
+            otlp:
+              protocols:
+                grpc:
+                  endpoint: 0.0.0.0:4317
+                http:
+                  endpoint: 0.0.0.0:4318
+        persistence:
+          enabled: true
+          storageClassName: gp3
+          size: 10Gi
+        replicas: 1
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

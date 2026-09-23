@@ -12,3 +12,127 @@ images:
   # You can add other services here like order-service or user-service
   # - name: 602367507570.dkr.ecr.us-east-1.amazonaws.com/order-service
   #   newTag: "v1.0.0"
+
+# Wire order-service/user-service into the otel-collector deployed by
+# bootstrap/envs/prod (see ../../bootstrap/projects/otel-collector.yaml).
+# Sampler is a 10% ratio to control trace volume/cost at production traffic —
+# tune OTEL_TRACES_SAMPLER_ARG as needed once real traffic is observed.
+patches:
+  - target:
+      kind: Deployment
+      name: order-service
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_SERVICE_NAME
+          value: order-service
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://otel-collector-opentelemetry-collector.monitoring:4318
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_EXPORTER_OTLP_PROTOCOL
+          value: http/protobuf
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_TRACES_SAMPLER
+          value: parentbased_traceidratio
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_TRACES_SAMPLER_ARG
+          value: "0.1"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_TRACES_EXPORTER
+          value: otlp
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_METRICS_EXPORTER
+          value: none
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_LOGS_EXPORTER
+          value: none
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_PROPAGATORS
+          value: tracecontext,baggage
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_RESOURCE_ATTRIBUTES
+          value: deployment.environment=production,k8s.namespace.name=production
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_INSTRUMENTATION_LOGBACK_MDC_TRACE_ID
+          value: "true"
+  - target:
+      kind: Deployment
+      name: user-service
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_SERVICE_NAME
+          value: user-service
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://otel-collector-opentelemetry-collector.monitoring:4318
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_EXPORTER_OTLP_PROTOCOL
+          value: http/protobuf
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_TRACES_SAMPLER
+          value: parentbased_traceidratio
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_TRACES_SAMPLER_ARG
+          value: "0.1"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_TRACES_EXPORTER
+          value: otlp
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_METRICS_EXPORTER
+          value: none
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_LOGS_EXPORTER
+          value: none
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_PROPAGATORS
+          value: tracecontext,baggage
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_RESOURCE_ATTRIBUTES
+          value: deployment.environment=production,k8s.namespace.name=production
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_INSTRUMENTATION_LOGBACK_MDC_TRACE_ID
+          value: "true"
