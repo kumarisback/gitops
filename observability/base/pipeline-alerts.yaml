@@ -1,0 +1,114 @@
+# Alerts on the observability pipeline itself, so a broken log or trace
+# path is noticed before someone needs the data. Warning severity: they
+# mean lost visibility, not user-facing errors. Prometheus, Alertmanager
+# and scrape-target health are covered by kube-prometheus-stack's default
+# rules (TargetDown, PrometheusNotConnectedToAlertmanagers, Watchdog, ...).
+#
+# Metric names: Alloy loki.write (docs, v1.18), Loki 3.0, Tempo 2.9, and
+# the collector's internal telemetry, which has dropped and re-added the
+# _total suffix across releases, so collector counters match either name.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: pipeline-alerts
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: log-pipeline
+      rules:
+        - alert: LogShipperMissing
+          expr: absent_over_time(loki_write_sent_entries_total[15m])
+          for: 5m
+          labels:
+            severity: warning
+            pipeline: logs
+          annotations:
+            summary: "No log shipper is reporting"
+            description: "Prometheus has had no metrics from Alloy for 20 minutes: it is down, not deployed, or not scraped. Pod logs are not reaching Loki."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#logshippermissing
+        - alert: LogShipperStalled
+          expr: sum(rate(loki_write_sent_entries_total[15m])) == 0
+          for: 5m
+          labels:
+            severity: warning
+            pipeline: logs
+          annotations:
+            summary: "Alloy is running but has sent no log lines for 20 minutes"
+            description: "A cluster always writes some logs, so zero sent lines means Alloy can't read pod logs (RBAC, API server) or can't reach Loki."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#logshipperstalled
+        - alert: LogShipperDroppingLines
+          expr: sum by (pod) (increase(loki_write_dropped_entries_total[15m])) > 0
+          labels:
+            severity: warning
+            pipeline: logs
+          annotations:
+            summary: "{{ $labels.pod }} is dropping log lines"
+            description: "Alloy gave up on about {{ $value | humanize }} log lines in 15 minutes after retrying; they are lost. Loki is rejecting them or unreachable."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#logshipperdroppinglines
+        - alert: LokiRejectingLines
+          expr: sum by (reason) (increase(loki_discarded_samples_total[15m])) > 0
+          labels:
+            severity: warning
+            pipeline: logs
+          annotations:
+            summary: "Loki is discarding log lines ({{ $labels.reason }})"
+            description: "Loki discarded about {{ $value | humanize }} lines in 15 minutes for {{ $labels.reason }}: a rate or stream limit, timestamps too old, or lines too long."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#lokirejectinglines
+        - alert: LokiPushErrors
+          expr: sum(rate(loki_request_duration_seconds_count{route="loki_api_v1_push", status_code=~"5.."}[5m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+            pipeline: logs
+          annotations:
+            summary: "Loki is failing log pushes"
+            description: "Loki has answered pushes with 5xx for 10 minutes; Alloy is retrying and will start dropping lines."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#lokipusherrors
+    - name: trace-pipeline
+      rules:
+        - alert: TraceCollectorDroppingSpans
+          expr: |
+            (sum(rate({__name__=~"otelcol_exporter_send_failed_spans(_total)?"}[5m])) > 0)
+            or
+            (sum(rate({__name__=~"otelcol_receiver_refused_spans(_total)?"}[5m])) > 0)
+          for: 10m
+          labels:
+            severity: warning
+            pipeline: traces
+          annotations:
+            summary: "The OTel Collector is losing spans"
+            description: "For 10 minutes the collector has either failed to export spans to Tempo or refused incoming spans (memory_limiter); those spans are lost."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#tracecollectordroppingspans
+        - alert: TraceCollectorQueueFilling
+          expr: max(otelcol_exporter_queue_size / otelcol_exporter_queue_capacity) > 0.8
+          for: 10m
+          labels:
+            severity: warning
+            pipeline: traces
+          annotations:
+            summary: "The OTel Collector's export queue is {{ $value | humanizePercentage }} full"
+            description: "Tempo is slow or unreachable. When the queue is full the collector starts dropping spans."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#tracecollectorqueuefilling
+        - alert: TracePipelineStalled
+          expr: |
+            sum(rate({__name__=~"otelcol_receiver_accepted_spans(_total)?"}[15m])) > 0
+            unless
+            sum(rate({__name__=~"otelcol_exporter_sent_spans(_total)?"}[15m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+            pipeline: traces
+          annotations:
+            summary: "The OTel Collector is receiving spans but sending none to Tempo"
+            description: "Spans have arrived for 25 minutes and none have been exported; check the collector's exporter and Tempo."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#tracepipelinestalled
+        - alert: TempoDiscardingSpans
+          expr: sum by (reason) (increase(tempo_discarded_spans_total[15m])) > 0
+          labels:
+            severity: warning
+            pipeline: traces
+          annotations:
+            summary: "Tempo is discarding spans ({{ $labels.reason }})"
+            description: "Tempo discarded about {{ $value | humanize }} spans in 15 minutes for {{ $labels.reason }}, usually an ingestion rate or trace size limit."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#tempodiscardingspans

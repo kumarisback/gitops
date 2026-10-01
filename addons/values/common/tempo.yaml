@@ -18,3 +18,9 @@ tempo:
 persistence:
   enabled: true
 replicas: 1
+# Scraped by Prometheus for the pipeline alerts in
+# observability/base/pipeline-alerts.yaml.
+serviceMonitor:
+  enabled: true
+  additionalLabels:
+    release: kube-prometheus-stack

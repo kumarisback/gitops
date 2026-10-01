@@ -1,0 +1,74 @@
+# Unit tests for observability/base/pipeline-alerts.yaml (see slo_test.yaml
+# for how validate.sh provides the rule file).
+rule_files:
+  - ../../.validate/rules/observability/pipeline-alerts.yaml
+
+evaluation_interval: 30s
+
+tests:
+  # No Alloy metrics at all: LogShipperMissing after 15m + 5m.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="prometheus"}'
+        values: '1x30'
+    promql_expr_test:
+      - expr: ALERTS{alertname="LogShipperMissing", alertstate="firing"}
+        eval_time: 22m
+        exp_samples:
+          - labels: 'ALERTS{alertname="LogShipperMissing",alertstate="firing",pipeline="logs",severity="warning"}'
+            value: 1
+
+  # Alloy is up and sending, but one pod starts dropping lines.
+  - interval: 1m
+    input_series:
+      - series: 'loki_write_sent_entries_total{pod="alloy-logs-0"}'
+        values: '0+100x30'
+      - series: 'loki_write_dropped_entries_total{pod="alloy-logs-0"}'
+        values: '0x10 5+5x20'
+    promql_expr_test:
+      - expr: ALERTS{alertstate="firing"}
+        eval_time: 15m
+        exp_samples:
+          - labels: 'ALERTS{alertname="LogShipperDroppingLines",alertstate="firing",pipeline="logs",pod="alloy-logs-0",severity="warning"}'
+            value: 1
+
+  # Exports to Tempo fail. The send_failed counter only appears once the
+  # first batch gives up, and this collector version names it without
+  # _total; the rule matches either.
+  - interval: 1m
+    input_series:
+      - series: 'otelcol_receiver_accepted_spans{receiver="otlp",transport="http"}'
+        values: '0+50x40'
+      - series: 'otelcol_exporter_sent_spans{exporter="otlp"}'
+        values: '0+50x5 250x35'
+      - series: 'otelcol_exporter_send_failed_spans{exporter="otlp"}'
+        values: '_x5 0+50x35'
+    promql_expr_test:
+      - expr: ALERTS{alertname="TraceCollectorDroppingSpans", alertstate="firing"}
+        eval_time: 20m
+        exp_samples:
+          - labels: 'ALERTS{alertname="TraceCollectorDroppingSpans",alertstate="firing",pipeline="traces",severity="warning"}'
+            value: 1
+
+  # Spans arrive but none have ever been exported (no sent_spans series):
+  # stalled. With exports flowing, nothing fires.
+  - interval: 1m
+    input_series:
+      - series: 'otelcol_receiver_accepted_spans_total{receiver="otlp",transport="grpc"}'
+        values: '0+50x40'
+    promql_expr_test:
+      - expr: ALERTS{alertname="TracePipelineStalled", alertstate="firing"}
+        eval_time: 30m
+        exp_samples:
+          - labels: 'ALERTS{alertname="TracePipelineStalled",alertstate="firing",pipeline="traces",severity="warning"}'
+            value: 1
+  - interval: 1m
+    input_series:
+      - series: 'otelcol_receiver_accepted_spans{receiver="otlp",transport="grpc"}'
+        values: '0+50x40'
+      - series: 'otelcol_exporter_sent_spans{exporter="otlp"}'
+        values: '0+50x40'
+    promql_expr_test:
+      - expr: ALERTS{alertstate="firing", pipeline="traces"}
+        eval_time: 30m
+        exp_samples: []

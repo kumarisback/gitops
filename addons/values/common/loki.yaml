@@ -16,3 +16,13 @@ write:
   replicas: 0
 backend:
   replicas: 0
+# Scraped by Prometheus for the pipeline alerts in
+# observability/base/pipeline-alerts.yaml. metricsInstance is a Grafana
+# Agent operator resource this cluster doesn't run.
+monitoring:
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: kube-prometheus-stack
+    metricsInstance:
+      enabled: false

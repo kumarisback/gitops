@@ -128,3 +128,104 @@ limit), roll back a slow release, or fix the slow dependency the trace shows.
 **Meaning:** a steady share of slow requests over a day or more.
 
 **Check / Act:** as for the fast alert, over 1-3 days; open a ticket.
+
+---
+
+## Observability pipeline
+
+These fire when logs or traces stop reaching Loki or Tempo. They are
+`warning`: nothing is broken for users, but the next incident will be
+investigated blind. The path is drawn in `docs/observability-pipeline.html`.
+
+### LogShipperMissing
+
+**Meaning:** Prometheus has no `loki_write_*` metrics at all, so Alloy isn't
+running or isn't being scraped.
+
+**Check:** `kubectl get pods -n monitoring -l app.kubernetes.io/name=alloy`;
+`kubectl logs -n monitoring deploy/alloy-logs`; ArgoCD app `alloy-logs`.
+
+**Act:** fix the Deployment (often a config error after a change; run
+`./scripts/validate.sh`, which runs `alloy validate`). If the
+ServiceMonitor is missing, check `serviceMonitor.enabled` in
+`addons/values/common/alloy.yaml`.
+
+### LogShipperStalled
+
+**Meaning:** Alloy is up but has sent nothing for 20 minutes.
+
+**Check:** Alloy's logs for `permission denied` on `pods/log` (RBAC) or
+connection errors to `loki.monitoring:3100`. In the Alloy UI
+(`kubectl port-forward deploy/alloy-logs 12345 -n monitoring`, then
+http://localhost:12345) check that `loki.source.kubernetes` has targets.
+
+**Act:** restore RBAC or Loki connectivity; restart Alloy once fixed.
+
+### LogShipperDroppingLines
+
+**Meaning:** Alloy retried and then gave up on log lines. They are lost.
+
+**Check:** look for `LokiRejectingLines` or `LokiPushErrors` at the same
+time; Alloy's logs show the HTTP status Loki returned.
+
+**Act:** fix Loki first (below). For `429` raise Loki's
+`limits_config.ingestion_rate_mb` / `per_stream_rate_limit` in
+`addons/values/*/loki.yaml`.
+
+### LokiRejectingLines
+
+**Meaning:** Loki accepted the push but discarded lines, grouped by `reason`:
+`rate_limited`, `per_stream_rate_limit`, `stream_limit`, `greater_than_max_sample_age`,
+`line_too_long`.
+
+**Act:** raise the matching limit in `addons/values/*/loki.yaml`, or find the
+noisy stream (`topk(5, sum by (namespace, container) (rate({namespace=~".+"}[5m])))`
+in Explore → Loki) and quiet it at the source.
+
+### LokiPushErrors
+
+**Meaning:** Loki is returning 5xx to pushes.
+
+**Check:** `kubectl logs -n monitoring loki-0`; PVC or S3 errors; memory
+(`kubectl top pod -n monitoring`).
+
+**Act:** fix storage or raise Loki's memory limit; Alloy retries meanwhile.
+
+### TraceCollectorDroppingSpans
+
+**Meaning:** the OTel Collector failed to export spans to Tempo, or refused
+incoming spans because `memory_limiter` hit its limit.
+
+**Check:** `kubectl logs -n monitoring deploy/otel-collector-opentelemetry-collector`;
+`otelcol_receiver_refused_spans` vs `otelcol_exporter_send_failed_spans` in
+Prometheus tells you which side.
+
+**Act:** export failures: fix Tempo (below). Refusals: raise the collector's
+memory limit and `memory_limiter.limit_mib` together in
+`addons/values/common/otel-collector.yaml`, or add replicas.
+
+### TraceCollectorQueueFilling
+
+**Meaning:** the collector's queue to Tempo is over 80% full; Tempo is slow or
+unreachable, and spans are dropped when it fills.
+
+**Act:** as for `TempoDiscardingSpans` and Tempo's health.
+
+### TracePipelineStalled
+
+**Meaning:** spans arrive at the collector, none leave.
+
+**Check:** collector logs for exporter errors; that
+`tempo.monitoring:4317` resolves and Tempo is ready.
+
+**Act:** fix the exporter endpoint or Tempo; run `./scripts/validate.sh`
+after any collector config change (it runs `otelcol-contrib validate`).
+
+### TempoDiscardingSpans
+
+**Meaning:** Tempo dropped spans, grouped by `reason` (`rate_limited`,
+`trace_too_large`, `live_traces_exceeded`).
+
+**Act:** raise Tempo's ingestion limits (`overrides` in
+`addons/values/*/tempo.yaml`), or find the service producing huge traces in
+TraceQL (`{ } | count() > 1000`).

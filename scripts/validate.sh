@@ -114,7 +114,8 @@ render_release() {  # JSON DEST
   local args=(-f "${inline}")
   while IFS= read -r f; do args+=(-f "${f}"); done < <(ruby -rjson -e 'JSON.parse(ARGV[0])["value_files"].each { |f| puts f }' "${json}")
   helm template "${name}" "${dir}" -n "${ns}" --kube-version "${KUBE_VERSION}" \
-    --api-versions monitoring.coreos.com/v1 --api-versions policy/v1 \
+    --api-versions monitoring.coreos.com/v1 --api-versions monitoring.coreos.com/v1/ServiceMonitor \
+    --api-versions monitoring.coreos.com/v1/PrometheusRule --api-versions policy/v1 \
     "${args[@]}" > "${dest}"
 }
 

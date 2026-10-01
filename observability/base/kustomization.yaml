@@ -11,6 +11,7 @@ namespace: monitoring
 resources:
   - service-alerts.yaml
   - slo-rules.yaml
+  - pipeline-alerts.yaml
 
 # The Grafana sidecar loads every ConfigMap labelled grafana_dashboard from
 # the monitoring namespace. Stable names, so a dashboard keeps its URL.
