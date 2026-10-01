@@ -10,6 +10,18 @@ resources:
 
 namespace: development
 
+# OpenTelemetry: shared agent settings come from ../components/otel-instrumentation;
+# the lab traces every request.
+components:
+  - ../components/otel-instrumentation
+
+configMapGenerator:
+  - name: otel-environment
+    literals:
+      - DEPLOYMENT_ENVIRONMENT=local
+      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=local,k8s.namespace.name=development
+      - OTEL_TRACES_SAMPLER=always_on
+
 # 100% Local: Do NOT pull from AWS ECR. Use images loaded directly into KinD.
 patches:
   - target:
@@ -35,116 +47,8 @@ patches:
         value: 1
   - target:
       kind: Deployment
-      name: order-service
-    patch: |-
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OTEL_SERVICE_NAME
-          value: order-service
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OTEL_EXPORTER_OTLP_ENDPOINT
-          value: http://otel-collector-opentelemetry-collector.monitoring:4318
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OTEL_EXPORTER_OTLP_PROTOCOL
-          value: http/protobuf
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OTEL_TRACES_SAMPLER
-          value: always_on
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OTEL_TRACES_EXPORTER
-          value: otlp
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OTEL_METRICS_EXPORTER
-          value: none
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OTEL_LOGS_EXPORTER
-          value: none
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OTEL_PROPAGATORS
-          value: tracecontext,baggage
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OTEL_RESOURCE_ATTRIBUTES
-          value: deployment.environment=local,k8s.namespace.name=development
-      # Same value as deployment.environment above; logback-spring.xml
-      # writes it into the "environment" field of every JSON log line.
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: DEPLOYMENT_ENVIRONMENT
-          value: local
-  - target:
-      kind: Deployment
       name: user-service
     patch: |-
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OTEL_SERVICE_NAME
-          value: user-service
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OTEL_EXPORTER_OTLP_ENDPOINT
-          value: http://otel-collector-opentelemetry-collector.monitoring:4318
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OTEL_EXPORTER_OTLP_PROTOCOL
-          value: http/protobuf
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OTEL_TRACES_SAMPLER
-          value: always_on
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OTEL_TRACES_EXPORTER
-          value: otlp
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OTEL_METRICS_EXPORTER
-          value: none
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OTEL_LOGS_EXPORTER
-          value: none
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OTEL_PROPAGATORS
-          value: tracecontext,baggage
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OTEL_RESOURCE_ATTRIBUTES
-          value: deployment.environment=local,k8s.namespace.name=development
-      # Same value as deployment.environment above; logback-spring.xml
-      # writes it into the "environment" field of every JSON log line.
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: DEPLOYMENT_ENVIRONMENT
-          value: local
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:

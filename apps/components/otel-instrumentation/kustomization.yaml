@@ -1,0 +1,50 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# OpenTelemetry Java agent settings for order-service and user-service,
+# shared by every environment. The agent itself is baked into the images
+# (-javaagent in each Dockerfile); this tells it where to send spans.
+#
+# Each overlay that includes this component must generate the per-environment
+# half as ConfigMap otel-environment, for example:
+#
+#   configMapGenerator:
+#     - name: otel-environment
+#       literals:
+#         - DEPLOYMENT_ENVIRONMENT=staging
+#         - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=staging,k8s.namespace.name=staging
+#         - OTEL_TRACES_SAMPLER=parentbased_traceidratio
+#         - OTEL_TRACES_SAMPLER_ARG=0.5
+#
+# DEPLOYMENT_ENVIRONMENT feeds the "environment" field of every JSON log line
+# (logback-spring.xml), so keep it equal to deployment.environment.
+configMapGenerator:
+  - name: otel-instrumentation
+    literals:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector-opentelemetry-collector.monitoring:4318
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+      - OTEL_TRACES_EXPORTER=otlp
+      - OTEL_METRICS_EXPORTER=none
+      - OTEL_LOGS_EXPORTER=none
+      - OTEL_PROPAGATORS=tracecontext,baggage
+
+patches:
+  - target:
+      kind: Deployment
+      name: order-service|user-service
+    patch: |-
+      # Later entries win: the environment's settings override the shared ones.
+      - op: add
+        path: /spec/template/spec/containers/0/envFrom
+        value:
+          - configMapRef:
+              name: otel-instrumentation
+          - configMapRef:
+              name: otel-environment
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_SERVICE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.labels['app']
