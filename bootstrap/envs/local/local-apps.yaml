@@ -16,8 +16,8 @@ spec:
     server: https://kubernetes.default.svc
     namespace: development
   syncPolicy:
+    # The app-secrets Secret is created outside Git (start-lab.sh), so ArgoCD
+    # never tracks it and prune can't delete it.
     automated:
       prune: true
       selfHeal: true
-    syncOptions:
-      - Prune=false
