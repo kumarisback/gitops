@@ -16,6 +16,8 @@
 #   - every PrometheusRule passes promtool check rules, and the rule unit
 #     tests in tests/prometheus pass
 #   - every Grafana dashboard ConfigMap holds valid JSON
+#   - the Alloy log pipeline (redaction, multiline, log_type labels) turns
+#     the sample lines in tests/alloy into the expected entries
 #   - the lab scripts parse
 #
 # Rendered output and logs are kept in .validate/ (git-ignored); charts and
@@ -184,7 +186,13 @@ for f in "${OUT}"/kustomize/*.yaml; do
   fi
 done
 
-# --- 4. lab scripts --------------------------------------------------------
+# --- 4. log pipeline -------------------------------------------------------
+# alloy validate only checks syntax; this runs the real loki.process stages
+# on sample lines (tests/alloy/pipeline_cases.yaml) and checks the output.
+echo "Log pipeline"
+check "alloy pipeline cases" ruby tests/alloy/pipeline_test.rb
+
+# --- 5. lab scripts --------------------------------------------------------
 echo "Scripts"
 for f in scripts/*.sh; do check "bash -n ${f}" bash -n "${f}"; done
 for f in scripts/*.rb scripts/lib/*.rb; do check "ruby -c ${f}" ruby -c "${f}"; done

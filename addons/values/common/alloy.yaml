@@ -49,6 +49,30 @@ alloy:
       loki.process "pod_logs" {
         forward_to = [loki.write.default.receiver]
 
+        // Mask credentials in every container's logs before they leave the
+        // cluster: each capture group is replaced, the rest of the line is
+        // kept. Cases are tested in tests/alloy/pipeline_cases.yaml.
+        stage.replace {
+          expression = "(?i)\\bbearer\\s+([a-z0-9\\-._~+/]+=*)"
+          replace    = "<redacted>"
+        }
+        stage.replace {
+          expression = "\\b(eyJ[A-Za-z0-9_-]{5,}\\.[A-Za-z0-9_-]{5,}\\.[A-Za-z0-9_-]{5,})"
+          replace    = "<redacted-jwt>"
+        }
+        stage.replace {
+          expression = "(?i)\"(?:password|passwd|secret|token|access_token|refresh_token|api_key|apikey|authorization)\"\\s*:\\s*\"([^\"]*)\""
+          replace    = "<redacted>"
+        }
+        stage.replace {
+          expression = "(?i)\\b(?:password|passwd|secret|token|access_token|api_key|apikey)=([^&\\s\"]+)"
+          replace    = "<redacted>"
+        }
+        stage.replace {
+          expression = "mongodb(?:\\+srv)?://([^:/\\s@]+:[^@/\\s]+)@"
+          replace    = "<redacted>"
+        }
+
         // Only the Spring services write one JSON object per line
         // (net.logstash.logback encoder), so only they get the
         // multiline rule: a new entry starts at "{" and anything else

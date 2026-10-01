@@ -1,0 +1,77 @@
+# Log lines fed through the real loki.process "pod_logs" pipeline from
+# addons/values/common/alloy.yaml by tests/alloy/pipeline_test.rb (run by
+# scripts/validate.sh). Each case is one container's log file; `expect`
+# lists the entries Loki must receive, in order, and their log_type label
+# (null: no label).
+cases:
+  - name: bearer token is masked
+    container: user-service
+    lines:
+      - '{"level":"WARN","logger":"com.example.demo.security.AuthTokenFilter","message":"rejected header Authorization: Bearer abc.DEF-123_xyz"}'
+    expect:
+      - line: '{"level":"WARN","logger":"com.example.demo.security.AuthTokenFilter","message":"rejected header Authorization: Bearer <redacted>"}'
+        log_type: server
+
+  - name: JWT anywhere in a line is masked
+    container: user-service
+    lines:
+      - '{"level":"ERROR","logger":"com.example.demo.security.jwt.JwtUtils","message":"Invalid JWT signature: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhbGljZSJ9.c2lnbmF0dXJlLXZhbHVl"}'
+    expect:
+      - line: '{"level":"ERROR","logger":"com.example.demo.security.jwt.JwtUtils","message":"Invalid JWT signature: <redacted-jwt>"}'
+        log_type: server
+
+  - name: password and token fields are masked, the rest kept
+    container: user-service
+    lines:
+      - '{"level":"INFO","logger":"audit.user-service.auth","message":"auth_signup_succeeded","enduser.id":"alice","password":"hunter2","api_key":"k-123"}'
+    expect:
+      - line: '{"level":"INFO","logger":"audit.user-service.auth","message":"auth_signup_succeeded","enduser.id":"alice","password":"<redacted>","api_key":"<redacted>"}'
+        log_type: server
+
+  - name: query-string secrets are masked
+    container: ingress-nginx-controller
+    lines:
+      - '10.0.0.7 - - [01/Oct/2026:08:35:12 +0000] "GET /api/reset?token=s3cr3t&user=alice HTTP/1.1" 200 12'
+    expect:
+      - line: '10.0.0.7 - - [01/Oct/2026:08:35:12 +0000] "GET /api/reset?token=<redacted>&user=alice HTTP/1.1" 200 12'
+        log_type: null
+
+  - name: MongoDB URI credentials are masked
+    container: order-service
+    lines:
+      - '{"level":"ERROR","logger":"org.springframework.boot.SpringApplication","message":"Application run failed: cannot connect to mongodb+srv://appuser:S3cr3t!@cluster0.example.net/order_db"}'
+    expect:
+      - line: '{"level":"ERROR","logger":"org.springframework.boot.SpringApplication","message":"Application run failed: cannot connect to mongodb+srv://<redacted>@cluster0.example.net/order_db"}'
+        log_type: server
+
+  - name: API log is labelled api
+    container: order-service
+    lines:
+      - '{"level":"INFO","logger":"access.order-service.http","message":"http_request","http.method":"GET","http.path":"/api/orders","http.status":200,"http.duration_ms":12}'
+    expect:
+      - line: '{"level":"INFO","logger":"access.order-service.http","message":"http_request","http.method":"GET","http.path":"/api/orders","http.status":200,"http.duration_ms":12}'
+        log_type: api
+
+  - name: non-JSON lines from a Spring container join the previous entry
+    container: order-service
+    lines:
+      - '{"level":"ERROR","logger":"x","message":"boom"}'
+      - 'Exception in thread "main" java.lang.IllegalStateException: no'
+      - '	at com.example.Main.main(Main.java:10)'
+      - '{"level":"INFO","logger":"x","message":"next"}'
+    expect:
+      - line: "{\"level\":\"ERROR\",\"logger\":\"x\",\"message\":\"boom\"}\nException in thread \"main\" java.lang.IllegalStateException: no\n\tat com.example.Main.main(Main.java:10)"
+        log_type: server
+      - line: '{"level":"INFO","logger":"x","message":"next"}'
+        log_type: server
+
+  - name: plain-text containers are not merged or labelled
+    container: frontend
+    lines:
+      - '10.0.0.1 - - [01/Oct/2026:08:35:12 +0000] "GET / HTTP/1.1" 200 512'
+      - '10.0.0.2 - - [01/Oct/2026:08:35:13 +0000] "GET /favicon.ico HTTP/1.1" 404 153'
+    expect:
+      - line: '10.0.0.1 - - [01/Oct/2026:08:35:12 +0000] "GET / HTTP/1.1" 200 512'
+        log_type: null
+      - line: '10.0.0.2 - - [01/Oct/2026:08:35:13 +0000] "GET /favicon.ico HTTP/1.1" 404 153'
+        log_type: null
