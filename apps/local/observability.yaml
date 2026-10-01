@@ -86,7 +86,7 @@ data:
         {"type":"timeseries","title":"API P95 Latency","gridPos":{"h":8,"w":16,"x":8,"y":16},"targets":[{"expr":"histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{namespace=\"development\"}[5m])))","refId":"A"}]},
         {"type":"timeseries","title":"Container Restarts","gridPos":{"h":7,"w":12,"x":0,"y":24},"targets":[{"expr":"sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"development\",pod=~\"(frontend|user-service|order-service)-.*\"}[15m]))","refId":"A"}]},
         {"type":"logs","title":"Application Logs","gridPos":{"h":7,"w":12,"x":12,"y":24},"datasource":{"type":"loki","uid":"Loki"},"targets":[{"expr":"{namespace=\"development\", container=~\"frontend|user-service|order-service\"}","refId":"A"}]},
-        {"type":"timeseries","title":"Collector Accepted Spans","gridPos":{"h":7,"w":12,"x":0,"y":31},"targets":[{"expr":"sum(rate(otelcol_receiver_accepted_spans[5m]))","refId":"A"}]},
+        {"type":"timeseries","title":"Collector Accepted Spans","gridPos":{"h":7,"w":12,"x":0,"y":31},"targets":[{"expr":"sum(rate({__name__=~\"otelcol_receiver_accepted_spans(_total)?\"}[5m]))","refId":"A"}]},
         {"type":"stat","title":"Missing Backend Scrapes","gridPos":{"h":7,"w":12,"x":12,"y":31},"targets":[{"expr":"absent_over_time(up{namespace=\"development\",service=~\"order-service|user-service\"}[10m])","refId":"A"}]}
       ]
     }
