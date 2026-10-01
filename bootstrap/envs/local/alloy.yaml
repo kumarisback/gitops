@@ -71,8 +71,13 @@ spec:
                   url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
                 }
               }
+        # loki.source.kubernetes tails pods through the Kubernetes API, and
+        # without clustering every Alloy instance tails every pod it
+        # discovers. As a DaemonSet that meant one copy of each log stream
+        # per node. One replica covers the whole lab cluster.
         controller:
-          type: daemonset
+          type: deployment
+          replicas: 1
         serviceMonitor:
           enabled: true
           additionalLabels:
