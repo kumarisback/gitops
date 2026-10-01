@@ -177,6 +177,8 @@ patches:
       - op: replace
         path: /spec/maxReplicas
         value: 1
+  # Tracing on app-ingress. The controller-side exporter settings (collector
+  # host, sampler) live in local-setup/ingress-nginx-otel.yaml.
   - target:
       kind: Ingress
       name: app-ingress

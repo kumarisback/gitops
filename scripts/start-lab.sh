@@ -50,6 +50,10 @@ kubectl wait --for=condition=available deployment/argocd-server -n argocd --time
 echo "🌐 Ensuring local NGINX Ingress Controller is installed..."
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.1/deploy/static/provider/kind/deploy.yaml > /dev/null
 kubectl rollout status deployment/ingress-nginx-controller -n ingress-nginx --timeout=180s
+# Send the controller's spans to the OTel collector (the controller reloads
+# on ConfigMap changes; spans buffer until the collector is up).
+kubectl patch configmap ingress-nginx-controller -n ingress-nginx --type merge \
+  --patch-file "${REPO_ROOT}/local-setup/ingress-nginx-otel.yaml" > /dev/null
 
 # 6. Load locally built application images into KinD. start-lab-podman.sh
 #    sets SKIP_IMAGE_LOAD=1 because it has already loaded them with
