@@ -10,6 +10,7 @@ kind: Component
 resources:
   - alertmanager-receivers.yaml
   - grafana-admin-credentials.yaml
+  - grafana-oauth.yaml
 
 replacements:
   - source:
@@ -19,8 +20,18 @@ replacements:
     targets:
       - select:
           kind: ExternalSecret
+        reject:
+          - name: grafana-oauth
         fieldPaths:
           - spec.data.*.remoteRef.key
+        options:
+          delimiter: /
+          index: 1
+      - select:
+          kind: ExternalSecret
+          name: grafana-oauth
+        fieldPaths:
+          - spec.dataFrom.*.extract.key
         options:
           delimiter: /
           index: 1

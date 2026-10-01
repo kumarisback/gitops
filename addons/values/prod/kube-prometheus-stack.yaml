@@ -1,0 +1,9 @@
+# TODO: placeholder host; set the real one (with a matching ACM certificate)
+# before prod goes live, and use it as root_url in the grafana-oauth secret.
+grafana:
+  ingress:
+    hosts:
+      - grafana.prod.example.com
+    tls:
+      - hosts:
+          - grafana.prod.example.com

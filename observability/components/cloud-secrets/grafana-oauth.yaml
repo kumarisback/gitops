@@ -1,0 +1,30 @@
+# Grafana's OIDC settings (see grafana.envFromSecrets and
+# auth.generic_oauth in addons/values/cloud/kube-prometheus-stack.yaml).
+# The AWS secret microservices/ENV/grafana-oauth holds JSON with
+# client_id, client_secret, auth_url, token_url, api_url and root_url;
+# they become Grafana's GF_* environment variables.
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: grafana-oauth
+  namespace: monitoring
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secretsmanager
+    kind: ClusterSecretStore
+  target:
+    name: grafana-oauth
+    template:
+      engineVersion: v2
+      data:
+        GF_AUTH_GENERIC_OAUTH_ENABLED: "true"
+        GF_AUTH_GENERIC_OAUTH_CLIENT_ID: "{{ .client_id }}"
+        GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET: "{{ .client_secret }}"
+        GF_AUTH_GENERIC_OAUTH_AUTH_URL: "{{ .auth_url }}"
+        GF_AUTH_GENERIC_OAUTH_TOKEN_URL: "{{ .token_url }}"
+        GF_AUTH_GENERIC_OAUTH_API_URL: "{{ .api_url }}"
+        GF_SERVER_ROOT_URL: "{{ .root_url }}"
+  dataFrom:
+    - extract:
+        key: microservices/ENV/grafana-oauth

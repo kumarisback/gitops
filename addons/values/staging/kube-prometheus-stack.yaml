@@ -1,0 +1,9 @@
+# TODO: placeholder host; set the real one (with a matching ACM certificate)
+# before staging goes live, and use it as root_url in the grafana-oauth secret.
+grafana:
+  ingress:
+    hosts:
+      - grafana.staging.example.com
+    tls:
+      - hosts:
+          - grafana.staging.example.com

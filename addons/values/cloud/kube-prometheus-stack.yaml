@@ -7,6 +7,46 @@ grafana:
     existingSecret: grafana-admin-credentials
     userKey: admin-user
     passwordKey: admin-password
+  # Single sign-on through any OIDC provider (Okta, Entra ID, Google,
+  # Keycloak, ...). Provider details arrive as GF_* env vars from Secret
+  # grafana-oauth (ExternalSecret in observability/components/cloud-secrets,
+  # from AWS Secrets Manager microservices/<env>/grafana-oauth). Optional:
+  # until that secret exists Grafana starts with SSO off and only the
+  # admin login above, which stays as a break-glass account.
+  envFromSecrets:
+    - name: grafana-oauth
+      optional: true
+  grafana.ini:
+    auth.anonymous:
+      enabled: false
+    auth.generic_oauth:
+      # Turned on by GF_AUTH_GENERIC_OAUTH_ENABLED=true in grafana-oauth.
+      enabled: false
+      name: SSO
+      scopes: openid email profile groups
+      use_pkce: true
+      allow_sign_up: true
+      email_attribute_path: email
+      login_attribute_path: preferred_username
+      groups_attribute_path: groups
+      # The same group names as the Kubernetes RBAC in platform/rbac. With
+      # role_attribute_strict, anyone in neither group can't log in.
+      role_attribute_path: "contains(groups[*], 'sre') && 'Admin' || contains(groups[*], 'developer-readonly') && 'Viewer'"
+      role_attribute_strict: true
+  # SSO needs a URL the browser returns to. Internal ALB: reachable from
+  # the VPC/VPN only. Each environment sets its host (and so its ACM
+  # certificate, which the AWS Load Balancer Controller discovers by host)
+  # in addons/values/<env>/kube-prometheus-stack.yaml.
+  ingress:
+    enabled: true
+    ingressClassName: alb
+    annotations:
+      alb.ingress.kubernetes.io/scheme: internal
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+      alb.ingress.kubernetes.io/healthcheck-path: /api/health
+    path: /
+    pathType: Prefix
   persistence:
     storageClassName: "gp3"
     size: 10Gi
