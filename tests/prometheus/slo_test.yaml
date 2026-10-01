@@ -1,0 +1,135 @@
+# Unit tests for observability/base/slo-rules.yaml and service-alerts.yaml.
+# Run by scripts/validate.sh, which extracts the rule groups to
+# .validate/rules/observability/ first:
+#   promtool test rules tests/prometheus/slo_test.yaml
+rule_files:
+  - ../../.validate/rules/observability/slo-rules.yaml
+  - ../../.validate/rules/observability/service-alerts.yaml
+
+evaluation_interval: 30s
+
+tests:
+  # order-service fails 10% of 10 req/s steadily; user-service is healthy.
+  # 10% is far above the 7.2% (14.4 x 0.5%) fast-burn line, so it pages,
+  # and only for order-service.
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="order-service",namespace="development",uri="/orders",status="200"}'
+        values: '0+540x150'
+      - series: 'http_server_requests_seconds_count{job="order-service",namespace="development",uri="/orders",status="500"}'
+        values: '0+60x150'
+      - series: 'http_server_requests_seconds_count{job="user-service",namespace="development",uri="/auth/signin",status="200"}'
+        values: '0+600x150'
+    promql_expr_test:
+      - expr: slo:sli_error:ratio_rate1h
+        eval_time: 70m
+        exp_samples:
+          - labels: 'slo:sli_error:ratio_rate1h{job="order-service",namespace="development"}'
+            value: 0.1
+          - labels: 'slo:sli_error:ratio_rate1h{job="user-service",namespace="development"}'
+            value: 0
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: SLOAvailabilityBudgetBurnFast
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              slo: availability
+              job: order-service
+              namespace: development
+            exp_annotations:
+              summary: "order-service is burning its availability error budget fast"
+              description: "order-service in development is failing 10% of requests with 5xx. At this rate the 30-day budget (0.5% of requests) runs out in under two days."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#sloavailabilitybudgetburnfast
+
+  # Eight healthy hours, then a six-minute outage (every request fails for
+  # minutes 471-476). It pages while the outage is on, and the page clears
+  # within minutes of recovery because the 5m window is clean again, even
+  # though the 1h window still holds 9% errors.
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="order-service",namespace="development",uri="/orders",status="200"}'
+        values: '0+600x490'
+      - series: 'http_server_requests_seconds_count{job="order-service",namespace="development",uri="/orders",status="500"}'
+        values: '0x470 600+600x5 3600x15'
+    # Checked through ALERTS rather than alert_rule_test: the annotation
+    # carries the 1h ratio, whose last digits depend on evaluation order
+    # during the step change.
+    promql_expr_test:
+      - expr: ALERTS{alertname="SLOAvailabilityBudgetBurnFast", alertstate="firing"}
+        eval_time: 479m
+        exp_samples:
+          - labels: 'ALERTS{alertname="SLOAvailabilityBudgetBurnFast",alertstate="firing",job="order-service",namespace="development",severity="critical",slo="availability"}'
+            value: 1
+      - expr: ALERTS{alertname="SLOAvailabilityBudgetBurnFast", alertstate="firing"}
+        eval_time: 486m
+        exp_samples: []
+
+  # One request a minute, half of them failing: a 50% error ratio, but too
+  # little traffic (0.017 req/s < 0.05) to page on.
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="order-service",namespace="development",uri="/orders",status="200"}'
+        values: '0+1x150'
+      - series: 'http_server_requests_seconds_count{job="order-service",namespace="development",uri="/orders",status="500"}'
+        values: '0+1x150'
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: SLOAvailabilityBudgetBurnFast
+        exp_alerts: []
+
+  # 20% of order-service requests take longer than 500ms (above the 14.4%
+  # fast-burn line for a 1% budget); user-service is all fast.
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="order-service",namespace="development",uri="/orders",status="200"}'
+        values: '0+600x150'
+      - series: 'http_server_requests_seconds_bucket{job="order-service",namespace="development",uri="/orders",status="200",le="0.5"}'
+        values: '0+480x150'
+      - series: 'http_server_requests_seconds_count{job="user-service",namespace="development",uri="/auth/signin",status="200"}'
+        values: '0+600x150'
+      - series: 'http_server_requests_seconds_bucket{job="user-service",namespace="development",uri="/auth/signin",status="200",le="0.5"}'
+        values: '0+600x150'
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: SLOLatencyBudgetBurnFast
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              slo: latency
+              job: order-service
+              namespace: development
+            exp_annotations:
+              summary: "order-service is burning its latency error budget fast"
+              description: "20% of order-service requests in development are taking longer than 500ms. At this rate the 30-day budget (1% of requests) runs out in under two days."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#slolatencybudgetburnfast
+
+  # order-service's scrape target is failing; user-service has no target
+  # at all (e.g. its Service lost its labels).
+  - interval: 1m
+    input_series:
+      - series: 'up{job="order-service",namespace="development",pod="order-service-7d9f8"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: ServiceDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: order-service
+              namespace: development
+              pod: order-service-7d9f8
+            exp_annotations:
+              summary: "order-service is not answering scrapes in development"
+              description: "Prometheus has failed to scrape order-service-7d9f8 for 2 minutes; the pod is down, not ready, or /actuator/prometheus is failing."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#servicedown
+      - eval_time: 15m
+        alertname: ServiceMetricsMissing
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: user-service
+            exp_annotations:
+              summary: "user-service has no scrape target at all"
+              description: "Prometheus has had no target for user-service for 10 minutes: the Service, its labels or the ServiceMonitor is missing."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#servicemetricsmissing

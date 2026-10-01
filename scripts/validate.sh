@@ -155,6 +155,10 @@ rule_files=("${OUT}"/rules/*.yaml)
 if [ -e "${rule_files[0]}" ]; then
   check "promtool check rules (${#rule_files[@]} PrometheusRules)" promtool check rules "${rule_files[@]}"
 fi
+# The unit tests load this repo's rules from .validate/rules/observability/
+# <PrometheusRule name>.yaml (see tests/prometheus/*.yaml).
+mkdir -p "${OUT}/rules/observability"
+ruby scripts/lib/manifest_tool.rb rules-by-name "${OUT}/kustomize/observability_local.yaml" "${OUT}/rules/observability"
 tests=(tests/prometheus/*.yaml)
 if [ -e "${tests[0]}" ]; then
   check "promtool test rules (${#tests[@]} files)" promtool test rules "${tests[@]}"

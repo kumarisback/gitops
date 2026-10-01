@@ -4,6 +4,7 @@
 #   manifest_tool.rb configmap FILE KEY [NAME_REGEX]  print data[KEY]
 #   manifest_tool.rb secret    FILE KEY [NAME_REGEX]  print decoded data[KEY]
 #   manifest_tool.rb rules     FILE OUTDIR            one promtool file per PrometheusRule
+#   manifest_tool.rb rules-by-name FILE OUTDIR        same, named <rule>.yaml (for tests)
 #   manifest_tool.rb dashboards FILE                  check every grafana_dashboard JSON
 require 'base64'
 require 'json'
@@ -40,6 +41,12 @@ when 'rules'
     count += 1
   end
   puts count
+when 'rules-by-name'
+  outdir = rest[0]
+  docs(file).select { |d| d['kind'] == 'PrometheusRule' }.each do |d|
+    File.write(File.join(outdir, "#{d.dig('metadata', 'name')}.yaml"),
+               { 'groups' => d.dig('spec', 'groups') || [] }.to_yaml)
+  end
 when 'dashboards'
   count = 0
   docs(file).select { |d| d['kind'] == 'ConfigMap' && d.dig('metadata', 'labels', 'grafana_dashboard') }.each do |d|

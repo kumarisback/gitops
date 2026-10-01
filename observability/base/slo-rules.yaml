@@ -1,0 +1,225 @@
+# Service level objectives for the backend APIs (order-service, user-service),
+# measured from Micrometer's http_server_requests_seconds with actuator
+# endpoints left out:
+#
+#   availability  99.5% of requests don't return 5xx   (budget 0.005)
+#   latency       99% of requests finish within 500ms   (budget 0.01)
+#
+# over a rolling 30 days. The alerts use the multi-window, multi-burn-rate
+# method from the Google SRE workbook (chapter 5, "Alerting on SLOs"): a
+# long window says the budget is really burning and a short window says
+# it still is, so alerts fire within minutes and clear soon after a fix.
+#
+#   page    14.4x for 1h (and 5m)   2% of the 30-day budget in an hour
+#            6x   for 6h (and 30m)  5% in six hours
+#   ticket   3x   for 1d (and 2h)  10% in a day
+#            1x   for 3d (and 6h)  10% in three days
+#
+# The page alerts also need at least 0.05 req/s (3 a minute) over the last
+# hour, so a single failure on an idle service can't page anyone.
+# Change an objective by editing its budget in the alert expressions, the
+# SLO dashboard (dashboards/slo.json) and docs/runbooks.md together.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: slo-rules
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: slo-sli-short
+      interval: 30s
+      rules:
+        - record: slo:sli_requests:rate1h
+          expr: sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[1h]))
+        - record: slo:sli_error:ratio_rate5m
+          expr: |
+            (
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*", status=~"5.."}[5m]))
+              or
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[5m])) * 0
+            )
+            /
+            sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[5m]))
+        - record: slo:sli_latency_slow:ratio_rate5m
+          expr: |
+            1 - (
+              sum by (namespace, job) (rate(http_server_requests_seconds_bucket{job=~"order-service|user-service", uri!~".*actuator.*", le="0.5"}[5m]))
+              /
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[5m]))
+            )
+        - record: slo:sli_error:ratio_rate30m
+          expr: |
+            (
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*", status=~"5.."}[30m]))
+              or
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[30m])) * 0
+            )
+            /
+            sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[30m]))
+        - record: slo:sli_latency_slow:ratio_rate30m
+          expr: |
+            1 - (
+              sum by (namespace, job) (rate(http_server_requests_seconds_bucket{job=~"order-service|user-service", uri!~".*actuator.*", le="0.5"}[30m]))
+              /
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[30m]))
+            )
+        - record: slo:sli_error:ratio_rate1h
+          expr: |
+            (
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*", status=~"5.."}[1h]))
+              or
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[1h])) * 0
+            )
+            /
+            sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[1h]))
+        - record: slo:sli_latency_slow:ratio_rate1h
+          expr: |
+            1 - (
+              sum by (namespace, job) (rate(http_server_requests_seconds_bucket{job=~"order-service|user-service", uri!~".*actuator.*", le="0.5"}[1h]))
+              /
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[1h]))
+            )
+        - record: slo:sli_error:ratio_rate2h
+          expr: |
+            (
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*", status=~"5.."}[2h]))
+              or
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[2h])) * 0
+            )
+            /
+            sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[2h]))
+        - record: slo:sli_latency_slow:ratio_rate2h
+          expr: |
+            1 - (
+              sum by (namespace, job) (rate(http_server_requests_seconds_bucket{job=~"order-service|user-service", uri!~".*actuator.*", le="0.5"}[2h]))
+              /
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[2h]))
+            )
+        - record: slo:sli_error:ratio_rate6h
+          expr: |
+            (
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*", status=~"5.."}[6h]))
+              or
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[6h])) * 0
+            )
+            /
+            sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[6h]))
+        - record: slo:sli_latency_slow:ratio_rate6h
+          expr: |
+            1 - (
+              sum by (namespace, job) (rate(http_server_requests_seconds_bucket{job=~"order-service|user-service", uri!~".*actuator.*", le="0.5"}[6h]))
+              /
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[6h]))
+            )
+    - name: slo-sli-long
+      interval: 5m
+      rules:
+        - record: slo:sli_error:ratio_rate1d
+          expr: |
+            (
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*", status=~"5.."}[1d]))
+              or
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[1d])) * 0
+            )
+            /
+            sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[1d]))
+        - record: slo:sli_latency_slow:ratio_rate1d
+          expr: |
+            1 - (
+              sum by (namespace, job) (rate(http_server_requests_seconds_bucket{job=~"order-service|user-service", uri!~".*actuator.*", le="0.5"}[1d]))
+              /
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[1d]))
+            )
+        - record: slo:sli_error:ratio_rate3d
+          expr: |
+            (
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*", status=~"5.."}[3d]))
+              or
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[3d])) * 0
+            )
+            /
+            sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[3d]))
+        - record: slo:sli_latency_slow:ratio_rate3d
+          expr: |
+            1 - (
+              sum by (namespace, job) (rate(http_server_requests_seconds_bucket{job=~"order-service|user-service", uri!~".*actuator.*", le="0.5"}[3d]))
+              /
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[3d]))
+            )
+        - record: slo:sli_error:ratio_rate30d
+          expr: |
+            (
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*", status=~"5.."}[30d]))
+              or
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[30d])) * 0
+            )
+            /
+            sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[30d]))
+        - record: slo:sli_latency_slow:ratio_rate30d
+          expr: |
+            1 - (
+              sum by (namespace, job) (rate(http_server_requests_seconds_bucket{job=~"order-service|user-service", uri!~".*actuator.*", le="0.5"}[30d]))
+              /
+              sum by (namespace, job) (rate(http_server_requests_seconds_count{job=~"order-service|user-service", uri!~".*actuator.*"}[30d]))
+            )
+    - name: slo-burn-rate
+      rules:
+        - alert: SLOAvailabilityBudgetBurnFast
+          expr: |
+            (
+              (slo:sli_error:ratio_rate1h > (14.4 * 0.005) and slo:sli_error:ratio_rate5m > (14.4 * 0.005))
+              or
+              (slo:sli_error:ratio_rate6h > (6 * 0.005) and slo:sli_error:ratio_rate30m > (6 * 0.005))
+            )
+            and on (namespace, job) slo:sli_requests:rate1h > 0.05
+          for: 2m
+          labels:
+            severity: critical
+            slo: availability
+          annotations:
+            summary: "{{ $labels.job }} is burning its availability error budget fast"
+            description: "{{ $labels.job }} in {{ $labels.namespace }} is failing {{ $value | humanizePercentage }} of requests with 5xx. At this rate the 30-day budget (0.5% of requests) runs out in under two days."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#sloavailabilitybudgetburnfast
+        - alert: SLOAvailabilityBudgetBurnSlow
+          expr: |
+            (slo:sli_error:ratio_rate1d > (3 * 0.005) and slo:sli_error:ratio_rate2h > (3 * 0.005))
+            or
+            (slo:sli_error:ratio_rate3d > (1 * 0.005) and slo:sli_error:ratio_rate6h > (1 * 0.005))
+          for: 15m
+          labels:
+            severity: warning
+            slo: availability
+          annotations:
+            summary: "{{ $labels.job }} is steadily using up its availability error budget"
+            description: "{{ $labels.job }} in {{ $labels.namespace }} has failed {{ $value | humanizePercentage }} of requests with 5xx over the last day or more; the 30-day budget won't last the month."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#sloavailabilitybudgetburnslow
+        - alert: SLOLatencyBudgetBurnFast
+          expr: |
+            (
+              (slo:sli_latency_slow:ratio_rate1h > (14.4 * 0.01) and slo:sli_latency_slow:ratio_rate5m > (14.4 * 0.01))
+              or
+              (slo:sli_latency_slow:ratio_rate6h > (6 * 0.01) and slo:sli_latency_slow:ratio_rate30m > (6 * 0.01))
+            )
+            and on (namespace, job) slo:sli_requests:rate1h > 0.05
+          for: 2m
+          labels:
+            severity: critical
+            slo: latency
+          annotations:
+            summary: "{{ $labels.job }} is burning its latency error budget fast"
+            description: "{{ $value | humanizePercentage }} of {{ $labels.job }} requests in {{ $labels.namespace }} are taking longer than 500ms. At this rate the 30-day budget (1% of requests) runs out in under two days."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#slolatencybudgetburnfast
+        - alert: SLOLatencyBudgetBurnSlow
+          expr: |
+            (slo:sli_latency_slow:ratio_rate1d > (3 * 0.01) and slo:sli_latency_slow:ratio_rate2h > (3 * 0.01))
+            or
+            (slo:sli_latency_slow:ratio_rate3d > (1 * 0.01) and slo:sli_latency_slow:ratio_rate6h > (1 * 0.01))
+          for: 15m
+          labels:
+            severity: warning
+            slo: latency
+          annotations:
+            summary: "{{ $labels.job }} is steadily using up its latency error budget"
+            description: "{{ $value | humanizePercentage }} of {{ $labels.job }} requests in {{ $labels.namespace }} have taken longer than 500ms over the last day or more; the 30-day budget won't last the month."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#slolatencybudgetburnslow

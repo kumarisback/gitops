@@ -10,6 +10,7 @@ namespace: monitoring
 
 resources:
   - service-alerts.yaml
+  - slo-rules.yaml
 
 # The Grafana sidecar loads every ConfigMap labelled grafana_dashboard from
 # the monitoring namespace. Stable names, so a dashboard keeps its URL.
@@ -17,6 +18,13 @@ configMapGenerator:
   - name: dashboard-microservices
     files:
       - dashboards/microservices.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+  - name: dashboard-slo
+    files:
+      - dashboards/slo.json
     options:
       disableNameSuffixHash: true
       labels:
