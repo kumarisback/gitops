@@ -13,6 +13,8 @@ kind: Kustomization
 resources:
   - ../../projects/platform.yaml
   - ../../projects/prod.yaml
+  # The HPAs in apps/base need resource metrics; EKS ships no metrics-server.
+  - ../../projects/metrics-server.yaml
   # Observability stack: logs (Loki/Alloy), metrics (kube-prometheus-stack),
   # and traces (Tempo/OTel Collector) — same pattern as bootstrap/envs/dev.
   - ../../projects/prometheus-stack.yaml
