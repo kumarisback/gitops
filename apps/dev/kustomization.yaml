@@ -70,6 +70,13 @@ patches:
         value:
           name: OTEL_RESOURCE_ATTRIBUTES
           value: deployment.environment=dev,k8s.namespace.name=development
+      # Same value as deployment.environment above; logback-spring.xml
+      # writes it into the "environment" field of every JSON log line.
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: DEPLOYMENT_ENVIRONMENT
+          value: dev
   - target:
       kind: Deployment
       name: user-service
@@ -119,3 +126,10 @@ patches:
         value:
           name: OTEL_RESOURCE_ATTRIBUTES
           value: deployment.environment=dev,k8s.namespace.name=development
+      # Same value as deployment.environment above; logback-spring.xml
+      # writes it into the "environment" field of every JSON log line.
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: DEPLOYMENT_ENVIRONMENT
+          value: dev
