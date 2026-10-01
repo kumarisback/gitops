@@ -1,4 +1,6 @@
 loki:
+  commonConfig:
+    replication_factor: 3
   # Required: chart 6.x refuses to render without a schema.
   schemaConfig:
     configs:
@@ -49,7 +51,14 @@ serviceAccount:
   create: false
   name: loki
 
+# Three replicas with replication factor 3 (memberlist ring): a write is
+# acknowledged by two of three, so one pod or node can go away without
+# losing logs or failing pushes.
 singleBinary:
+  replicas: 3
+  persistence:
+    storageClass: gp3
+    size: 10Gi
   resources:
     requests:
       cpu: 250m
@@ -57,3 +66,10 @@ singleBinary:
     limits:
       cpu: 1000m
       memory: 1.5Gi
+
+# The chart's defaults size the memcached chunk cache at 8 GB of RAM;
+# 1 GB and 512 MB are plenty at this volume.
+chunksCache:
+  allocatedMemory: 1024
+resultsCache:
+  allocatedMemory: 512

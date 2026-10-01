@@ -7,3 +7,9 @@ grafana:
     tls:
       - hosts:
           - grafana.prod.example.com
+prometheus:
+  prometheusSpec:
+    # Identifies this cluster's series once they're remote-written or
+    # federated alongside other clusters'.
+    externalLabels:
+      cluster: microservices-prod-eks-cluster

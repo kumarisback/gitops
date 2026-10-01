@@ -127,3 +127,68 @@ alertmanager:
             details:
               runbook: '{{ .CommonAnnotations.runbook_url }}'
               firing: '{{ .Alerts.Firing | len }}'
+
+prometheus:
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  prometheusSpec:
+    # Two replicas scrape the same targets; Alertmanager de-duplicates their
+    # alerts. __replica__ (with the cluster label from the environment file)
+    # is what Amazon Managed Prometheus de-duplicates remote-written samples by.
+    replicas: 2
+    replicaExternalLabelName: __replica__
+    podAntiAffinity: soft
+    # 30 days on disk so the SLO rules' 30-day windows (budget left) see a
+    # full window.
+    retention: 30d
+    retentionSize: 45GB
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp3
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 50Gi
+    resources:
+      requests:
+        cpu: 500m
+        memory: 2Gi
+      limits:
+        cpu: "2"
+        memory: 4Gi
+    # Long-term and cross-cluster metrics: once an Amazon Managed Prometheus
+    # workspace and an IRSA role with aps:RemoteWrite exist (tf repo), add to
+    # addons/values/<env>/kube-prometheus-stack.yaml:
+    #
+    #   prometheus:
+    #     serviceAccount:
+    #       annotations:
+    #         eks.amazonaws.com/role-arn: arn:aws:iam::<account>:role/microservices-<env>-irsa-prometheus
+    #     prometheusSpec:
+    #       remoteWrite:
+    #         - url: https://aps-workspaces.us-east-1.amazonaws.com/workspaces/<id>/api/v1/remote_write
+    #           sigv4:
+    #             region: us-east-1
+    #
+    # Left out until then: a placeholder URL fails every write and fires
+    # the chart's PrometheusRemoteStorageFailures alert.
+
+alertmanager:
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+  alertmanagerSpec:
+    # Three peers gossip silences and notification state, so one pod (or
+    # node) going away neither loses silences nor double-notifies.
+    replicas: 3
+    podAntiAffinity: soft
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp3
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 2Gi

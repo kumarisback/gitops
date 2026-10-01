@@ -1,6 +1,21 @@
-# TODO: local-disk trace storage on a PVC works but doesn't scale past a
-# single replica — consider an S3 backend (same IRSA pattern as loki.yaml)
-# once real bucket/region values are available for this environment.
+tempo:
+  # Traces in S3 (14 days), not on the pod's disk: survives the pod and the
+  # node, and doesn't fill a PVC. TODO: placeholder bucket and region, like
+  # addons/values/cloud/loki.yaml; fill them in and create the IRSA-annotated
+  # `tempo` ServiceAccount (s3:GetObject/PutObject/ListBucket/DeleteObject on
+  # the bucket) before the environment goes live.
+  retention: 336h
+  storage:
+    trace:
+      backend: s3
+      s3:
+        bucket: <your-tempo-s3-bucket-name>
+        endpoint: s3.<your-aws-region>.amazonaws.com
+        region: <your-aws-region>
+serviceAccount:
+  create: false
+  name: tempo
+# The PVC still holds the write-ahead log.
 persistence:
   storageClassName: gp3
   size: 10Gi
