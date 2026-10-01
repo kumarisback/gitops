@@ -1,0 +1,28 @@
+# Alertmanager receiver credentials (see addons/values/cloud/
+# kube-prometheus-stack.yaml). ENV is filled in by this component's
+# replacements from the overlay's observability-env ConfigMap.
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: alertmanager-receivers
+  namespace: monitoring
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secretsmanager
+    kind: ClusterSecretStore
+  target:
+    name: alertmanager-receivers
+  data:
+    - secretKey: slack_webhook_url
+      remoteRef:
+        key: microservices/ENV/alerting
+        property: slack_webhook_url
+    - secretKey: pagerduty_routing_key
+      remoteRef:
+        key: microservices/ENV/alerting
+        property: pagerduty_routing_key
+    - secretKey: heartbeat_url
+      remoteRef:
+        key: microservices/ENV/alerting
+        property: heartbeat_url

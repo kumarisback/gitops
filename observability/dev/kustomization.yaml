@@ -3,3 +3,16 @@ kind: Kustomization
 
 resources:
   - ../base
+
+components:
+  - ../components/cloud-secrets
+
+# Picks microservices/dev/... in AWS Secrets Manager (not deployed).
+configMapGenerator:
+  - name: observability-env
+    literals:
+      - env=dev
+    options:
+      disableNameSuffixHash: true
+      annotations:
+        config.kubernetes.io/local-config: "true"

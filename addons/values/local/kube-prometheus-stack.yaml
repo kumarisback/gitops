@@ -12,3 +12,14 @@ grafana:
   persistence:
     storageClassName: "standard"
     size: 2Gi
+alertmanager:
+  # Lab: alerts show in the Alertmanager UI
+  # (kubectl port-forward svc/kube-prometheus-stack-alertmanager 9093 -n monitoring)
+  # and Grafana, and are sent nowhere.
+  config:
+    route:
+      receiver: "null"
+      group_by: [alertname, namespace, job]
+      routes: []
+    receivers:
+      - name: "null"

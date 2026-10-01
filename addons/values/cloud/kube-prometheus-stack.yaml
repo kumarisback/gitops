@@ -1,14 +1,8 @@
 grafana:
-  # No hardcoded default password: this environment's Grafana reads its
-  # admin credentials from a pre-existing Secret in the monitoring
-  # namespace instead. Until this is wired through ExternalSecrets
-  # (matching the apps/<env>/app-secrets.yaml pattern), create it once
-  # per cluster out-of-band, e.g.:
-  #   kubectl create secret generic grafana-admin-credentials \
-  #     -n monitoring \
-  #     --from-literal=admin-user=admin \
-  #     --from-literal=admin-password='<a real generated password>'
-  # Grafana will fail to start until this Secret exists.
+  # No hardcoded password: admin credentials come from Secret
+  # grafana-admin-credentials, created by the ExternalSecret in
+  # observability/components/cloud-secrets from AWS Secrets Manager
+  # (microservices/<env>/grafana: admin_user, admin_password).
   admin:
     existingSecret: grafana-admin-credentials
     userKey: admin-user
@@ -16,3 +10,80 @@ grafana:
   persistence:
     storageClassName: "gp3"
     size: 10Gi
+
+alertmanager:
+  alertmanagerSpec:
+    # Receiver credentials, mounted at
+    # /etc/alertmanager/secrets/alertmanager-receivers/<key>. Created by the
+    # ExternalSecret in observability/components/cloud-secrets from AWS
+    # Secrets Manager (microservices/<env>/alerting): slack_webhook_url,
+    # pagerduty_routing_key, heartbeat_url.
+    secrets:
+      - alertmanager-receivers
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      receiver: slack
+      group_by: [alertname, namespace, job]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        # Dead man's switch: Watchdog always fires, so the heartbeat
+        # service (e.g. a PagerDuty or healthchecks.io check) raises its own
+        # alarm when these pings stop, i.e. when alerting itself is broken.
+        - matchers: ['alertname="Watchdog"']
+          receiver: heartbeat
+          group_wait: 0s
+          group_interval: 1m
+          repeat_interval: 1m
+        - matchers: ['alertname="InfoInhibitor"']
+          receiver: "null"
+        - matchers: ['severity="info"']
+          receiver: "null"
+        # Critical pages, and is also posted to Slack for context.
+        - matchers: ['severity="critical"']
+          receiver: pagerduty
+          repeat_interval: 1h
+          continue: true
+        - matchers: ['severity=~"warning|critical"']
+          receiver: slack
+    inhibit_rules:
+      - source_matchers: ['severity="critical"']
+        target_matchers: ['severity=~"warning|info"']
+        equal: [namespace, alertname]
+      - source_matchers: ['severity="warning"']
+        target_matchers: ['severity="info"']
+        equal: [namespace, alertname]
+      - source_matchers: ['alertname="InfoInhibitor"']
+        target_matchers: ['severity="info"']
+        equal: [namespace]
+      # While a service is down its SLO alerts add nothing.
+      - source_matchers: ['alertname="ServiceDown"']
+        target_matchers: ['alertname=~"SLO.+"']
+        equal: [namespace, job]
+    receivers:
+      - name: "null"
+      - name: heartbeat
+        webhook_configs:
+          - url_file: /etc/alertmanager/secrets/alertmanager-receivers/heartbeat_url
+            send_resolved: false
+      - name: slack
+        slack_configs:
+          - api_url_file: /etc/alertmanager/secrets/alertmanager-receivers/slack_webhook_url
+            send_resolved: true
+            title: '[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }} ({{ .CommonLabels.namespace }})'
+            text: |-
+              {{ range .Alerts }}*{{ .Annotations.summary }}*
+              {{ .Annotations.description }}
+              {{ if .Annotations.runbook_url }}Runbook: {{ .Annotations.runbook_url }}{{ end }}
+              {{ end }}
+      - name: pagerduty
+        pagerduty_configs:
+          - routing_key_file: /etc/alertmanager/secrets/alertmanager-receivers/pagerduty_routing_key
+            send_resolved: true
+            description: '{{ .CommonAnnotations.summary }}'
+            details:
+              runbook: '{{ .CommonAnnotations.runbook_url }}'
+              firing: '{{ .Alerts.Firing | len }}'
