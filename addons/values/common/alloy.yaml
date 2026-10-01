@@ -69,9 +69,11 @@ alloy:
         // access log from RequestLoggingFilter, logger access.<svc>.http)
         // or log_type="server" (everything else) so Grafana can pick
         // one by label. Two values, so the index barely grows. No Go
-        // templates in this file: the chart renders it through tpl.
+        // templates in this file: the chart renders it through tpl. The
+        // match stage's LogQL parser doesn't accept `raw` strings, hence
+        // the escaped quotes.
         stage.match {
-          selector = "{container=~\"user-service|order-service\"} |= `\"logger\":\"access.`"
+          selector = "{container=~\"user-service|order-service\"} |= \"\\\"logger\\\":\\\"access.\""
 
           stage.static_labels {
             values = { log_type = "api" }
@@ -79,7 +81,7 @@ alloy:
         }
 
         stage.match {
-          selector = "{container=~\"user-service|order-service\"} != `\"logger\":\"access.`"
+          selector = "{container=~\"user-service|order-service\"} != \"\\\"logger\\\":\\\"access.\""
 
           stage.static_labels {
             values = { log_type = "server" }
