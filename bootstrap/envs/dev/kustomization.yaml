@@ -17,6 +17,6 @@ resources:
     # Add the PLG stack below:
   - ../../projects/prometheus-stack.yaml
   - ../../projects/loki.yaml
-  - ../../projects/promtail.yaml
+  - ../../projects/alloy.yaml
   - ../../projects/tempo.yaml
   - ../../projects/otel-collector.yaml
