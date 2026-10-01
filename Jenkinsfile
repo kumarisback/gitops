@@ -15,7 +15,7 @@ pipeline {
   }
 
   parameters {
-    booleanParam(name: 'UPDATE_IMAGE', defaultValue: false, description: 'Check this box to update a service image tag')
+    booleanParam(name: 'UPDATE_IMAGE', defaultValue: false, description: 'Check this box to open a pull request that updates a service image tag')
     choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'prod'], description: 'Target environment to update')
     choice(name: 'SERVICE_NAME', choices: ['frontend', 'user-service', 'order-service'], description: 'Service to update')
     string(name: 'NEW_TAG', defaultValue: '', description: 'New Docker image tag (e.g., v1.2.0)')
@@ -33,45 +33,85 @@ pipeline {
         expression { return params.UPDATE_IMAGE == true && params.NEW_TAG != '' }
       }
       steps {
-        dir("apps/${params.ENVIRONMENT}") {
-          echo "Updating ${params.SERVICE_NAME} to tag ${params.NEW_TAG} in ${params.ENVIRONMENT}..."
-          sh "kustomize edit set image 602367507570.dkr.ecr.us-east-1.amazonaws.com/${params.SERVICE_NAME}=602367507570.dkr.ecr.us-east-1.amazonaws.com/${params.SERVICE_NAME}:${params.NEW_TAG}"
+        script {
+          // Job parameters reach the shell only as environment variables in
+          // single-quoted scripts (never Groovy string interpolation), and
+          // only after matching these checks, so a crafted value can't run
+          // commands on the agent.
+          if (!(params.ENVIRONMENT in ['dev', 'staging', 'prod'])) {
+            error("Invalid ENVIRONMENT: must be dev, staging or prod")
+          }
+          if (!(params.SERVICE_NAME in ['frontend', 'user-service', 'order-service'])) {
+            error("Invalid SERVICE_NAME: must be frontend, user-service or order-service")
+          }
+          if (!(params.NEW_TAG ==~ /[A-Za-z0-9][A-Za-z0-9._-]{0,127}/)) {
+            error("Invalid NEW_TAG: use letters, digits, '.', '_' or '-', up to 128 characters")
+          }
+        }
+        withEnv(["TARGET_ENV=${params.ENVIRONMENT}", "SERVICE=${params.SERVICE_NAME}", "NEW_TAG=${params.NEW_TAG}"]) {
+          sh '''
+            set -eu
+            image="602367507570.dkr.ecr.us-east-1.amazonaws.com/${SERVICE}"
+            cd "apps/${TARGET_ENV}"
+            echo "Updating ${SERVICE} to tag ${NEW_TAG} in ${TARGET_ENV}..."
+            kustomize edit set image "${image}=${image}:${NEW_TAG}"
+          '''
         }
       }
     }
 
     // Runs on every build, and after an image-tag edit so a broken change
-    // is never pushed. Renders every environment's overlays and Helm
-    // add-ons and checks them with each component's own parser.
+    // never reaches a pull request. Renders every environment's overlays and
+    // Helm add-ons and checks them with each component's own parser.
     stage('Validate') {
       steps {
         sh './scripts/validate.sh'
       }
     }
 
-    stage('Push Image Tag') {
+    // main is protected: an image change lands through a reviewed pull
+    // request (validated by this same pipeline), never a direct push.
+    stage('Open Pull Request') {
       when {
         expression { return params.UPDATE_IMAGE == true && params.NEW_TAG != '' }
       }
       steps {
-        withCredentials([gitUsernamePassword(credentialsId: 'github-credentials', gitToolName: 'git-default')]) {
-          sh """
-            git config user.name "Jenkins CI"
-            git config user.email "jenkins@company.com"
-            git add apps/${params.ENVIRONMENT}/kustomization.yaml
-            git commit -m "ci: update ${params.SERVICE_NAME} image tag to ${params.NEW_TAG} in ${params.ENVIRONMENT}"
-            git push origin HEAD:main
-          """
+        withEnv(["TARGET_ENV=${params.ENVIRONMENT}", "SERVICE=${params.SERVICE_NAME}", "NEW_TAG=${params.NEW_TAG}"]) {
+          withCredentials([gitUsernamePassword(credentialsId: 'github-credentials', gitToolName: 'git-default')]) {
+            sh '''
+              set -eu
+              branch="ci/${SERVICE}-${TARGET_ENV}-${NEW_TAG}"
+              git config user.name "Jenkins CI"
+              git config user.email "jenkins@company.com"
+              git checkout -b "${branch}"
+              git add "apps/${TARGET_ENV}/kustomization.yaml"
+              git commit -m "ci: update ${SERVICE} image tag to ${NEW_TAG} in ${TARGET_ENV}"
+              git push origin "${branch}"
+
+              # Credentials go to curl through a private file, not argv.
+              auth="$(mktemp)"
+              trap 'rm -f "${auth}"' EXIT
+              chmod 600 "${auth}"
+              printf 'user = "%s:%s"\\n' "${GIT_USERNAME}" "${GIT_PASSWORD}" > "${auth}"
+              jq -n \
+                --arg title "ci: ${SERVICE} ${NEW_TAG} -> ${TARGET_ENV}" \
+                --arg head "${branch}" \
+                --arg body "Image tag update requested by Jenkins build ${BUILD_URL}" \
+                '{title: $title, head: $head, base: "main", body: $body}' |
+                curl -fsS -K "${auth}" -H "Accept: application/vnd.github+json" \
+                  -X POST https://api.github.com/repos/kumarisback/gitops/pulls -d @- |
+                jq -r '"Opened " + .html_url'
+            '''
+          }
         }
-        echo "🚀 Updated image tag and pushed to GitOps repo! ArgoCD will now auto-deploy."
       }
     }
   }
 
   post {
     always {
-      // Per-check logs and the rendered manifests, for failed builds.
-      archiveArtifacts artifacts: '.validate/logs/**,.validate/kustomize/**,.validate/helm/**', allowEmptyArchive: true
+      // Per-check logs only; the rendered manifests include Secrets.
+      archiveArtifacts artifacts: '.validate/logs/**', allowEmptyArchive: true
       cleanWs()
     }
   }
