@@ -47,8 +47,14 @@ spec:
           annotations:
             summary: "Local API latency is high"
             description: "The 95th percentile API latency is above one second."
+        # One absent_over_time per service: with a regex matcher it only
+        # returns a result when *no* matching series exist, so one missing
+        # service went unnoticed while the other was still scraped.
         - alert: LocalMetricsMissing
-          expr: absent_over_time(up{namespace="development",service=~"order-service|user-service"}[10m])
+          expr: |
+            absent_over_time(up{namespace="development",service="order-service"}[10m])
+            or
+            absent_over_time(up{namespace="development",service="user-service"}[10m])
           for: 2m
           labels:
             severity: critical
