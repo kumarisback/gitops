@@ -75,9 +75,11 @@ disable_argocd_autosync
 
 AddonReleases.for('bootstrap/envs/local').each { |r| sync_helm_app(r, failures) }
 
-puts "\n=== local-apps (frontend/order-service/user-service + observability config) ==="
-unless run(%(kubectl apply -k #{File.join(REPO_ROOT, 'apps/local')}))
-  failures << 'local-apps'
+# Directory-based Applications: the services (apps/local) and the alerting
+# rules + dashboards (observability/local).
+AddonReleases.paths('bootstrap/envs/local').each do |app|
+  puts "\n=== #{app['name']} (#{app['path']}) ==="
+  failures << app['name'] unless run(%(kubectl apply -k #{File.join(REPO_ROOT, app['path'])}))
 end
 
 if failures.empty?

@@ -20,7 +20,7 @@ spec:
       patches:
         - target:
             kind: Application
-            name: local-apps
+            name: local-apps|observability-config
           patch: |-
             - op: replace
               path: /spec/source/targetRevision

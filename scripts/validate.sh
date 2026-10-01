@@ -72,7 +72,7 @@ render_kustomize() {  # SRC DEST
 # --- 1. kustomize overlays -------------------------------------------------
 echo "Kustomize overlays"
 KUSTOMIZE_DIRS=(platform)
-for env in "${ENVS[@]}"; do KUSTOMIZE_DIRS+=("apps/${env}" "bootstrap/envs/${env}"); done
+for env in "${ENVS[@]}"; do KUSTOMIZE_DIRS+=("apps/${env}" "observability/${env}" "bootstrap/envs/${env}"); done
 for dir in "${KUSTOMIZE_DIRS[@]}"; do
   dest="${OUT}/kustomize/$(echo "${dir}" | tr '/' '_').yaml"
   check "build ${dir}" render_kustomize "${dir}" "${dest}"

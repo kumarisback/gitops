@@ -1,0 +1,37 @@
+# Basic availability of the backend services, in every environment.
+# Request-level health (errors, latency) is covered by the SLO burn-rate
+# alerts in slo-rules.yaml; pod-level problems by kube-prometheus-stack's
+# default rules (KubePodCrashLooping, KubeDeploymentReplicasMismatch, ...).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: service-alerts
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: service-availability
+      rules:
+        - alert: ServiceDown
+          expr: up{job=~"order-service|user-service"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.job }} is not answering scrapes in {{ $labels.namespace }}"
+            description: "Prometheus has failed to scrape {{ $labels.pod }} for 2 minutes; the pod is down, not ready, or /actuator/prometheus is failing."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#servicedown
+        # One absent_over_time per service: with a regex matcher it only
+        # returns a result when *no* matching series exist.
+        - alert: ServiceMetricsMissing
+          expr: |
+            absent_over_time(up{job="order-service"}[10m])
+            or
+            absent_over_time(up{job="user-service"}[10m])
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.job }} has no scrape target at all"
+            description: "Prometheus has had no target for {{ $labels.job }} for 10 minutes: the Service, its labels or the ServiceMonitor is missing."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#servicemetricsmissing

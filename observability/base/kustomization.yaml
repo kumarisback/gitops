@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Alerting rules and Grafana dashboards shared by every environment. They
+# select services by job/namespace labels rather than a hard-coded
+# namespace, so the same files work in development, staging and
+# production. Deployed into monitoring by the observability-config
+# Application (addons/applications/observability-config.yaml).
+namespace: monitoring
+
+resources:
+  - service-alerts.yaml
+
+# The Grafana sidecar loads every ConfigMap labelled grafana_dashboard from
+# the monitoring namespace. Stable names, so a dashboard keeps its URL.
+configMapGenerator:
+  - name: dashboard-microservices
+    files:
+      - dashboards/microservices.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"

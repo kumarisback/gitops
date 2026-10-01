@@ -18,3 +18,4 @@ resources:
   - otel-collector.yaml
   - alloy.yaml
   - metrics-server.yaml
+  - observability-config.yaml

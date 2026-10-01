@@ -6,7 +6,6 @@ resources:
   - ../base
   - resourcequota.yaml
   - limitrange.yaml
-  - observability.yaml
 
 namespace: development
 

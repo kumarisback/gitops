@@ -14,6 +14,7 @@ kind: Component
 #
 # valueFiles[1] is $values/addons/values/TIER/<addon>.yaml and valueFiles[2]
 # is $values/addons/values/ENV/<addon>.yaml; path segment 3 is replaced.
+# observability-config's source path observability/ENV gets segment 1.
 replacements:
   - source:
       kind: ConfigMap
@@ -41,3 +42,11 @@ replacements:
         options:
           delimiter: /
           index: 3
+      - select:
+          kind: Application
+          labelSelector: app.kubernetes.io/name=observability-config
+        fieldPaths:
+          - spec.source.path
+        options:
+          delimiter: /
+          index: 1

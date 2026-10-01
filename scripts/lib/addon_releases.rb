@@ -51,6 +51,20 @@ module AddonReleases
   end
 end
 
+module AddonReleases
+  # Applications that point at a directory of this repo (kustomize), e.g.
+  # local-apps -> apps/local, observability-config -> observability/local.
+  def self.paths(env_dir)
+    render(env_dir).select { |d| d['kind'] == 'Application' }.map do |app|
+      source = app.dig('spec', 'source')
+      next unless source && source['path'] && !source['chart']
+
+      { 'name' => app['metadata']['name'], 'path' => source['path'],
+        'namespace' => app.dig('spec', 'destination', 'namespace') }
+    end.compact.sort_by { |a| a['name'] }
+  end
+end
+
 if $PROGRAM_NAME == __FILE__
   abort "usage: #{$PROGRAM_NAME} bootstrap/envs/<env>" unless ARGV.size == 1
   AddonReleases.for(ARGV[0]).each { |r| puts JSON.generate(r) }

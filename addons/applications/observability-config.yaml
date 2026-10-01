@@ -1,0 +1,36 @@
+# Alerting rules, dashboards and (outside the lab) alerting secrets from
+# observability/<env>. Not a Helm chart, so it isn't labelled
+# cluster-addons; addons/select-env fills in ENV in the path.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: observability-config
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: observability-config
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/kumarisback/gitops.git
+    targetRevision: HEAD
+    path: observability/ENV
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    # PrometheusRule and ExternalSecret CRDs come from other add-ons;
+    # retry until they exist instead of failing the first sync.
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      - CreateNamespace=true
+      - SkipDryRunOnMissingResource=true
