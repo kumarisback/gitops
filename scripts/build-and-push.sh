@@ -7,18 +7,19 @@ ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 CLUSTER_NAME="dev-lab"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKSPACE_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-DEVOPS_DIR="${WORKSPACE_ROOT}/Devops"
+# The application repo is checked out next to this one (../app), the same
+# place the podman scripts build from. Override with APP_DIR=/path.
+APP_DIR="${APP_DIR:-$(cd "${SCRIPT_DIR}/../.." && pwd)/app}"
 
-if [ ! -d "${DEVOPS_DIR}" ]; then
-  echo "❌ Error: Could not find Devops directory at ${DEVOPS_DIR}"
+if [ ! -d "${APP_DIR}" ]; then
+  echo "❌ Error: Could not find the application repo at ${APP_DIR} (set APP_DIR to override)"
   exit 1
 fi
 
 echo "========================================================"
 echo "🛠️  Building Microservices Docker Images"
 echo "========================================================"
-echo "• Devops source: ${DEVOPS_DIR}"
+echo "• App source:    ${APP_DIR}"
 echo "• Target ECR:    ${ECR_REGISTRY}"
 echo "========================================================"
 
@@ -28,7 +29,7 @@ SERVICES=("frontend" "order-service" "user-service")
 for svc in "${SERVICES[@]}"; do
   echo ""
   echo "🔨 Building ${svc}..."
-  docker build -t "${ECR_REGISTRY}/${svc}:latest" -t "${svc}:latest" "${DEVOPS_DIR}/${svc}"
+  docker build -t "${ECR_REGISTRY}/${svc}:latest" -t "${svc}:latest" "${APP_DIR}/${svc}"
   echo "✅ Built ${svc}:latest successfully."
 done
 
