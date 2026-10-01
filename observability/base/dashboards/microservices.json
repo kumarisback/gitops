@@ -64,7 +64,8 @@
           "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"$namespace\",pod=~\"(frontend|user-service|order-service)-.*\",container!=\"POD\",container!=\"\"}[5m]))",
           "refId": "A"
         }
-      ]
+      ],
+      "id": 1
     },
     {
       "type": "timeseries",
@@ -80,7 +81,8 @@
           "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"$namespace\",pod=~\"(frontend|user-service|order-service)-.*\",container!=\"POD\",container!=\"\"})",
           "refId": "A"
         }
-      ]
+      ],
+      "id": 2
     },
     {
       "type": "timeseries",
@@ -96,7 +98,8 @@
           "expr": "sum by (job, method, status) (rate(http_server_requests_seconds_count{namespace=\"$namespace\"}[5m]))",
           "refId": "A"
         }
-      ]
+      ],
+      "id": 3
     },
     {
       "type": "timeseries",
@@ -112,7 +115,8 @@
           "expr": "sum by (job, status) (rate(http_server_requests_seconds_count{namespace=\"$namespace\",status=~\"5..\"}[5m]))",
           "refId": "A"
         }
-      ]
+      ],
+      "id": 4
     },
     {
       "type": "stat",
@@ -128,7 +132,8 @@
           "expr": "sum(kube_pod_status_ready{namespace=\"$namespace\",condition=\"true\",pod=~\"(frontend|user-service|order-service)-.*\"})",
           "refId": "A"
         }
-      ]
+      ],
+      "id": 5
     },
     {
       "type": "timeseries",
@@ -144,7 +149,8 @@
           "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{namespace=\"$namespace\"}[5m])))",
           "refId": "A"
         }
-      ]
+      ],
+      "id": 6
     },
     {
       "type": "timeseries",
@@ -160,7 +166,8 @@
           "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"$namespace\",pod=~\"(frontend|user-service|order-service)-.*\"}[15m]))",
           "refId": "A"
         }
-      ]
+      ],
+      "id": 7
     },
     {
       "type": "timeseries",
@@ -176,7 +183,8 @@
           "expr": "sum(rate({__name__=~\"otelcol_receiver_accepted_spans(_total)?\"}[5m]))",
           "refId": "A"
         }
-      ]
+      ],
+      "id": 8
     },
     {
       "type": "stat",
@@ -192,7 +200,8 @@
           "expr": "absent_over_time(up{namespace=\"$namespace\",service=~\"order-service|user-service\"}[10m])",
           "refId": "A"
         }
-      ]
+      ],
+      "id": 9
     },
     {
       "type": "logs",
@@ -217,7 +226,44 @@
           "expr": "{namespace=\"$namespace\", container=~\"frontend|user-service|order-service\", log_type=~\"$log_type\"}",
           "refId": "A"
         }
-      ]
+      ],
+      "id": 10
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Failed requests (click a dot to open the trace)",
+      "description": "Server spans with an error status, from the collector's span metrics (100% of spans). Each dot is an exemplar: one failing request whose trace the tail sampler always keeps.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 50
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "exemplar": true,
+          "legendFormat": "{{service_name}}",
+          "expr": "sum by (service_name) (rate(traces_spanmetrics_calls_total{span_kind=\"SPAN_KIND_SERVER\", status_code=\"STATUS_CODE_ERROR\", k8s_namespace_name=\"$namespace\"}[5m]))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": [
+
+        ]
+      }
     }
   ],
   "uid": "microservices"

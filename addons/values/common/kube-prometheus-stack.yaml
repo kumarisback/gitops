@@ -2,6 +2,10 @@ prometheus:
   prometheusSpec:
     # Pick up every ServiceMonitor/PrometheusRule regardless of its labels.
     serviceMonitorSelectorNilUsesHelmValues: false
+    # Keep the trace IDs (exemplars) the collector's span metrics carry, so
+    # Grafana can open the trace behind a point on a graph.
+    enableFeatures:
+      - exemplar-storage
     resources:
       requests:
         cpu: 250m
@@ -10,6 +14,12 @@ prometheus:
         cpu: 1000m
         memory: 2Gi
 grafana:
+  sidecar:
+    datasources:
+      # Exemplar dots on Prometheus graphs open the trace in Tempo.
+      exemplarTraceIdDestinations:
+        datasourceUid: Tempo
+        traceIdLabelName: trace_id
   # Loki and Tempo link to each other through trace_id, which the Java
   # agent puts in every JSON log line. $$ stops Grafana's provisioning
   # from expanding ${...} as an environment variable.
@@ -42,5 +52,11 @@ grafana:
           spanEndTimeShift: 5m
           customQuery: true
           query: '{log_type=~".+"} |= "$${__trace.traceId}"'
+        # Service map and node graph from the collector's servicegraph
+        # metrics (traces_service_graph_*) in Prometheus.
+        serviceMap:
+          datasourceUid: prometheus
+        nodeGraph:
+          enabled: true
   persistence:
     enabled: true
