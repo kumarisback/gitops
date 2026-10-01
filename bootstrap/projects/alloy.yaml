@@ -55,7 +55,9 @@ spec:
                 targets    = discovery.relabel.pod_logs.output
                 forward_to = [loki.process.pod_logs.receiver]
 
-                // Without this every replica would tail every pod.
+                // With alloy.clustering.enabled the replicas shard the pods
+                // between them so each is tailed once; without clustering
+                // this block is a no-op and the one replica tails them all.
                 clustering {
                   enabled = true
                 }
@@ -64,8 +66,13 @@ spec:
               loki.process "pod_logs" {
                 forward_to = [loki.write.default.receiver]
 
-                // Only the Spring services write one JSON object per line, so
-                // only they get the multiline rule (see the local file).
+                // Only the Spring services write one JSON object per line
+                // (net.logstash.logback encoder), so only they get the
+                // multiline rule: a new entry starts at "{" and anything else
+                // (JVM or agent output that bypasses the encoder) joins the
+                // previous entry. Applied cluster-wide it glued plain-text
+                // logs from nginx, ingress-nginx, Loki and ArgoCD into blocks
+                // of up to 128 lines.
                 stage.match {
                   selector = "{container=~\"user-service|order-service\"}"
 

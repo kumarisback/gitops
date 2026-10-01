@@ -51,10 +51,17 @@ spec:
               loki.source.kubernetes "pod_logs" {
                 targets    = discovery.relabel.pod_logs.output
                 forward_to = [loki.process.pod_logs.receiver]
+
+                // With alloy.clustering.enabled the replicas shard the pods
+                // between them so each is tailed once; without clustering
+                // this block is a no-op and the one replica tails them all.
+                clustering {
+                  enabled = true
+                }
               }
 
               loki.process "pod_logs" {
-                forward_to = [loki.write.local.receiver]
+                forward_to = [loki.write.default.receiver]
 
                 // Only the Spring services write one JSON object per line
                 // (net.logstash.logback encoder), so only they get the
@@ -94,15 +101,13 @@ spec:
                 }
               }
 
-              loki.write "local" {
+              loki.write "default" {
                 endpoint {
                   url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
                 }
               }
-        # loki.source.kubernetes tails pods through the Kubernetes API, and
-        # without clustering every Alloy instance tails every pod it
-        # discovers. As a DaemonSet that meant one copy of each log stream
-        # per node. One replica covers the whole lab cluster.
+        # loki.source.kubernetes reads pods through the Kubernetes API, so one
+        # replica covers the whole lab cluster (no DaemonSet, no clustering).
         controller:
           type: deployment
           replicas: 1
