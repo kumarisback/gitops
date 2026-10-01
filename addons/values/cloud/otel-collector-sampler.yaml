@@ -1,0 +1,16 @@
+replicaCount: 2
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+# Of traces with no error and under 500ms, keep this share. dev and staging
+# override it in addons/values/<env>/otel-collector-sampler.yaml.
+extraEnvs:
+  - name: TAIL_SAMPLING_PERCENTAGE
+    value: "10"

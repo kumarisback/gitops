@@ -72,3 +72,20 @@ tests:
       - expr: ALERTS{alertstate="firing", pipeline="traces"}
         eval_time: 30m
         exp_samples: []
+
+  # The gateway's DNS lookup returns no sampler pods; and a sampler that
+  # runs out of room drops traces before deciding.
+  - interval: 1m
+    input_series:
+      - series: 'otelcol_loadbalancer_num_backends{resolver="dns"}'
+        values: '2x5 0x20'
+      - series: 'otelcol_processor_tail_sampling_sampling_trace_dropped_too_early{processor="tail_sampling"}'
+        values: '0x10 5+5x15'
+    promql_expr_test:
+      - expr: ALERTS{alertstate="firing", alertname=~"TraceGatewayHasNoSamplers|TailSamplerOverloaded"}
+        eval_time: 15m
+        exp_samples:
+          - labels: 'ALERTS{alertname="TailSamplerOverloaded",alertstate="firing",pipeline="traces",severity="warning"}'
+            value: 1
+          - labels: 'ALERTS{alertname="TraceGatewayHasNoSamplers",alertstate="firing",pipeline="traces",severity="warning"}'
+            value: 1

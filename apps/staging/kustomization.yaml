@@ -17,8 +17,10 @@ images:
   #   newTag: "latest"
 
 # OpenTelemetry: shared agent settings come from ../components/otel-instrumentation.
-# Sampler is a 50% ratio, not always_on — staging traffic can be significant
-# during load/perf testing. Tune OTEL_TRACES_SAMPLER_ARG as needed.
+# The agent sends every span (parentbased_always_on); which traces are kept
+# is decided after the fact by the collector's tail sampler
+# (addons/values/*/otel-collector-sampler.yaml): all errors, all requests
+# over 500ms, and a share of the rest per environment.
 components:
   - ../components/otel-instrumentation
 
@@ -27,5 +29,4 @@ configMapGenerator:
     literals:
       - DEPLOYMENT_ENVIRONMENT=staging
       - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=staging,k8s.namespace.name=staging
-      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
-      - OTEL_TRACES_SAMPLER_ARG=0.5
+      - OTEL_TRACES_SAMPLER=parentbased_always_on

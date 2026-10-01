@@ -112,3 +112,22 @@ spec:
             summary: "Tempo is discarding spans ({{ $labels.reason }})"
             description: "Tempo discarded about {{ $value | humanize }} spans in 15 minutes for {{ $labels.reason }}, usually an ingestion rate or trace size limit."
             runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#tempodiscardingspans
+        - alert: TailSamplerOverloaded
+          expr: sum(increase({__name__=~"otelcol_processor_tail_sampling_sampling_trace_dropped_too_early(_total)?"}[10m])) > 0
+          labels:
+            severity: warning
+            pipeline: traces
+          annotations:
+            summary: "The tail sampler is dropping traces before deciding on them"
+            description: "More traces arrived within decision_wait than num_traces can hold, so about {{ $value | humanize }} traces in 10 minutes were dropped unsampled, errors included."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#tailsampleroverloaded
+        - alert: TraceGatewayHasNoSamplers
+          expr: max(otelcol_loadbalancer_num_backends) == 0
+          for: 5m
+          labels:
+            severity: warning
+            pipeline: traces
+          annotations:
+            summary: "The trace gateway can't find any sampler replica"
+            description: "The gateway's loadbalancing exporter resolves no otel-collector-sampler pods, so every span is failing to export."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#tracegatewayhasnosamplers

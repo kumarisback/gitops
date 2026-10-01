@@ -125,7 +125,14 @@ extract() {  # ARGS... DEST: run manifest_tool with stdout to DEST
 }
 
 alloy_check()  { extract configmap "$1" config.alloy "$2" && alloy validate "$2"; }
-otelcol_check() { extract configmap "$1" relay "$2" && MY_POD_IP=127.0.0.1 otelcol-contrib validate --config="file:$2"; }
+# The collector config reads ${env:...}; give it the literal env vars the
+# chart puts on the container (MY_POD_IP comes from the downward API).
+otelcol_check() {
+  extract configmap "$1" relay "$2" || return 1
+  local vars=(MY_POD_IP=127.0.0.1)
+  while IFS= read -r kv; do [ -n "${kv}" ] && vars+=("${kv}"); done < <(ruby scripts/lib/manifest_tool.rb env "$1")
+  env "${vars[@]}" otelcol-contrib validate --config="file:$2"
+}
 loki_check()   { extract configmap "$1" config.yaml '^loki$' "$2" && loki -verify-config -config.expand-env=true -config.file="$2"; }
 am_check()     { extract secret "$1" alertmanager.yaml '^alertmanager-' "$2" && amtool check-config "$2"; }
 

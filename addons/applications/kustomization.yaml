@@ -16,6 +16,7 @@ resources:
   - loki.yaml
   - tempo.yaml
   - otel-collector.yaml
+  - otel-collector-sampler.yaml
   - alloy.yaml
   - metrics-server.yaml
   - observability-config.yaml

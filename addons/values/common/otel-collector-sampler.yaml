@@ -1,0 +1,135 @@
+# Trace pipeline, tier 2 ("sampler"). Receives whole traces from the
+# gateway (otel-collector.yaml), and:
+#   - computes RED metrics and the service graph from 100% of spans
+#     (spanmetrics, servicegraph), exposed on :8889 for Prometheus, with
+#     trace-ID exemplars, so dashboards aren't skewed by sampling;
+#   - keeps every trace with an error, every trace slower than 500ms (the
+#     latency SLO), and TAIL_SAMPLING_PERCENTAGE% of the rest, and sends
+#     those to Tempo.
+# TAIL_SAMPLING_PERCENTAGE is set per tier/environment (extraEnvs).
+fullnameOverride: otel-collector-sampler
+mode: deployment
+image:
+  repository: otel/opentelemetry-collector-contrib
+replicaCount: 1
+service:
+  # Headless: the gateway's loadbalancing exporter resolves every pod IP
+  # from DNS and hashes trace IDs across them.
+  clusterIP: None
+ports:
+  otlp-http:
+    enabled: false
+  jaeger-compact:
+    enabled: false
+  jaeger-thrift:
+    enabled: false
+  jaeger-grpc:
+    enabled: false
+  zipkin:
+    enabled: false
+  metrics:
+    enabled: true
+  span-metrics:
+    enabled: true
+    containerPort: 8889
+    servicePort: 8889
+    protocol: TCP
+serviceMonitor:
+  enabled: true
+  extraLabels:
+    release: kube-prometheus-stack
+  metricsEndpoints:
+    - port: metrics
+      interval: 30s
+    - port: span-metrics
+      interval: 15s
+alternateConfig:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+  processors:
+    memory_limiter:
+      check_interval: 5s
+      limit_percentage: 75
+      spike_limit_percentage: 20
+    # Policies are OR'ed: a trace is kept if any of them keeps it.
+    tail_sampling:
+      decision_wait: 10s
+      num_traces: 20000
+      expected_new_traces_per_sec: 50
+      policies:
+        - name: keep-errors
+          type: status_code
+          status_code:
+            status_codes: [ERROR]
+        - name: keep-slow
+          type: latency
+          latency:
+            threshold_ms: 500
+        - name: baseline
+          type: probabilistic
+          probabilistic:
+            sampling_percentage: ${env:TAIL_SAMPLING_PERCENTAGE}
+    batch: {}
+  connectors:
+    spanmetrics:
+      namespace: traces.spanmetrics
+      histogram:
+        explicit:
+          buckets: [100ms, 250ms, 500ms, 1s, 2s, 5s]
+      # Span attributes, then resource attributes (k8s.* from the
+      # gateway's k8sattributes).
+      dimensions:
+        - name: k8s.namespace.name
+        - name: http.request.method
+        - name: http.response.status_code
+        - name: http.route
+      exemplars:
+        enabled: true
+      metrics_flush_interval: 15s
+    servicegraph:
+      latency_histogram_buckets: [100ms, 250ms, 500ms, 1s, 2s, 5s]
+      dimensions:
+        - k8s.namespace.name
+      store:
+        ttl: 10s
+        max_items: 10000
+  exporters:
+    otlp/tempo:
+      endpoint: tempo.monitoring:4317
+      tls:
+        insecure: true
+    # OpenMetrics carries the exemplars (trace IDs) Grafana links to Tempo.
+    prometheus:
+      endpoint: ${env:MY_POD_IP}:8889
+      enable_open_metrics: true
+  extensions:
+    health_check:
+      endpoint: 0.0.0.0:13133
+  service:
+    extensions: [health_check]
+    telemetry:
+      metrics:
+        readers:
+          - pull:
+              exporter:
+                prometheus:
+                  host: ${env:MY_POD_IP}
+                  port: 8888
+    pipelines:
+      # Every span: metrics and service graph.
+      traces/metrics:
+        receivers: [otlp]
+        processors: [memory_limiter]
+        exporters: [spanmetrics, servicegraph]
+      # Sampled traces to Tempo.
+      traces/sampled:
+        receivers: [otlp]
+        processors: [memory_limiter, tail_sampling, batch]
+        exporters: [otlp/tempo]
+      metrics/from-spans:
+        receivers: [spanmetrics, servicegraph]
+        processors: [batch]
+        exporters: [prometheus]

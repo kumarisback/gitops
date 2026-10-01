@@ -1,0 +1,4 @@
+# staging keeps half of the healthy, fast traces (load tests are big).
+extraEnvs:
+  - name: TAIL_SAMPLING_PERCENTAGE
+    value: "50"

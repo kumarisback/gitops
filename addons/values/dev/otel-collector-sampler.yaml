@@ -1,0 +1,4 @@
+# dev keeps every trace.
+extraEnvs:
+  - name: TAIL_SAMPLING_PERCENTAGE
+    value: "100"

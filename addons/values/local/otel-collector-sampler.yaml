@@ -1,0 +1,11 @@
+# The lab keeps every trace.
+extraEnvs:
+  - name: TAIL_SAMPLING_PERCENTAGE
+    value: "100"
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 250m
+    memory: 384Mi

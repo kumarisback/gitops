@@ -1,0 +1,6 @@
+# Two gateways behind the Service, so a rollout or node loss doesn't drop
+# spans; the apps' exporters retry across them.
+replicaCount: 2
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

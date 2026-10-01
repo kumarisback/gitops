@@ -18,8 +18,11 @@ images:
   # - name: 602367507570.dkr.ecr.us-east-1.amazonaws.com/order-service
   #   newTag: "latest"
 
-# OpenTelemetry: shared agent settings come from ../components/otel-instrumentation;
-# dev traces every request.
+# OpenTelemetry: shared agent settings come from ../components/otel-instrumentation.
+# The agent sends every span (parentbased_always_on); which traces are kept
+# is decided after the fact by the collector's tail sampler
+# (addons/values/*/otel-collector-sampler.yaml): all errors, all requests
+# over 500ms, and a share of the rest per environment.
 components:
   - ../components/otel-instrumentation
 
@@ -28,4 +31,4 @@ configMapGenerator:
     literals:
       - DEPLOYMENT_ENVIRONMENT=dev
       - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=dev,k8s.namespace.name=development
-      - OTEL_TRACES_SAMPLER=always_on
+      - OTEL_TRACES_SAMPLER=parentbased_always_on

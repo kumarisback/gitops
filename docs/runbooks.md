@@ -229,3 +229,23 @@ after any collector config change (it runs `otelcol-contrib validate`).
 **Act:** raise Tempo's ingestion limits (`overrides` in
 `addons/values/*/tempo.yaml`), or find the service producing huge traces in
 TraceQL (`{ } | count() > 1000`).
+
+### TailSamplerOverloaded
+
+**Meaning:** the sampler holds each trace for `decision_wait` (10s) before
+deciding; more traces arrived than `num_traces` can hold, so some were
+dropped without a decision, errors included.
+
+**Act:** raise `num_traces` (and memory) in
+`addons/values/common/otel-collector-sampler.yaml`, or add sampler
+replicas; check `otelcol_processor_tail_sampling_sampling_traces_on_memory`.
+
+### TraceGatewayHasNoSamplers
+
+**Meaning:** the gateway's `loadbalancing` exporter resolves
+`otel-collector-sampler.monitoring.svc.cluster.local` to no pods.
+
+**Check:** `kubectl get pods,endpoints -n monitoring -l app.kubernetes.io/instance=otel-collector-sampler`;
+the ArgoCD app `otel-collector-sampler`.
+
+**Act:** get the sampler running; the gateway re-resolves DNS on its own.

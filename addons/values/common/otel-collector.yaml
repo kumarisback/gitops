@@ -1,3 +1,8 @@
+# Trace pipeline, tier 1 ("gateway"). Every span from the apps (OTLP/HTTP
+# 4318) and ingress-nginx (OTLP/gRPC 4317) arrives here, gets the sending
+# pod's Kubernetes metadata, and is forwarded by trace ID to tier 2
+# (otel-collector-sampler.yaml), so all spans of one trace reach the same
+# sampler replica: tail sampling can only judge a whole trace.
 mode: deployment
 image:
   repository: otel/opentelemetry-collector-contrib
@@ -10,6 +15,14 @@ resources:
     cpu: 250m
     memory: 256Mi
 ports:
+  jaeger-compact:
+    enabled: false
+  jaeger-thrift:
+    enabled: false
+  jaeger-grpc:
+    enabled: false
+  zipkin:
+    enabled: false
   metrics:
     enabled: true
 serviceMonitor:
@@ -19,6 +32,17 @@ serviceMonitor:
   metricsEndpoints:
     - port: metrics
       interval: 30s
+# k8sattributes looks up the sending pod. alternateConfig bypasses the
+# chart's presets, so the RBAC it needs is granted here.
+clusterRole:
+  create: true
+  rules:
+    - apiGroups: [""]
+      resources: [pods, namespaces, nodes]
+      verbs: [get, list, watch]
+    - apiGroups: [apps]
+      resources: [replicasets]
+      verbs: [get, list, watch]
 alternateConfig:
   receivers:
     otlp:
@@ -28,16 +52,43 @@ alternateConfig:
         http:
           endpoint: 0.0.0.0:4318
   processors:
+    # A share of the container's memory limit, so it scales with the limit.
     memory_limiter:
       check_interval: 5s
-      limit_mib: 192
-      spike_limit_mib: 48
-    batch: {}
+      limit_percentage: 75
+      spike_limit_percentage: 20
+    # Adds k8s.namespace.name, k8s.pod.name, k8s.deployment.name, ... to
+    # every span, from the connection's pod IP; apps don't need to know.
+    k8sattributes:
+      auth_type: serviceAccount
+      extract:
+        metadata:
+          - k8s.namespace.name
+          - k8s.pod.name
+          - k8s.pod.uid
+          - k8s.deployment.name
+          - k8s.node.name
+      pod_association:
+        - sources:
+            - from: resource_attribute
+              name: k8s.pod.ip
+        - sources:
+            - from: resource_attribute
+              name: k8s.pod.uid
+        - sources:
+            - from: connection
   exporters:
-    otlp:
-      endpoint: tempo.monitoring:4317
-      tls:
-        insecure: true
+    loadbalancing:
+      routing_key: traceID
+      protocol:
+        otlp:
+          tls:
+            insecure: true
+      # The sampler's Service is headless, so DNS returns every replica.
+      resolver:
+        dns:
+          hostname: otel-collector-sampler.monitoring.svc.cluster.local
+          port: "4317"
   extensions:
     health_check:
       endpoint: 0.0.0.0:13133
@@ -54,5 +105,5 @@ alternateConfig:
     pipelines:
       traces:
         receivers: [otlp]
-        processors: [memory_limiter, batch]
-        exporters: [otlp]
+        processors: [memory_limiter, k8sattributes]
+        exporters: [loadbalancing]

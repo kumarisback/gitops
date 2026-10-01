@@ -13,8 +13,7 @@ kind: Component
 #       literals:
 #         - DEPLOYMENT_ENVIRONMENT=staging
 #         - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=staging,k8s.namespace.name=staging
-#         - OTEL_TRACES_SAMPLER=parentbased_traceidratio
-#         - OTEL_TRACES_SAMPLER_ARG=0.5
+#         - OTEL_TRACES_SAMPLER=parentbased_always_on
 #
 # DEPLOYMENT_ENVIRONMENT feeds the "environment" field of every JSON log line
 # (logback-spring.xml), so keep it equal to deployment.environment.

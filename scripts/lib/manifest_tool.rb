@@ -6,6 +6,7 @@
 #   manifest_tool.rb rules     FILE OUTDIR            one promtool file per PrometheusRule
 #   manifest_tool.rb rules-by-name FILE OUTDIR        same, named <rule>.yaml (for tests)
 #   manifest_tool.rb dashboards FILE                  check every grafana_dashboard JSON
+#   manifest_tool.rb env       FILE                   KEY=VALUE for each literal container env var
 require 'base64'
 require 'json'
 require 'yaml'
@@ -46,6 +47,12 @@ when 'rules-by-name'
   docs(file).select { |d| d['kind'] == 'PrometheusRule' }.each do |d|
     File.write(File.join(outdir, "#{d.dig('metadata', 'name')}.yaml"),
                { 'groups' => d.dig('spec', 'groups') || [] }.to_yaml)
+  end
+when 'env'
+  docs(file).select { |d| %w[Deployment StatefulSet DaemonSet].include?(d['kind']) }.each do |d|
+    (d.dig('spec', 'template', 'spec', 'containers') || []).each do |c|
+      (c['env'] || []).each { |e| puts "#{e['name']}=#{e['value']}" if e.key?('value') }
+    end
   end
 when 'dashboards'
   count = 0
