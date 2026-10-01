@@ -9,8 +9,21 @@ spec:
   project: default
   source:
     repoURL: https://github.com/kumarisback/gitops.git
-    targetRevision: 05-storage-statefulsets
+    # HEAD (main) when applied as-is. scripts/start-lab.sh replaces both
+    # HEADs below with the current branch, or LAB_REVISION if set, so a
+    # lesson branch can be tested before it's merged.
+    targetRevision: HEAD
     path: bootstrap/envs/local
+    kustomize:
+      # Keep the child app on the same revision as this one.
+      patches:
+        - target:
+            kind: Application
+            name: local-apps
+          patch: |-
+            - op: replace
+              path: /spec/source/targetRevision
+              value: HEAD
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

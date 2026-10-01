@@ -93,8 +93,12 @@ fi
 if [ "${SKIP_ROOT_APP:-0}" = "1" ]; then
   echo "⏭️  Skipping local Argo root application (SKIP_ROOT_APP=1)."
 else
-  echo "🚀 Applying local Argo root application..."
-  kubectl apply -f "${REPO_ROOT}/bootstrap/root-app-local.yaml" > /dev/null
+  # Sync the branch that's checked out (it must be pushed), unless
+  # LAB_REVISION names another branch, tag or commit.
+  LAB_REVISION="${LAB_REVISION:-$(git -C "${REPO_ROOT}" rev-parse --abbrev-ref HEAD)}"
+  echo "🚀 Applying local Argo root application (revision ${LAB_REVISION})..."
+  sed -E "s#^([[:space:]]*(targetRevision|value)): HEAD$#\1: ${LAB_REVISION}#" \
+    "${REPO_ROOT}/bootstrap/root-app-local.yaml" | kubectl apply -f - > /dev/null
 fi
 
 # 9. Retrieve admin password

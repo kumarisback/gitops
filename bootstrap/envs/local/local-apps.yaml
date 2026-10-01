@@ -9,7 +9,8 @@ spec:
   project: default
   source:
     repoURL: https://github.com/kumarisback/gitops.git
-    targetRevision: 05-storage-statefulsets
+    # Overridden by root-app-local to match its own revision.
+    targetRevision: HEAD
     path: apps/local
   destination:
     server: https://kubernetes.default.svc
