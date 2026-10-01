@@ -39,6 +39,9 @@ spec:
             existingSecret: grafana-admin-credentials
             userKey: admin-user
             passwordKey: admin-password
+          # Loki and Tempo link to each other through trace_id, which the Java
+          # agent puts in every JSON log line. $$ stops Grafana's provisioning
+          # from expanding ${...} as an environment variable.
           additionalDataSources:
             - name: Loki
               type: loki
@@ -46,12 +49,28 @@ spec:
               access: proxy
               url: http://loki.monitoring.svc.cluster.local:3100
               isDefault: false
+              jsonData:
+                # Adds a "trace_id" link on each log line that opens it in Tempo.
+                derivedFields:
+                  - name: trace_id
+                    matcherRegex: '"trace_id":"(\w+)"'
+                    datasourceUid: Tempo
+                    url: '$${__value.raw}'
             - name: Tempo
               type: tempo
               uid: Tempo
               access: proxy
               url: http://tempo.monitoring.svc.cluster.local:3200
               isDefault: false
+              jsonData:
+                # Adds "Logs for this span" on each span. log_type only exists on
+                # the Spring services' lines, so no namespace is hard-coded.
+                tracesToLogsV2:
+                  datasourceUid: Loki
+                  spanStartTimeShift: -5m
+                  spanEndTimeShift: 5m
+                  customQuery: true
+                  query: '{log_type=~".+"} |= "$${__trace.traceId}"'
           persistence:
             enabled: true
             storageClassName: "gp3"
