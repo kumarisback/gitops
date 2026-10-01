@@ -10,7 +10,7 @@ The learning roadmap spans 43 real-world engineering steps. Running all of them 
 
 By using a local **KinD (Kubernetes in Docker)** multi-node cluster (`dev-lab`), you can master:
 - **Core Kubernetes Architecture**: RBAC, Probes, Resource limits, PDBs, StatefulSets, PVCs, Helm authoring.
-- **Full Observability Stack**: Prometheus, Grafana, Alertmanager, Promtail, Loki, OpenTelemetry, Tempo.
+- **Full Observability Stack**: Prometheus, Grafana, Alertmanager, Grafana Alloy, Loki, OpenTelemetry, Tempo.
 - **Event Streaming**: Strimzi Kafka, Kafka Topics/Users, Schema Registry, Kafka Connect, KEDA.
 - **Traffic & Mesh**: Kong Ingress, Gateway API, rate limiting, Linkerd/Istio mTLS, NetworkPolicies.
 - **Progressive Delivery**: Argo Rollouts (Canaries, Blue/Green, automated analysis), Argo Workflows.
@@ -67,10 +67,13 @@ port-forward:
 open http://localhost
 ```
 
-Install the controller once per KinD cluster:
+`scripts/start-lab.sh` installs the controller and points its OpenTelemetry
+exporter at the collector. To do it by hand once per KinD cluster:
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.1/deploy/static/provider/kind/deploy.yaml
 kubectl rollout status deployment/ingress-nginx-controller -n ingress-nginx --timeout=180s
+kubectl patch configmap ingress-nginx-controller -n ingress-nginx --type merge \
+  --patch-file local-setup/ingress-nginx-otel.yaml
 ```
 
 ArgoCD is not part of the application Ingress, so keep a separate secure
@@ -169,9 +172,23 @@ resources:
   - local-apps.yaml
   - metrics-server.yaml
   - prometheus-stack.yaml
+  - loki.yaml
+  - alloy.yaml
+  - tempo.yaml
+  - otel-collector.yaml
 ```
 
 This ensures your local KinD cluster runs the core applications and observability stack without crashing on AWS-specific IAM controllers.
+
+There are two ways to deploy it:
+
+| Flow | Command | Who deploys |
+|---|---|---|
+| Docker Desktop | `./scripts/start-lab.sh` | ArgoCD, from `root-app-local` (syncs the checked-out branch, which must be pushed; set `LAB_REVISION` to pick another) |
+| Podman | `./scripts/start-lab-podman.sh` | `scripts/sync-local-stack.rb`, which runs `helm upgrade --install` with the values in `bootstrap/envs/local/*.yaml` and `kubectl apply -k apps/local` from your working tree. ArgoCD stays installed for its UI, with auto-sync off. |
+
+After a code change in `../app`, rebuild and restart one or more services with
+`./scripts/update-and-redeploy-podman.sh order-service`.
 
 The local application workloads expect an `app-secrets` Secret, but Argo CD does not manage that Secret because it contains local-only credentials. Create it directly in the cluster from an ignored file before syncing the local application:
 
@@ -201,14 +218,15 @@ flowchart LR
   U --> M[(MongoDB)]
   O --> M
 
-  F -. stdout/stderr .-> P[Promtail DaemonSet]
-  U -. stdout/stderr .-> P
-  O -. stdout/stderr .-> P
-  I -. controller logs .-> P
+  F -. stdout/stderr .-> P[Grafana Alloy]
+  U -. JSON stdout .-> P
+  O -. JSON stdout .-> P
+  I -. access log .-> P
   P --> L[Loki]
   G[Grafana] --> L
 
-  U -. OpenTelemetry Java agent .-> C[OTel Collector]
+  I -. OTLP gRPC spans .-> C[OTel Collector]
+  U -. OpenTelemetry Java agent .-> C
   O -. OpenTelemetry Java agent .-> C
   C --> T[Tempo]
   G --> T
@@ -224,7 +242,7 @@ What each component does:
 | Component | Responsibility |
 |---|---|
 | NGINX Ingress | Routes `/` to frontend and `/api` to backend services. |
-| Promtail | Reads container stdout/stderr from every KinD node and sends logs to Loki. |
+| Grafana Alloy | One replica reads every pod's stdout through the Kubernetes API, labels the Spring services' lines `log_type=api` or `log_type=server`, and sends them to Loki. |
 | Loki | Stores and searches logs; use LogQL in Grafana. |
 | OpenTelemetry Java agent | Creates HTTP, MongoDB, and downstream-client spans without custom filters. |
 | OpenTelemetry Collector | Receives OTLP traces and forwards them to Tempo. |
@@ -236,15 +254,47 @@ Typical request flow:
 
 ```text
 Browser -> Ingress -> user-service -> order-service -> MongoDB
-       |          |              |
-       |          |              +-- span -> Collector -> Tempo
-       |          +----------------- span -> Collector -> Tempo
-       +-- access log -> Promtail -> Loki
+             |            |                |
+             |            |                +-- span -> Collector -> Tempo
+             |            +------------------- span -> Collector -> Tempo
+             +-- span -> Collector -> Tempo
+             +-- access log -> Alloy -> Loki
 ```
 
-The browser request may not include W3C trace context until the frontend is
-instrumented. Backend requests still create real OpenTelemetry traces. The
-static frontend and NGINX Ingress currently provide logs, not application spans.
+The frontend's `traceFetch()` sends a W3C `traceparent` header, so the browser,
+ingress and backend share one trace ID, but the browser's own span is not
+exported (there is no browser OpenTelemetry SDK yet). Tempo therefore shows each
+trace with a missing root above the ingress span.
+
+[`docs/observability-pipeline.html`](docs/observability-pipeline.html) maps every
+hop to the file that configures it.
+
+### 4.1 API logs vs server logs in Grafana
+
+Both come out of the same Spring Boot process as one JSON line per event on
+stdout. They differ only in the `logger` field:
+
+| Log type | Written by | `logger` | Example `message` |
+|---|---|---|---|
+| API log | `RequestLoggingFilter`, once per HTTP request | `access.<service>.http` | `http_request` with `http.method`, `http.path`, `http.status`, `http.duration_ms` |
+| Server log | everything else: controllers, `audit.<service>.*`, security, `GlobalExceptionHandler` | the class or `audit.*` logger | `auth_signin_succeeded`, `unhandled_exception` |
+
+Alloy turns that into a `log_type` label (`api` or `server`) when it ships the
+line, so choosing one is a label filter, not a setting:
+
+- **Dashboard:** open *Local Microservices* and pick **Log type** at the top
+  (All / api / server).
+- **Explore:** choose the **Loki** datasource, open the label browser, pick
+  `log_type`, then `api` or `server`.
+- **Query:** `{namespace="development", log_type="api"}` or
+  `{namespace="development", log_type="server"}`.
+
+Lines shipped before the label existed don't have it; for those, parse the JSON
+instead: `{namespace="development", container=~"user-service|order-service"} | json | logger=~"access\\..*"`
+(add `!~` for server logs).
+
+Every line also carries `trace_id`. Click the **trace_id** link on a log line to
+open its trace in Tempo, or **Logs for this span** on a span to go the other way.
 
 ### Phase A: Core Kubernetes (Steps 01 – 06)
 
@@ -265,7 +315,7 @@ static frontend and NGINX Ingress currently provide logs, not application spans.
 |---|---|---|
 | **07** | `07-prometheus-grafana` | Deploy `kube-prometheus-stack`. Set up `ServiceMonitor` for `frontend`, `order-service`, and `user-service`. Port-forward Grafana (`3000:80`). Build dashboards with PromQL. |
 | **08** | `08-alerting-slo` | Write `PrometheusRule` CRDs (high error rate, burn rate). Configure Alertmanager with Slack/Discord webhook. Deliberately break a pod and verify the alert fires. |
-| **09** | `09-elk-logging` / Loki | Deploy Promtail + Loki (or ECK / Fluent Bit). Ship JSON logs with correlation IDs. Query logs in Grafana. |
+| **09** | `09-elk-logging` / Loki | Deploy Grafana Alloy + Loki (or ECK / Fluent Bit). Ship JSON logs with correlation IDs. Query logs in Grafana. |
 | **10** | `10-tracing-otel` | Instrument apps with OpenTelemetry SDK. Deploy OTel Collector and Grafana Tempo in KinD. Trace request path: `frontend` → `order-service` → `user-service`. |
 | **11** | `11-synthetic-blackbox` | Deploy Prometheus `blackbox_exporter`. Probe internal/external endpoints for HTTP 200, TLS expiry, and latency. |
 
@@ -357,13 +407,15 @@ git commit -am "Complete <lesson-name>"
 ```
 
 ### When to turn off the cluster:
-You don't even need to delete the cluster between sessions! You can simply pause the Docker containers:
+You don't even need to delete the cluster between sessions! You can simply pause the node containers:
 ```bash
 # Pause cluster (saves CPU and battery on Mac):
-docker stop dev-lab-control-plane dev-lab-worker dev-lab-worker2
+./scripts/stop-lab.sh            # Docker
+./scripts/pause-lab-podman.sh    # Podman
 
 # Resume cluster:
-docker start dev-lab-control-plane dev-lab-worker dev-lab-worker2
+./scripts/start-lab.sh           # Docker
+./scripts/start-lab-podman.sh    # Podman
 ```
 
 To permanently delete the local cluster and all Kubernetes data, including
