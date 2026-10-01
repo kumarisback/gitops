@@ -75,11 +75,6 @@ patches:
         value:
           name: OTEL_RESOURCE_ATTRIBUTES
           value: deployment.environment=staging,k8s.namespace.name=staging
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OTEL_INSTRUMENTATION_LOGBACK_MDC_TRACE_ID
-          value: "true"
   - target:
       kind: Deployment
       name: user-service
@@ -134,8 +129,3 @@ patches:
         value:
           name: OTEL_RESOURCE_ATTRIBUTES
           value: deployment.environment=staging,k8s.namespace.name=staging
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OTEL_INSTRUMENTATION_LOGBACK_MDC_TRACE_ID
-          value: "true"
