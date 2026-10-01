@@ -53,16 +53,23 @@ spec:
                 forward_to = [loki.process.pod_logs.receiver]
               }
 
-              // Logs are single-line JSON (net.logstash.logback encoder writing to
-              // stdout), so a new entry starts at "{" and any line that doesn't
-              // start with "{" is joined onto the previous entry instead of being
-              // shipped as its own broken log line.
               loki.process "pod_logs" {
                 forward_to = [loki.write.local.receiver]
 
-                stage.multiline {
-                  firstline     = "^\\{"
-                  max_wait_time = "3s"
+                // Only the Spring services write one JSON object per line
+                // (net.logstash.logback encoder), so only they get the
+                // multiline rule: a new entry starts at "{" and anything else
+                // (JVM or agent output that bypasses the encoder) joins the
+                // previous entry. Applied cluster-wide it glued plain-text
+                // logs from nginx, ingress-nginx, Loki and ArgoCD into blocks
+                // of up to 128 lines.
+                stage.match {
+                  selector = "{container=~\"user-service|order-service\"}"
+
+                  stage.multiline {
+                    firstline     = "^\\{"
+                    max_wait_time = "3s"
+                  }
                 }
               }
 
