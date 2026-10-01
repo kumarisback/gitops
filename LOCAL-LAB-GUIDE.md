@@ -436,3 +436,69 @@ Or destroy and recreate in 30 seconds:
 kind delete cluster --name dev-lab
 kind create cluster --name dev-lab --config kind-config.yaml
 ```
+
+---
+
+## 6. Access, Queries & Troubleshooting
+
+### Access
+
+```bash
+# Frontend plus API through the local NGINX Ingress.
+# Don't port-forward svc/frontend: that bypasses /api routing (405 on POST).
+open http://localhost
+
+# ArgoCD UI
+kubectl port-forward svc/argocd-server 8443:443 -n argocd
+open https://localhost:8443
+
+# Grafana UI
+kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n monitoring
+open http://localhost:3000
+
+# Prometheus UI and scrape targets (use 9091:9090 if 9090 is busy)
+kubectl port-forward svc/kube-prometheus-stack-prometheus 9090:9090 -n monitoring
+open http://localhost:9090/targets
+```
+
+### Starter PromQL (Grafana → Explore → Prometheus)
+
+```promql
+# Is every scrape target up?
+up
+
+# Ready application Pods
+kube_pod_status_ready{namespace="development",pod=~"(frontend|user-service|order-service)-.*"}
+
+# CPU and memory of the three application Pods
+rate(container_cpu_usage_seconds_total{namespace="development",pod=~"(frontend|user-service|order-service)-.*",container!="POD",container!=""}[5m])
+container_memory_working_set_bytes{namespace="development",pod=~"(frontend|user-service|order-service)-.*",container!="POD",container!=""}
+
+# HTTP request rate from the Spring Boot services
+sum by (job, uri, method, status) (rate(http_server_requests_seconds_count{namespace="development"}[5m]))
+```
+
+### Problems already hit, and their fixes
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Services exit with code 1 during Spring startup | MongoDB URI typed as `mmongodb+srv://` | Correct `MONGO_URI` in `apps/local/app-secrets.env` and recreate the Secret |
+| ArgoCD can't create `app-secrets` | The env file is git-ignored, so ArgoCD can't read it | `start-lab.sh` creates the Secret directly (section 3) |
+| ArgoCD kustomize rejects bootstrap files | Files outside the Application's source directory | Local Application manifests live under `bootstrap/envs/local/` |
+| `405` on `POST /api/auth/signup` | `svc/frontend` port-forward sent API calls to the static nginx | Use `http://localhost` through the Ingress |
+| `403` from the browser | `http://localhost:8000` missing from backend CORS origins | Added to user-service's CORS config and rebuilt the image |
+| Grafana shows no data, Prometheus has no endpoint | Prometheus Operator hadn't reconciled the Prometheus resource | Restart the operator Deployment |
+| Explore: `unsupported protocol scheme ""` | An old lowercase `loki` datasource with an empty URL | Use the datasource named `Loki`; delete the other |
+
+### Troubleshooting commands
+
+```bash
+kubectl get pods -n development
+kubectl get pods -n monitoring
+kubectl get servicemonitor -A
+kubectl get endpoints kube-prometheus-stack-prometheus -n monitoring
+```
+
+Healthy state: the Prometheus Pod is Running, its Service has an endpoint, both
+`order-service-monitor` and `user-service-monitor` show as UP on
+`/targets`, and `kube-prometheus-stack` is Synced and Healthy in ArgoCD.
