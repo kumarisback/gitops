@@ -1,7 +1,9 @@
 # Toolbox for scripts/validate.sh and the Jenkins pipeline. Every tool is
 # pinned to the version this repo deploys (keep in step with the charts in
 # addons/applications), and every download is checked against a SHA-256
-# recorded here rather than fetched at build time.
+# recorded here rather than fetched at build time. Renovate only bumps the
+# base image; to bump a tool, change its *_VERSION and both *_SHA256_* args
+# (from the release's published checksums), then run validate.sh.
 #
 #   docker build -t gitops-ci ci/
 #   docker run --rm -v "$PWD:/repo" -w /repo gitops-ci ./scripts/validate.sh

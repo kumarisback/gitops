@@ -1,0 +1,48 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard"
+  ],
+  "timezone": "Asia/Kolkata",
+  "schedule": [
+    "before 9am on monday"
+  ],
+  "prConcurrentLimit": 5,
+  "argocd": {
+    "fileMatch": [
+      "^addons/applications/.+\\.yaml$",
+      "^bootstrap/projects/.+\\.yaml$",
+      "^bootstrap/envs/.+\\.yaml$"
+    ]
+  },
+  "kubernetes": {
+    "fileMatch": [
+      "^apps/.+\\.yaml$",
+      "^platform/.+\\.yaml$"
+    ]
+  },
+  "packageRules": [
+    {
+      "description": "Observability charts move together so the dashboards, rules and pipeline stay compatible; validate.sh runs on every PR.",
+      "matchManagers": [
+        "argocd"
+      ],
+      "matchPackageNames": [
+        "kube-prometheus-stack",
+        "loki",
+        "tempo",
+        "alloy",
+        "opentelemetry-collector"
+      ],
+      "groupName": "observability charts"
+    },
+    {
+      "description": "Major chart versions change values schemas; wait for a person to approve them on the dependency dashboard.",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true
+    }
+  ]
+}
