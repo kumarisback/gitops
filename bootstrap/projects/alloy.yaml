@@ -74,6 +74,27 @@ spec:
                     max_wait_time = "3s"
                   }
                 }
+
+                // Label each Spring log line log_type="api" (the per-request
+                // access log from RequestLoggingFilter, logger access.<svc>.http)
+                // or log_type="server" (everything else) so Grafana can pick
+                // one by label. Two values, so the index barely grows. No Go
+                // templates in this file: the chart renders it through tpl.
+                stage.match {
+                  selector = "{container=~\"user-service|order-service\"} |= `\"logger\":\"access.`"
+
+                  stage.static_labels {
+                    values = { log_type = "api" }
+                  }
+                }
+
+                stage.match {
+                  selector = "{container=~\"user-service|order-service\"} != `\"logger\":\"access.`"
+
+                  stage.static_labels {
+                    values = { log_type = "server" }
+                  }
+                }
               }
 
               loki.write "default" {
