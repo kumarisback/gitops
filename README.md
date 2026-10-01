@@ -40,6 +40,23 @@ Open it directly in a browser (no server needed).
 
 ---
 
+## Validating a change
+
+`./scripts/validate.sh` renders every environment (local, dev, staging, prod)
+the way ArgoCD does and checks the result with each component's own parser:
+kubeconform for Kubernetes and CRD schemas, `alloy validate`,
+`otelcol-contrib validate`, `loki -verify-config`, `amtool check-config`,
+`promtool check rules` plus the rule unit tests in `tests/prometheus/`, and
+JSON parsing for every Grafana dashboard. Jenkins runs it on every build in
+the pinned toolbox image from `ci/Dockerfile`; to run it the same way locally:
+
+```bash
+docker build -t gitops-ci ci/
+docker run --rm -v "$PWD:/repo" -w /repo gitops-ci ./scripts/validate.sh
+```
+
+---
+
 ## Repository Structure
 
 - `apps/`: Contains the actual microservices (Frontend, Order Service, etc.) broken down by environment (`dev`, `staging`, `prod`).
