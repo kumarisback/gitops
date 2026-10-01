@@ -30,13 +30,13 @@ kubectl get ingress app-ingress -n <development|staging|production> \
 
 ## Observability: how logs, traces, and metrics actually flow
 
-New to this repo's logging/tracing/metrics setup, or setting it up in a new
+New to this repo's logging and tracing setup, or setting it up in a new
 environment? [`docs/observability-pipeline.html`](docs/observability-pipeline.html)
-is a single-page diagram of the whole pipeline — every hop from
-`order-service`/`user-service` to Grafana, with the exact Helm chart, port,
-and repo file behind each one, plus copy-paste LogQL/PromQL/TraceQL to verify
-each signal is actually flowing. Open it directly in a browser (no server
-needed).
+("Request to Grafana") follows one request from the browser to Grafana: how API
+logs, server logs and traces are produced, which Helm chart, port and repo file
+carries each hop, how to show only API or only server logs in Grafana (the
+`log_type` label), and copy-paste LogQL/TraceQL/PromQL to check each signal.
+Open it directly in a browser (no server needed).
 
 ---
 
