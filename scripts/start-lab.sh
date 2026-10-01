@@ -41,7 +41,10 @@ kubectl apply -f "${REPO_ROOT}/local-setup/gp3-storageclass.yaml" > /dev/null 2>
 # 4. Ensure ArgoCD is installed using server-side apply
 echo "🐙 Ensuring ArgoCD is installed..."
 kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
-kubectl apply -n argocd --server-side --force-conflicts -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+# Same ArgoCD version as the EKS clusters (argo-cd chart 7.7.15 in the tf
+# repo), so the lab behaves like them; "stable" changed under us.
+ARGOCD_VERSION="v2.13.3"
+kubectl apply -n argocd --server-side --force-conflicts -f "https://raw.githubusercontent.com/argoproj/argo-cd/${ARGOCD_VERSION}/manifests/install.yaml"
 
 echo "⏳ Waiting for ArgoCD server to be ready..."
 kubectl wait --for=condition=available deployment/argocd-server -n argocd --timeout=180s || true
