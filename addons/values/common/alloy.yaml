@@ -111,11 +111,23 @@ alloy:
             values = { log_type = "server" }
           }
         }
+
+        // Loki tenant: application namespaces are "apps"; everything else
+        // falls through to loki.write's tenant_id ("platform").
+        stage.match {
+          selector = "{namespace=~\"development|staging|production\"}"
+
+          stage.tenant {
+            value = "apps"
+          }
+        }
       }
 
       loki.write "default" {
         endpoint {
           url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+          // Tenant for everything not claimed by the "apps" match above.
+          tenant_id = "platform"
         }
       }
 controller:

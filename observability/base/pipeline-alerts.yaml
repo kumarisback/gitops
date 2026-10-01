@@ -47,13 +47,13 @@ spec:
             description: "Alloy gave up on about {{ $value | humanize }} log lines in 15 minutes after retrying; they are lost. Loki is rejecting them or unreachable."
             runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#logshipperdroppinglines
         - alert: LokiRejectingLines
-          expr: sum by (reason) (increase(loki_discarded_samples_total[15m])) > 0
+          expr: sum by (tenant, reason) (increase(loki_discarded_samples_total[15m])) > 0
           labels:
             severity: warning
             pipeline: logs
           annotations:
-            summary: "Loki is discarding log lines ({{ $labels.reason }})"
-            description: "Loki discarded about {{ $value | humanize }} lines in 15 minutes for {{ $labels.reason }}: a rate or stream limit, timestamps too old, or lines too long."
+            summary: "Loki is discarding {{ $labels.tenant }} log lines ({{ $labels.reason }})"
+            description: "Loki discarded about {{ $value | humanize }} lines from tenant {{ $labels.tenant }} in 15 minutes for {{ $labels.reason }}: a rate or stream limit, timestamps too old, or lines too long."
             runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#lokirejectinglines
         - alert: LokiPushErrors
           expr: sum(rate(loki_request_duration_seconds_count{route="loki_api_v1_push", status_code=~"5.."}[5m])) > 0

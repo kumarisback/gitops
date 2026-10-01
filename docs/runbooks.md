@@ -178,8 +178,12 @@ time; Alloy's logs show the HTTP status Loki returned.
 `rate_limited`, `per_stream_rate_limit`, `stream_limit`, `greater_than_max_sample_age`,
 `line_too_long`.
 
-**Act:** raise the matching limit in `addons/values/*/loki.yaml`, or find the
-noisy stream (`topk(5, sum by (namespace, container) (rate({namespace=~".+"}[5m])))`
+Limits are per tenant: `apps` (application namespaces) and `platform`
+(everything else); the cloud tier gives `platform` half of `apps`'
+ingestion rate and 7 days' retention instead of 30.
+
+**Act:** raise the matching limit in `addons/values/*/loki.yaml` (per tenant
+under `loki.runtimeConfig.overrides`), or find the noisy stream (`topk(5, sum by (namespace, container) (rate({namespace=~".+"}[5m])))`
 in Explore → Loki) and quiet it at the source.
 
 ### LokiPushErrors

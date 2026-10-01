@@ -30,7 +30,11 @@ grafana:
       access: proxy
       url: http://loki.monitoring.svc.cluster.local:3100
       isDefault: false
+      # Query both Loki tenants (see addons/values/common/loki.yaml).
+      secureJsonData:
+        httpHeaderValue1: apps|platform
       jsonData:
+        httpHeaderName1: X-Scope-OrgID
         # Adds a "trace_id" link on each log line that opens it in Tempo.
         derivedFields:
           - name: trace_id

@@ -40,7 +40,7 @@ Dir.mktmpdir do |dir|
   targets = cases.each_with_index.map do |c, n|
     path = File.join(dir, "case#{n}.log")
     File.write(path, c['lines'].join("\n") + "\n")
-    %({"__path__" = "#{path}", "container" = "#{c['container']}", "namespace" = "development", "case" = "#{n}"})
+    %({"__path__" = "#{path}", "container" = "#{c['container']}", "namespace" = "#{c['namespace'] || 'development'}", "case" = "#{n}"})
   end
   File.write(File.join(dir, 'test.alloy'), <<~ALLOY)
     local.file_match "cases" {
@@ -67,7 +67,8 @@ Dir.mktmpdir do |dir|
     next unless l.include?('msg="received log entry"')
     entry = l[/ entry=("(?:[^"\\]|\\.)*")/, 1].undump
     labels = Hash[l[/ labels=("(?:[^"\\]|\\.)*")/, 1].undump.scan(/(\w+)="((?:[^"\\]|\\.)*)"/)]
-    got[labels['case'].to_i] << { 'line' => entry, 'log_type' => labels['log_type'] }
+    got[labels['case'].to_i] << { 'line' => entry, 'log_type' => labels['log_type'],
+                                  'tenant' => labels['__tenant_id__'] }
   end
   if got.empty?
     puts File.read(log).lines.last(20).join
@@ -75,7 +76,10 @@ Dir.mktmpdir do |dir|
   end
 
   cases.each_with_index do |c, n|
-    if got[n] == c['expect']
+    # Compare only the keys each expected entry names.
+    same = got[n].size == c['expect'].size &&
+           got[n].zip(c['expect']).all? { |g, e| e.all? { |k, v| g[k] == v } }
+    if same
       puts "  ok   #{c['name']}"
     else
       failures << c['name']

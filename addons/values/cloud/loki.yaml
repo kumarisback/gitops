@@ -25,6 +25,22 @@ loki:
       region: <your-aws-region>
       s3ForcePathStyle: false
 
+  # 30 days for application logs, 7 for platform logs; the compactor
+  # deletes expired chunks from S3 (without this the bucket only grows).
+  limits_config:
+    retention_period: 720h
+    ingestion_rate_mb: 8
+    ingestion_burst_size_mb: 16
+  compactor:
+    retention_enabled: true
+    delete_request_store: s3
+  runtimeConfig:
+    overrides:
+      platform:
+        retention_period: 168h
+        ingestion_rate_mb: 4
+        ingestion_burst_size_mb: 8
+
 # Use the pre-created ServiceAccount `loki` in the monitoring namespace,
 # annotated with eks.amazonaws.com/role-arn for S3 access (IRSA). This is
 # a top-level chart value; under `loki:` it was silently ignored and the

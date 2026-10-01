@@ -1,5 +1,13 @@
 loki:
-  auth_enabled: false
+  # Two tenants, set by Alloy: "apps" (the application namespaces) and
+  # "platform" (everything else). Each has its own ingestion limits and
+  # retention (tier files), so a chatty platform component can't
+  # rate-limit or evict application logs. Grafana queries both at once
+  # (X-Scope-OrgID "apps|platform"). Resource isolation, not access
+  # control: Grafana OSS can't restrict a datasource per user.
+  auth_enabled: true
+  querier:
+    multi_tenant_queries_enabled: true
   commonConfig:
     replication_factor: 1
 # Single binary/monolithic mode. deploymentMode must be set explicitly: the
@@ -26,3 +34,9 @@ monitoring:
       release: kube-prometheus-stack
     metricsInstance:
       enabled: false
+# The canary DaemonSet (one pod per node) and the helm-test pod only probe
+# Loki; LogShipperStalled and LokiPushErrors cover that from real traffic.
+lokiCanary:
+  enabled: false
+test:
+  enabled: false

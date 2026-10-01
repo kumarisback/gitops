@@ -1,8 +1,9 @@
 # Log lines fed through the real loki.process "pod_logs" pipeline from
 # addons/values/common/alloy.yaml by tests/alloy/pipeline_test.rb (run by
 # scripts/validate.sh). Each case is one container's log file; `expect`
-# lists the entries Loki must receive, in order, and their log_type label
-# (null: no label).
+# lists the entries Loki must receive, in order, with their log_type label
+# and Loki tenant (null: not set, so loki.write's default "platform").
+# `namespace` defaults to development.
 cases:
   - name: bearer token is masked
     container: user-service
@@ -44,13 +45,24 @@ cases:
       - line: '{"level":"ERROR","logger":"org.springframework.boot.SpringApplication","message":"Application run failed: cannot connect to mongodb+srv://<redacted>@cluster0.example.net/order_db"}'
         log_type: server
 
-  - name: API log is labelled api
+  - name: API log is labelled api, in the apps tenant
     container: order-service
     lines:
       - '{"level":"INFO","logger":"access.order-service.http","message":"http_request","http.method":"GET","http.path":"/api/orders","http.status":200,"http.duration_ms":12}'
     expect:
       - line: '{"level":"INFO","logger":"access.order-service.http","message":"http_request","http.method":"GET","http.path":"/api/orders","http.status":200,"http.duration_ms":12}'
         log_type: api
+        tenant: apps
+
+  - name: platform namespaces go to the default tenant
+    container: coredns
+    namespace: kube-system
+    lines:
+      - '[INFO] 10.244.1.5:51234 - 1234 "A IN loki.monitoring.svc.cluster.local. udp 52 false 512" NOERROR qr,aa,rd 106 0.0001s'
+    expect:
+      - line: '[INFO] 10.244.1.5:51234 - 1234 "A IN loki.monitoring.svc.cluster.local. udp 52 false 512" NOERROR qr,aa,rd 106 0.0001s'
+        log_type: null
+        tenant: null
 
   - name: non-JSON lines from a Spring container join the previous entry
     container: order-service
