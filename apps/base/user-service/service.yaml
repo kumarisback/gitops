@@ -3,12 +3,16 @@ kind: Service
 metadata:
   name: user-service
   namespace: production
+  # ServiceMonitor selects Services by these labels, not by spec.selector.
+  labels:
+    app: user-service
 spec:
   type: ClusterIP
   selector:
     app: user-service
   ports:
-  - name: http          # <-- Add this name for Prometheus & Ingress
+  # Named so the ServiceMonitor can refer to it as port: http.
+  - name: http
     port: 80
     targetPort: 8080
-    protocol: TCP  
+    protocol: TCP

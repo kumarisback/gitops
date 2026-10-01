@@ -1,15 +1,20 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: order-service-monitor
+  name: user-service-monitor
   namespace: production
   labels:
-    release: prometheus # Matches your Prometheus release selection criteria
+    # Matches the kube-prometheus-stack release. Prometheus here selects every
+    # ServiceMonitor (serviceMonitorSelectorNilUsesHelmValues: false), so this
+    # only matters if that setting is ever turned back on.
+    release: kube-prometheus-stack
 spec:
+  # Matches labels on the user-service Service object (see service.yaml).
   selector:
     matchLabels:
-      app: order-service # Targets the order-service Pods
+      app: user-service
   endpoints:
-  - port: http      # Matches the port name 'http' you added to the Service [1]
-    path: /api/orders/actuator/prometheus # Spring Boot Actuator endpoint [1]
+  - port: http
+    # server.servlet.context-path=/api prefixes the actuator path.
+    path: /api/actuator/prometheus
     interval: 15s
