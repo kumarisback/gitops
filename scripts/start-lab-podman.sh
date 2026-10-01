@@ -56,7 +56,8 @@ done
 
 echo "▶️  Handing off to start-lab.sh for the rest of the setup..."
 # SKIP_ROOT_APP: sync-local-stack.rb below is the only deployer here.
-SKIP_ROOT_APP=1 "${SCRIPT_DIR}/with-podman.sh" start
+# SKIP_IMAGE_LOAD: the images were loaded above with image-archive.
+SKIP_ROOT_APP=1 SKIP_IMAGE_LOAD=1 "${SCRIPT_DIR}/with-podman.sh" start
 
 # ArgoCD's own reconcile loop has proven unreliable on this machine (repo-server
 # fetches to github.com / Helm chart repos intermittently or consistently time

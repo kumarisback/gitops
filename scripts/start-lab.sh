@@ -51,18 +51,29 @@ echo "🌐 Ensuring local NGINX Ingress Controller is installed..."
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.1/deploy/static/provider/kind/deploy.yaml > /dev/null
 kubectl rollout status deployment/ingress-nginx-controller -n ingress-nginx --timeout=180s
 
-# 6. Load locally built application images into KinD
-echo "📦 Loading local application images into KinD..."
+# 6. Load locally built application images into KinD. start-lab-podman.sh
+#    sets SKIP_IMAGE_LOAD=1 because it has already loaded them with
+#    `kind load image-archive` (`kind load docker-image` fails under podman).
+#    A failed load only warns: with set -e it used to abort before the
+#    Secret and root app below were created.
 ECR_REGISTRY="602367507570.dkr.ecr.us-east-1.amazonaws.com"
-for service in frontend order-service user-service; do
-  image="${ECR_REGISTRY}/${service}:latest"
-  if docker image inspect "${image}" > /dev/null 2>&1; then
-    kind load docker-image "${image}" --name "${CLUSTER_NAME}" > /dev/null
-    echo "  Loaded ${service}"
-  else
-    echo "  ⚠️  Missing ${image}; run ./scripts/build-and-push.sh first."
-  fi
-done
+if [ "${SKIP_IMAGE_LOAD:-0}" = "1" ]; then
+  echo "⏭️  Skipping image load (SKIP_IMAGE_LOAD=1)."
+else
+  echo "📦 Loading local application images into KinD..."
+  for service in frontend order-service user-service; do
+    image="${ECR_REGISTRY}/${service}:latest"
+    if docker image inspect "${image}" > /dev/null 2>&1; then
+      if kind load docker-image "${image}" --name "${CLUSTER_NAME}" > /dev/null; then
+        echo "  Loaded ${service}"
+      else
+        echo "  ⚠️  Could not load ${image}; under podman use ./scripts/start-lab-podman.sh."
+      fi
+    else
+      echo "  ⚠️  Missing ${image}; run ./scripts/build-and-push.sh first."
+    fi
+  done
+fi
 
 # 7. Restore the local-only Secret when the ignored file exists
 if [ -f "${REPO_ROOT}/apps/local/app-secrets.env" ]; then
