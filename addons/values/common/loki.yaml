@@ -1,0 +1,18 @@
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+# Single binary/monolithic mode. deploymentMode must be set explicitly: the
+# chart otherwise defaults to SimpleScalable and ignores the singleBinary
+# tuning in the tier files.
+deploymentMode: SingleBinary
+singleBinary:
+  replicas: 1
+gateway:
+  enabled: false
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0

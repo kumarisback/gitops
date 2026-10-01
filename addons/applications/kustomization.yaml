@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Cluster add-ons installed from Helm charts: one ArgoCD Application each,
+# shared by every environment. Each Application layers three values files
+# from addons/values (later files win):
+#
+#   common/<addon>.yaml   every environment
+#   <tier>/<addon>.yaml   local (KinD lab) or cloud (EKS: dev, staging, prod)
+#   <env>/<addon>.yaml    one environment; optional
+#
+# bootstrap/envs/<env>/kustomization.yaml picks the tier and environment
+# with the addons/select-env component.
+resources:
+  - kube-prometheus-stack.yaml
+  - loki.yaml
+  - tempo.yaml
+  - otel-collector.yaml
+  - alloy.yaml
+  - metrics-server.yaml

@@ -15,7 +15,8 @@ spec:
     targetRevision: HEAD
     path: bootstrap/envs/local
     kustomize:
-      # Keep the child app on the same revision as this one.
+      # Keep the child apps (and the add-ons' values files) on the same
+      # revision as this one.
       patches:
         - target:
             kind: Application
@@ -23,6 +24,13 @@ spec:
           patch: |-
             - op: replace
               path: /spec/source/targetRevision
+              value: HEAD
+        - target:
+            kind: Application
+            labelSelector: app.kubernetes.io/part-of=cluster-addons
+          patch: |-
+            - op: replace
+              path: /spec/sources/1/targetRevision
               value: HEAD
   destination:
     server: https://kubernetes.default.svc

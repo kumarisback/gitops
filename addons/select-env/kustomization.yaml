@@ -1,0 +1,43 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Fills in TIER and ENV in each add-on Application's valueFiles from the
+# addons-env ConfigMap that the including kustomization generates, e.g.
+#
+#   configMapGenerator:
+#     - name: addons-env
+#       literals: [tier=cloud, env=prod]
+#       options:
+#         disableNameSuffixHash: true
+#         annotations:
+#           config.kubernetes.io/local-config: "true"   # not deployed
+#
+# valueFiles[1] is $values/addons/values/TIER/<addon>.yaml and valueFiles[2]
+# is $values/addons/values/ENV/<addon>.yaml; path segment 3 is replaced.
+replacements:
+  - source:
+      kind: ConfigMap
+      name: addons-env
+      fieldPath: data.tier
+    targets:
+      - select:
+          kind: Application
+          labelSelector: app.kubernetes.io/part-of=cluster-addons
+        fieldPaths:
+          - spec.sources.0.helm.valueFiles.1
+        options:
+          delimiter: /
+          index: 3
+  - source:
+      kind: ConfigMap
+      name: addons-env
+      fieldPath: data.env
+    targets:
+      - select:
+          kind: Application
+          labelSelector: app.kubernetes.io/part-of=cluster-addons
+        fieldPaths:
+          - spec.sources.0.helm.valueFiles.2
+        options:
+          delimiter: /
+          index: 3

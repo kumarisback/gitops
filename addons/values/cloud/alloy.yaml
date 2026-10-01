@@ -1,0 +1,14 @@
+# Two replicas share the pod targets (clustering) so each pod is tailed
+# exactly once and log shipping survives one replica going down.
+alloy:
+  clustering:
+    enabled: true
+controller:
+  replicas: 2
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

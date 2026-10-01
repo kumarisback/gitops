@@ -1,0 +1,43 @@
+loki:
+  # Required: chart 6.x refuses to render without a schema.
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: s3
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+
+  # TODO: placeholder values — fill in the real bucket names and region
+  # for each environment (dev/staging/prod) before this Application is
+  # synced there. Until these are real, Loki will crash-loop on startup
+  # and nothing will be ingested. ruler/admin may be the same bucket
+  # as chunks; the chart renders all three into the config.
+  storage:
+    type: s3
+    bucketNames:
+      chunks: <your-loki-s3-bucket-name>
+      ruler: <your-loki-s3-bucket-name>
+      admin: <your-loki-s3-bucket-name>
+    s3:
+      region: <your-aws-region>
+      s3ForcePathStyle: false
+
+# Use the pre-created ServiceAccount `loki` in the monitoring namespace,
+# annotated with eks.amazonaws.com/role-arn for S3 access (IRSA). This is
+# a top-level chart value; under `loki:` it was silently ignored and the
+# chart created its own unannotated ServiceAccount.
+serviceAccount:
+  create: false
+  name: loki
+
+singleBinary:
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1.5Gi

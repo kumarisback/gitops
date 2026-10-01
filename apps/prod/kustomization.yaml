@@ -14,7 +14,7 @@ images:
   #   newTag: "v1.0.0"
 
 # Wire order-service/user-service into the otel-collector deployed by
-# bootstrap/envs/prod (see ../../bootstrap/projects/otel-collector.yaml).
+# bootstrap/envs/prod (see ../../addons/values/common/otel-collector.yaml).
 # Sampler is a 10% ratio to control trace volume/cost at production traffic —
 # tune OTEL_TRACES_SAMPLER_ARG as needed once real traffic is observed.
 patches:

@@ -9,56 +9,38 @@
 # Cisco AnyConnect are active) adding latency/unreliability that Podman's
 # VM networking doesn't smooth over the way Docker Desktop's does. This
 # script reads the exact same Application manifests ArgoCD would
-# (bootstrap/envs/local/*.yaml) so chart/version/values/namespace stay in
-# sync with what's committed - it's a direct-apply mirror of that intent,
+# (bootstrap/envs/local, rendered with kustomize, plus the addons/values
+# files they reference) so chart/version/values/namespace stay in sync with
+# what's committed - it's a direct-apply mirror of that intent,
 # not a separate source of truth. ArgoCD is left running for its UI/history;
 # this just doesn't depend on it actually reconciling.
 #
-# Usage: ./scripts/sync-local-stack.rb
-require 'yaml'
+# Usage: ./scripts/sync-local-stack.rb [--dry-run]
+#   --dry-run  print the helm/kubectl commands without running them
 require 'tmpdir'
-require 'fileutils'
 require 'json'
+require_relative 'lib/addon_releases'
 
 REPO_ROOT = File.expand_path('..', __dir__)
-LOCAL_ENV_DIR = File.join(REPO_ROOT, 'bootstrap/envs/local')
-
-# Order matters: prometheus-stack installs the Prometheus Operator's CRDs
-# (ServiceMonitor etc.), which otel-collector and alloy's charts create
-# instances of (serviceMonitor.enabled: true in both) - it must go first or
-# those two fail with "no matches for kind ServiceMonitor". Everything else
-# is order-independent (retries on its own regardless).
-HELM_CHART_APPS = %w[
-  prometheus-stack.yaml
-  metrics-server.yaml
-  loki.yaml
-  tempo.yaml
-  otel-collector.yaml
-  alloy.yaml
-]
+DRY_RUN = ARGV.include?('--dry-run')
 
 def run(cmd)
   puts "+ #{cmd}"
-  system(cmd)
+  DRY_RUN || system(cmd)
 end
 
-def sync_helm_app(file, failures)
-  path = File.join(LOCAL_ENV_DIR, file)
-  doc = YAML.load_file(path)
-  spec = doc['spec']
-  name = doc['metadata']['name']
-  chart = spec['source']['chart']
-  repo_url = spec['source']['repoURL']
-  version = spec['source']['targetRevision']
-  namespace = spec['destination']['namespace']
-  values = spec.dig('source', 'helm', 'values') || ''
-
-  puts "\n=== #{name} (#{chart} #{version} -> ns/#{namespace}) ==="
+def sync_helm_app(release, failures)
+  puts "\n=== #{release['name']} (#{release['chart']} #{release['version']} -> ns/#{release['namespace']}) ==="
   Dir.mktmpdir do |dir|
-    values_file = File.join(dir, 'values.yaml')
-    File.write(values_file, values)
-    ok = run(%(helm upgrade --install #{name} #{chart} --repo #{repo_url} --version #{version} -n #{namespace} --create-namespace -f #{values_file} --wait --timeout 5m))
-    failures << name unless ok
+    files = release['value_files'].dup
+    if release['inline_values']
+      inline = File.join(dir, 'inline-values.yaml')
+      File.write(inline, release['inline_values'])
+      files.unshift(inline)
+    end
+    value_args = files.map { |f| "-f #{f}" }.join(' ')
+    ok = run(%(helm upgrade --install #{release['name']} #{release['chart']} --repo #{release['repo']} --version #{release['version']} -n #{release['namespace']} --create-namespace #{value_args} --wait --timeout 5m))
+    failures << release['name'] unless ok
   end
 end
 
@@ -69,6 +51,8 @@ end
 # put. Root first, or it re-enables auto-sync on its children.
 # Re-applying bootstrap/root-app-local.yaml turns it back on.
 def disable_argocd_autosync
+  return if DRY_RUN
+
   out = `kubectl get applications.argoproj.io -n argocd -o json 2>/dev/null`
   return unless $?.success?
 
@@ -89,7 +73,7 @@ failures = []
 
 disable_argocd_autosync
 
-HELM_CHART_APPS.each { |f| sync_helm_app(f, failures) }
+AddonReleases.for('bootstrap/envs/local').each { |r| sync_helm_app(r, failures) }
 
 puts "\n=== local-apps (frontend/order-service/user-service + observability config) ==="
 unless run(%(kubectl apply -k #{File.join(REPO_ROOT, 'apps/local')}))

@@ -559,7 +559,7 @@
       </li>
       <li>
         <span class="cmd">scripts/sync-local-stack.rb</span>
-        <p>Turns ArgoCD auto-sync off if it's on, then runs <code>helm upgrade --install</code> from <code>bootstrap/envs/local/*.yaml</code>: kube-prometheus-stack, metrics-server, loki, tempo, otel-collector, alloy.</p>
+        <p>Turns ArgoCD auto-sync off if it's on, then runs <code>helm upgrade --install</code> with the charts in <code>addons/applications</code> and the values in <code>addons/values</code>: kube-prometheus-stack, metrics-server, loki, tempo, otel-collector, alloy.</p>
       </li>
       <li>
         <span class="cmd">kubectl apply -k apps/local</span>
@@ -588,11 +588,11 @@
           <tr><td><span class="dot logs"></span>Server log</td><td class="path">app/*/controller/*, security/AuthEntryPointJwt.java, web/GlobalExceptionHandler.java</td><td class="what"><code>audit.&lt;svc&gt;.*</code> loggers for business events; <code>unhandled_exception</code> with the stack trace</td></tr>
           <tr><td><span class="dot logs"></span>JSON encoder</td><td class="path">app/*/src/main/resources/logback-spring.xml</td><td class="what"><code>LoggingEventCompositeJsonEncoder</code> with <code>&lt;mdc/&gt;</code>, <code>&lt;arguments/&gt;</code>, <code>&lt;stackTrace&gt;</code>; <code>environment</code> from <code>deployment.environment</code>; root level INFO</td></tr>
           <tr><td><span class="dot logs"></span>Environment field</td><td class="path">gitops/apps/&lt;env&gt;/kustomization.yaml</td><td class="what"><code>DEPLOYMENT_ENVIRONMENT</code>, same value as <code>deployment.environment</code> in <code>OTEL_RESOURCE_ATTRIBUTES</code></td></tr>
-          <tr><td><span class="dot logs"></span>Log shipper</td><td class="path">gitops/bootstrap/envs/local/alloy.yaml</td><td class="what">Alloy 1.11.1, one Deployment replica; <code>loki.source.kubernetes</code>, labels <code>namespace</code>/<code>pod</code>/<code>container</code>/<code>job</code>, multiline and <code>log_type</code> on the Spring containers only, <code>loki.write</code> to <code>loki.monitoring:3100</code></td></tr>
-          <tr><td><span class="dot logs"></span>Log store</td><td class="path">gitops/bootstrap/envs/local/loki.yaml</td><td class="what">Loki chart 6.6.2, SingleBinary, filesystem, schema v13, <code>retention_period: 24h</code></td></tr>
-          <tr><td><span class="dot traces"></span>Collector</td><td class="path">gitops/bootstrap/envs/local/otel-collector.yaml</td><td class="what">chart 0.173.1, contrib image; <code>alternateConfig</code>: otlp → memory_limiter → batch → otlp <code>tempo.monitoring:4317</code></td></tr>
-          <tr><td><span class="dot traces"></span>Trace store</td><td class="path">gitops/bootstrap/envs/local/tempo.yaml</td><td class="what">Tempo chart 1.24.4, local backend, PVC 2Gi on <code>standard</code>, retention 24h</td></tr>
-          <tr><td><span class="dot both"></span>Grafana</td><td class="path">gitops/bootstrap/envs/local/prometheus-stack.yaml</td><td class="what"><code>additionalDataSources</code>: Loki (uid <code>Loki</code>) with a <code>trace_id</code> derived field, Tempo (uid <code>Tempo</code>) with <code>tracesToLogsV2</code>; dashboard sidecar on all namespaces</td></tr>
+          <tr><td><span class="dot logs"></span>Log shipper</td><td class="path">gitops/addons/values/{common,local}/alloy.yaml</td><td class="what">Alloy 1.11.1, one Deployment replica; <code>loki.source.kubernetes</code>, labels <code>namespace</code>/<code>pod</code>/<code>container</code>/<code>job</code>, multiline and <code>log_type</code> on the Spring containers only, <code>loki.write</code> to <code>loki.monitoring:3100</code></td></tr>
+          <tr><td><span class="dot logs"></span>Log store</td><td class="path">gitops/addons/values/{common,local}/loki.yaml</td><td class="what">Loki chart 6.6.2, SingleBinary, filesystem, schema v13, <code>retention_period: 24h</code></td></tr>
+          <tr><td><span class="dot traces"></span>Collector</td><td class="path">gitops/addons/values/common/otel-collector.yaml</td><td class="what">chart 0.173.1, contrib image; <code>alternateConfig</code>: otlp → memory_limiter → batch → otlp <code>tempo.monitoring:4317</code></td></tr>
+          <tr><td><span class="dot traces"></span>Trace store</td><td class="path">gitops/addons/values/{common,local}/tempo.yaml</td><td class="what">Tempo chart 1.24.4, local backend, PVC 2Gi on <code>standard</code>, retention 24h</td></tr>
+          <tr><td><span class="dot both"></span>Grafana</td><td class="path">gitops/addons/values/{common,local}/kube-prometheus-stack.yaml</td><td class="what"><code>additionalDataSources</code>: Loki (uid <code>Loki</code>) with a <code>trace_id</code> derived field, Tempo (uid <code>Tempo</code>) with <code>tracesToLogsV2</code>; dashboard sidecar on all namespaces</td></tr>
           <tr><td><span class="dot logs"></span>Dashboard</td><td class="path">gitops/apps/local/observability.yaml</td><td class="what">ConfigMap labelled <code>grafana_dashboard: "1"</code>; <code>log_type</code> variable drives the Application Logs panel</td></tr>
         </tbody>
       </table>
@@ -617,7 +617,7 @@
         <span class="num plain">–</span>
         <div class="body">
           <h3>Loki in dev, staging and prod needs real S3 settings <span class="chip logs">logs</span></h3>
-          <p><code>bootstrap/projects/loki.yaml</code> still has placeholder bucket names and region, and expects a pre-created <code>loki</code> ServiceAccount with an IRSA role. Until both exist, Loki won't start in those environments.</p>
+          <p><code>addons/values/cloud/loki.yaml</code> still has placeholder bucket names and region, and expects a pre-created <code>loki</code> ServiceAccount with an IRSA role. Until both exist, Loki won't start in those environments.</p>
         </div>
       </li>
     </ol>

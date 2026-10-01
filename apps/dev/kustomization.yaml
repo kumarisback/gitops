@@ -19,7 +19,7 @@ images:
   #   newTag: "latest"
 
 # Wire order-service/user-service into the otel-collector deployed by
-# bootstrap/envs/dev (see ../../bootstrap/projects/otel-collector.yaml).
+# bootstrap/envs/dev (see ../../addons/values/common/otel-collector.yaml).
 patches:
   - target:
       kind: Deployment

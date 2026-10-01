@@ -1,0 +1,14 @@
+prometheus:
+  prometheusSpec:
+    retention: 24h
+    retentionSize: 4GB
+grafana:
+  # Lab only: a throwaway cluster on localhost.
+  adminPassword: "admin"
+  sidecar:
+    dashboards:
+      enabled: true
+      searchNamespace: ALL
+  persistence:
+    storageClassName: "standard"
+    size: 2Gi

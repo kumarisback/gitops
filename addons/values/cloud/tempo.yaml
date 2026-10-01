@@ -1,0 +1,6 @@
+# TODO: local-disk trace storage on a PVC works but doesn't scale past a
+# single replica — consider an S3 backend (same IRSA pattern as loki.yaml)
+# once real bucket/region values are available for this environment.
+persistence:
+  storageClassName: gp3
+  size: 10Gi

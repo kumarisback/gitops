@@ -1,0 +1,3 @@
+persistence:
+  storageClassName: standard
+  size: 2Gi

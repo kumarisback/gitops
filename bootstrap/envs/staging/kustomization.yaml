@@ -13,12 +13,21 @@ kind: Kustomization
 resources:
   - ../../projects/platform.yaml
   - ../../projects/staging.yaml
-  # The HPAs in apps/base need resource metrics; EKS ships no metrics-server.
-  - ../../projects/metrics-server.yaml
-  # Observability stack: logs (Loki/Alloy), metrics (kube-prometheus-stack),
-  # and traces (Tempo/OTel Collector) — same pattern as bootstrap/envs/dev.
-  - ../../projects/prometheus-stack.yaml
-  - ../../projects/loki.yaml
-  - ../../projects/alloy.yaml
-  - ../../projects/tempo.yaml
-  - ../../projects/otel-collector.yaml
+  # Cluster add-ons: metrics-server, logs (Loki/Alloy), metrics
+  # (kube-prometheus-stack) and traces (Tempo/OTel Collector).
+  - ../../../addons/applications
+
+# Selects addons/values/cloud/ and addons/values/staging/ for every add-on
+# (see addons/select-env).
+configMapGenerator:
+  - name: addons-env
+    literals:
+      - tier=cloud
+      - env=staging
+    options:
+      disableNameSuffixHash: true
+      annotations:
+        config.kubernetes.io/local-config: "true"
+
+components:
+  - ../../../addons/select-env

@@ -162,21 +162,21 @@ In `Gitops/bootstrap/envs/dev`, your setup includes cloud-dependent controllers:
 
 ### Recommended: Add a Local Overlay
 
-The repository already contains `bootstrap/envs/local/kustomization.yaml`:
+The repository already contains `bootstrap/envs/local/kustomization.yaml`. It
+deploys `local-apps` plus the shared cluster add-ons in `addons/applications`
+(kube-prometheus-stack, Loki, Alloy, Tempo, OTel Collector, metrics-server).
+Every environment uses the same add-on Applications; only their Helm values
+differ, layered from `addons/values`:
 
-```yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
+| File | Applies to |
+|---|---|
+| `addons/values/common/<addon>.yaml` | every environment |
+| `addons/values/local/<addon>.yaml` | the KinD lab (small sizing, filesystem storage, `admin` Grafana password) |
+| `addons/values/cloud/<addon>.yaml` | dev, staging and prod on EKS (S3, IRSA, gp3) |
+| `addons/values/<env>/<addon>.yaml` | one environment, when it needs to differ |
 
-resources:
-  - local-apps.yaml
-  - metrics-server.yaml
-  - prometheus-stack.yaml
-  - loki.yaml
-  - alloy.yaml
-  - tempo.yaml
-  - otel-collector.yaml
-```
+`bootstrap/envs/<env>/kustomization.yaml` chooses the tier and environment for
+its add-ons with the `addons/select-env` component.
 
 This ensures your local KinD cluster runs the core applications and observability stack without crashing on AWS-specific IAM controllers.
 
@@ -185,7 +185,7 @@ There are two ways to deploy it:
 | Flow | Command | Who deploys |
 |---|---|---|
 | Docker Desktop | `./scripts/start-lab.sh` | ArgoCD, from `root-app-local` (syncs the checked-out branch, which must be pushed; set `LAB_REVISION` to pick another) |
-| Podman | `./scripts/start-lab-podman.sh` | `scripts/sync-local-stack.rb`, which runs `helm upgrade --install` with the values in `bootstrap/envs/local/*.yaml` and `kubectl apply -k apps/local` from your working tree. ArgoCD stays installed for its UI, with auto-sync off. |
+| Podman | `./scripts/start-lab-podman.sh` | `scripts/sync-local-stack.rb`, which runs `helm upgrade --install` with the chart versions from `addons/applications` and the values from `addons/values/{common,local}` and `kubectl apply -k apps/local` from your working tree. ArgoCD stays installed for its UI, with auto-sync off. |
 
 After a code change in `../app`, rebuild and restart one or more services with
 `./scripts/update-and-redeploy-podman.sh order-service`.

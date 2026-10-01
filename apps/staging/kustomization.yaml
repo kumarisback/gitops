@@ -17,7 +17,7 @@ images:
   #   newTag: "latest"
 
 # Wire order-service/user-service into the otel-collector deployed by
-# bootstrap/envs/staging (see ../../bootstrap/projects/otel-collector.yaml).
+# bootstrap/envs/staging (see ../../addons/values/common/otel-collector.yaml).
 # Sampler is a 50% ratio, not always_on — staging traffic can be significant
 # during load/perf testing. Tune OTEL_TRACES_SAMPLER_ARG as needed.
 patches:

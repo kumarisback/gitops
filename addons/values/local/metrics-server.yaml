@@ -1,0 +1,3 @@
+args:
+  # KinD kubelets serve self-signed certificates.
+  - --kubelet-insecure-tls

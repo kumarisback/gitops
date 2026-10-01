@@ -1,13 +1,23 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# Local environment overlay for KinD
-# Deploys the local microservices, metrics-server, and Prometheus/Grafana stack
+# Local environment overlay for KinD: the local microservices plus the
+# cluster add-ons (metrics-server, Prometheus/Grafana, Loki, Alloy, Tempo,
+# OTel Collector) with the lab-sized values from addons/values/local.
 resources:
   - local-apps.yaml
-  - metrics-server.yaml
-  - prometheus-stack.yaml
-  - loki.yaml
-  - alloy.yaml
-  - tempo.yaml
-  - otel-collector.yaml
+  - ../../../addons/applications
+
+# Selects addons/values/local/ for every add-on (see addons/select-env).
+configMapGenerator:
+  - name: addons-env
+    literals:
+      - tier=local
+      - env=local
+    options:
+      disableNameSuffixHash: true
+      annotations:
+        config.kubernetes.io/local-config: "true"
+
+components:
+  - ../../../addons/select-env
