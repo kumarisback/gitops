@@ -18,18 +18,22 @@
 #   - every Grafana dashboard ConfigMap holds valid JSON
 #   - the lab scripts parse
 #
-# Rendered output and logs are kept in .validate/ (git-ignored).
+# Rendered output and logs are kept in .validate/ (git-ignored); charts and
+# schemas are cached in ~/.cache/gitops-validate.
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${REPO_ROOT}/.validate"
+# Downloaded charts and JSON schemas survive between runs; set
+# VALIDATE_CACHE to move them.
+CACHE="${VALIDATE_CACHE:-${XDG_CACHE_HOME:-${HOME}/.cache}/gitops-validate}"
 KUBE_VERSION="${KUBE_VERSION:-1.33.0}"
 ENVS=(local dev staging prod)
 CRD_SCHEMAS='https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
 
 cd "${REPO_ROOT}"
 rm -rf "${OUT}"
-mkdir -p "${OUT}"/{kustomize,helm,configs,rules,charts,logs}
+mkdir -p "${OUT}"/{kustomize,helm,configs,rules,logs} "${CACHE}"/{charts,kubeconform}
 
 missing=()
 for tool in kubectl helm kubeconform promtool amtool alloy otelcol-contrib loki ruby; do
@@ -61,7 +65,7 @@ kubeconform_file() {
   # CRD definitions themselves come from upstream charts and have no schema
   # to check against; the custom resources using them are still validated.
   kubeconform -strict -summary -kubernetes-version "${KUBE_VERSION}" \
-    -skip CustomResourceDefinition \
+    -skip CustomResourceDefinition -cache "${CACHE}/kubeconform" \
     -schema-location default -schema-location "${CRD_SCHEMAS}" "$1"
 }
 
@@ -81,7 +85,7 @@ done
 
 # --- 2. Helm add-ons -------------------------------------------------------
 pull_chart() {  # CHART REPO VERSION -> prints the chart directory
-  local dir="${OUT}/charts/$1-$3"
+  local dir="${CACHE}/charts/$1-$3"
   if [ ! -d "${dir}" ]; then
     mkdir -p "${dir}"
     case "$2" in
