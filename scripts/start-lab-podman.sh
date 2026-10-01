@@ -55,7 +55,8 @@ for svc in "${SERVICES[@]}"; do
 done
 
 echo "▶️  Handing off to start-lab.sh for the rest of the setup..."
-"${SCRIPT_DIR}/with-podman.sh" start
+# SKIP_ROOT_APP: sync-local-stack.rb below is the only deployer here.
+SKIP_ROOT_APP=1 "${SCRIPT_DIR}/with-podman.sh" start
 
 # ArgoCD's own reconcile loop has proven unreliable on this machine (repo-server
 # fetches to github.com / Helm chart repos intermittently or consistently time

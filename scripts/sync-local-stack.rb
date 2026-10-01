@@ -18,6 +18,7 @@
 require 'yaml'
 require 'tmpdir'
 require 'fileutils'
+require 'json'
 
 REPO_ROOT = File.expand_path('..', __dir__)
 LOCAL_ENV_DIR = File.join(REPO_ROOT, 'bootstrap/envs/local')
@@ -61,8 +62,32 @@ def sync_helm_app(file, failures)
   end
 end
 
+# This script and ArgoCD must not both own the stack: an auto-syncing
+# Application resets everything to what's pushed on GitHub (undoing
+# working-tree changes applied here) and prunes what isn't there. Turn
+# auto-sync off on any Application that still has it; the resources stay
+# put. Root first, or it re-enables auto-sync on its children.
+# Re-applying bootstrap/root-app-local.yaml turns it back on.
+def disable_argocd_autosync
+  out = `kubectl get applications.argoproj.io -n argocd -o json 2>/dev/null`
+  return unless $?.success?
+
+  names = JSON.parse(out)['items']
+              .select { |app| app.dig('spec', 'syncPolicy', 'automated') }
+              .map { |app| app.dig('metadata', 'name') }
+  return if names.empty?
+
+  names = names.partition { |n| n == 'root-app-local' }.flatten
+  puts "⏸️  Turning off ArgoCD auto-sync so it doesn't undo this sync: #{names.join(', ')}"
+  names.each do |name|
+    run(%(kubectl patch applications.argoproj.io #{name} -n argocd --type merge -p '{"spec":{"syncPolicy":{"automated":null}}}'))
+  end
+end
+
 puts "🔄 Syncing local observability stack + apps directly (bypassing ArgoCD)..."
 failures = []
+
+disable_argocd_autosync
 
 HELM_CHART_APPS.each { |f| sync_helm_app(f, failures) }
 

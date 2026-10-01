@@ -76,9 +76,15 @@ else
   echo "⚠️  Missing apps/local/app-secrets.env; services requiring MongoDB will not start."
 fi
 
-# 8. Restore the local Argo app-of-apps
-echo "🚀 Applying local Argo root application..."
-kubectl apply -f "${REPO_ROOT}/bootstrap/root-app-local.yaml" > /dev/null
+# 8. Restore the local Argo app-of-apps. start-lab-podman.sh sets
+#    SKIP_ROOT_APP=1 because it deploys with sync-local-stack.rb instead,
+#    and an auto-syncing root app would fight that script.
+if [ "${SKIP_ROOT_APP:-0}" = "1" ]; then
+  echo "⏭️  Skipping local Argo root application (SKIP_ROOT_APP=1)."
+else
+  echo "🚀 Applying local Argo root application..."
+  kubectl apply -f "${REPO_ROOT}/bootstrap/root-app-local.yaml" > /dev/null
+fi
 
 # 9. Retrieve admin password
 echo "🔑 Retrieving ArgoCD initial admin password..."
@@ -104,6 +110,10 @@ echo ""
 echo "To enable local frontend/API routing, install NGINX Ingress once:"
 echo "  (already installed by this script)"
 echo ""
-echo "To deploy your local apps and monitoring stack via ArgoCD:"
-echo "  (root-app-local is applied automatically by this script)"
+if [ "${SKIP_ROOT_APP:-0}" = "1" ]; then
+  echo "Local apps and monitoring stack: deployed by scripts/sync-local-stack.rb"
+else
+  echo "To deploy your local apps and monitoring stack via ArgoCD:"
+  echo "  (root-app-local is applied automatically by this script)"
+fi
 echo "========================================================"
