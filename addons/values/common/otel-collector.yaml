@@ -1,5 +1,6 @@
 # Trace pipeline, tier 1 ("gateway"). Every span from the apps (OTLP/HTTP
-# 4318) and ingress-nginx (OTLP/gRPC 4317) arrives here, gets the sending
+# 4318), the ingress (OTLP/gRPC 4317) and browsers (4319, via the ingress
+# at /otlp) arrives here, gets the sending
 # pod's Kubernetes metadata, and is forwarded by trace ID to tier 2
 # (otel-collector-sampler.yaml), so all spans of one trace reach the same
 # sampler replica: tail sampling can only judge a whole trace.
@@ -25,6 +26,12 @@ ports:
     enabled: false
   metrics:
     enabled: true
+  # Browser spans, routed here by the ingress at /otlp/v1/traces.
+  otlp-browser:
+    enabled: true
+    containerPort: 4319
+    servicePort: 4319
+    protocol: TCP
 serviceMonitor:
   enabled: true
   extraLabels:
@@ -51,6 +58,15 @@ alternateConfig:
           endpoint: 0.0.0.0:4317
         http:
           endpoint: 0.0.0.0:4318
+    # Public (through the ingress), so it only takes traces, at the path the
+    # ingress forwards unchanged, and caps request size. A WAF rate limit in
+    # front of the cloud ALB is the next step against abuse.
+    otlp/browser:
+      protocols:
+        http:
+          endpoint: 0.0.0.0:4319
+          traces_url_path: /otlp/v1/traces
+          max_request_body_size: 1048576
   processors:
     # A share of the container's memory limit, so it scales with the limit.
     memory_limiter:
@@ -106,4 +122,10 @@ alternateConfig:
       traces:
         receivers: [otlp]
         processors: [memory_limiter, k8sattributes]
+        exporters: [loadbalancing]
+      # No k8sattributes: browser spans arrive through the ingress, so the
+      # connection is the ingress pod's, not the sender's.
+      traces/browser:
+        receivers: [otlp/browser]
+        processors: [memory_limiter]
         exporters: [loadbalancing]
