@@ -366,12 +366,23 @@ Click the **trace_id** link on a log line to open its trace in Tempo, or
 - **SLOs:** 99.5% of requests without a 5xx and 99% within 500ms, per
   service. Alerts use multi-window burn rates: they page when the error
   budget is burning fast and clear soon after a fix.
+- **Service alerts:** `ServiceUnavailable` (no ready pods at all) and
+  `ServiceDown` (a pod not answering scrapes) page; the services' SLO alerts
+  are held back while either fires.
 - **Pipeline alerts** if logs or traces stop reaching Loki or Tempo.
 
 In the lab, alerts are only shown in Grafana (Alerting) and Alertmanager
 (`kubectl port-forward svc/kube-prometheus-stack-alertmanager 9093 -n monitoring`).
 Each alert links to its runbook in [`docs/runbooks.md`](docs/runbooks.md). The rules
 are unit-tested (`tests/prometheus`) by `./scripts/validate.sh`.
+
+To prove the whole path works, run an alert drill: it scales one service to
+0, waits for `ServiceUnavailable` in Alertmanager, restores it and waits for
+the alert to clear (about 4 minutes; works the same on EKS):
+
+```bash
+./scripts/alert-drill.sh order-service development
+```
 
 ### Phase A: Core Kubernetes (Steps 01 – 06)
 
