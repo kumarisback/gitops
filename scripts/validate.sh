@@ -77,7 +77,7 @@ render_kustomize() {  # SRC DEST
 
 # --- 1. kustomize overlays -------------------------------------------------
 echo "Kustomize overlays"
-KUSTOMIZE_DIRS=(platform)
+KUSTOMIZE_DIRS=(platform platform/karpenter/dev)
 for env in "${ENVS[@]}"; do KUSTOMIZE_DIRS+=("apps/${env}" "observability/${env}" "bootstrap/envs/${env}"); done
 for dir in "${KUSTOMIZE_DIRS[@]}"; do
   dest="${OUT}/kustomize/$(echo "${dir}" | tr '/' '_').yaml"

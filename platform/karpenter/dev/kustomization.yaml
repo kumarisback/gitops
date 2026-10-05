@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# dev's Karpenter NodePool and EC2NodeClass. They name dev's node role and
+# security group, and need the Karpenter CRDs that only dev installs
+# (bootstrap/projects/karpenter-dev.yaml), so they are deployed by the
+# dev-only karpenter-nodepools Application rather than the shared platform
+# Application, which every cluster syncs.
+resources:
+  - karpenter-config.yaml

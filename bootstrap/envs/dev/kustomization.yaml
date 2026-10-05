@@ -16,6 +16,7 @@ resources:
   # (kube-prometheus-stack) and traces (Tempo/OTel Collector).
   - ../../../addons/applications
   - ../../projects/karpenter-dev.yaml
+  - ../../projects/karpenter-nodepools-dev.yaml
 
 # Selects addons/values/cloud/ and addons/values/dev/ for every add-on
 # (see addons/select-env).
