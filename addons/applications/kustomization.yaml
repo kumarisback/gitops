@@ -19,4 +19,5 @@ resources:
   - otel-collector-sampler.yaml
   - alloy.yaml
   - metrics-server.yaml
+  - vertical-pod-autoscaler.yaml
   - observability-config.yaml

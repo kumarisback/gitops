@@ -7,4 +7,5 @@ resources:
   - serviceaccount.yaml
   - poddisruptionbudget.yaml
   - hpa.yaml
+  - vpa.yaml
   - servicemonitor.yaml

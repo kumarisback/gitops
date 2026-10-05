@@ -1,0 +1,22 @@
+# Suggested CPU/memory requests for user-service, from its real usage. Recommendation
+# only (updateMode "Off"): nothing changes the pods; see
+# addons/values/common/vertical-pod-autoscaler.yaml.
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: user-service
+  annotations:
+    # The kind exists once the vertical-pod-autoscaler add-on has installed
+    # its CRD; until then ArgoCD skips the dry run for this object.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: user-service
+  updatePolicy:
+    updateMode: "Off"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "*"
+        controlledResources: ["cpu", "memory"]

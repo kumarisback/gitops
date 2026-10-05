@@ -1,0 +1,29 @@
+# Vertical Pod Autoscaler in recommendation-only mode. The recommender
+# watches each container's real CPU and memory use (from metrics-server) and
+# publishes suggested requests on the VerticalPodAutoscaler objects in
+# apps/base/*/vpa.yaml (updateMode "Off"). Read them with
+#   kubectl describe vpa -n <namespace>
+# and change the Deployments' requests in Git.
+#
+# The updater (evicts pods to apply new requests) and the admission
+# controller (rewrites requests as pods are created) are off: requests
+# changing on their own would fight the HPAs, which scale on CPU as a
+# percentage of the request, and would put resources out of step with Git.
+admissionController:
+  enabled: false
+updater:
+  enabled: false
+recommender:
+  # One replica: it isn't on any request path, and its history survives a
+  # restart in VerticalPodAutoscalerCheckpoint objects. Without a second
+  # replica a PodDisruptionBudget would only block node drains.
+  replicas: 1
+  podDisruptionBudget:
+    enabled: false
+  logLevel: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
