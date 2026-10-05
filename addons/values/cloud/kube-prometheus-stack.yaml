@@ -103,6 +103,12 @@ alertmanager:
       - source_matchers: ['alertname="ServiceDown"']
         target_matchers: ['alertname=~"SLO.+"']
         equal: [namespace, job]
+      # With no ready pods at all, the missing-scrape and SLO alerts only
+      # repeat it. Matched on job alone: ServiceMetricsMissing has no
+      # namespace label, and each cluster runs one environment.
+      - source_matchers: ['alertname="ServiceUnavailable"']
+        target_matchers: ['alertname=~"ServiceDown|ServiceMetricsMissing|SLO.+"']
+        equal: [job]
     receivers:
       - name: "null"
       - name: heartbeat

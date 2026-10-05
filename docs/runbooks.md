@@ -20,6 +20,30 @@ Severity decides where an alert goes (see Alertmanager in
 
 ## Service availability
 
+### ServiceUnavailable
+
+**Meaning:** no pod of the Deployment has been ready for 2 minutes, so every
+request to the service fails. Users are affected now. While it fires,
+Alertmanager holds back that service's `ServiceDown`, `ServiceMetricsMissing`
+and SLO alerts, which would only repeat it.
+
+**Check:**
+
+```bash
+kubectl get deploy,pods -n <namespace> -l app=<service>
+kubectl describe deploy <service> -n <namespace>      # conditions; replicas 0 on purpose?
+kubectl get events -n <namespace> --sort-by=.lastTimestamp | tail -20
+```
+
+Common causes, roughly in order: a bad rollout (`CrashLoopBackOff`, failing
+readiness), an image that can't be pulled (`ImagePullBackOff`: the pinned tag
+isn't in ECR), the namespace quota (`exceeded quota` on the ReplicaSet), no
+node with room (`Pending`; check Karpenter), or someone scaled it to 0.
+
+**Act:** roll back a bad release first (`git revert` the image-tag commit and
+let ArgoCD sync). For the other causes, fix that cause. Scaled to 0 on purpose: silence
+the alert for the maintenance window.
+
 ### ServiceDown
 
 **Meaning:** Prometheus has failed to scrape one backend pod's

@@ -104,6 +104,31 @@ tests:
               description: "20% of order-service requests in development are taking longer than 500ms. At this rate the 30-day budget (1% of requests) runs out in under two days."
               runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#slolatencybudgetburnfast
 
+  # Every order-service pod is gone (scaled to 0, crash-looping, never
+  # scheduled): no scrape target, so only the Deployment shows it.
+  - interval: 1m
+    input_series:
+      - series: 'kube_deployment_status_replicas_available{deployment="order-service",namespace="development",job="kube-state-metrics",pod="kube-state-metrics-6c5d8"}'
+        values: '2 2 0x10'
+      - series: 'kube_deployment_status_replicas_available{deployment="user-service",namespace="development",job="kube-state-metrics",pod="kube-state-metrics-6c5d8"}'
+        values: '2x12'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ServiceUnavailable
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: ServiceUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: development
+              deployment: order-service
+              job: order-service
+            exp_annotations:
+              summary: "order-service has no ready pods in development"
+              description: "No pod of order-service has been ready for 2 minutes, so every request to it is failing."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#serviceunavailable
+
   # order-service's scrape target is failing; user-service has no target
   # at all (e.g. its Service lost its labels).
   - interval: 1m

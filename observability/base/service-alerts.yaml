@@ -12,6 +12,27 @@ spec:
   groups:
     - name: service-availability
       rules:
+        # Every pod of a service gone or unready, so every request to it
+        # fails. ServiceDown can't see this: with no pod there's no scrape
+        # target and no `up` series to be 0. The SLO alerts can't either:
+        # the services' own request metrics disappear with their pods. So
+        # it's read from the Deployment (kube-state-metrics). job is set to
+        # the deployment so Alertmanager can inhibit the alerts it implies.
+        - alert: ServiceUnavailable
+          expr: |
+            label_replace(
+              max by (namespace, deployment) (
+                kube_deployment_status_replicas_available{deployment=~"frontend|order-service|user-service"}
+              ) == 0,
+              "job", "$1", "deployment", "(.+)"
+            )
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.deployment }} has no ready pods in {{ $labels.namespace }}"
+            description: "No pod of {{ $labels.deployment }} has been ready for 2 minutes, so every request to it is failing."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#serviceunavailable
         - alert: ServiceDown
           expr: up{job=~"order-service|user-service"} == 0
           for: 2m
