@@ -120,6 +120,28 @@ alloy:
           }
         }
 
+        // Traefik (the lab's ingress) writes one access-log line per request
+        // (it has "DownstreamStatus"): log_type="edge", what the client saw
+        // at the entrance, with the same trace_id as the service's own api
+        // line. Its other lines are about Traefik itself: log_type="server".
+        // In the cloud the ALB is the edge; its access logs go to S3 (see
+        // apps/base/ingress.yaml).
+        stage.match {
+          selector = "{namespace=\"traefik\", container=\"traefik\"} |= \"\\\"DownstreamStatus\\\":\""
+
+          stage.static_labels {
+            values = { log_type = "edge" }
+          }
+        }
+
+        stage.match {
+          selector = "{namespace=\"traefik\", container=\"traefik\"} != \"\\\"DownstreamStatus\\\":\""
+
+          stage.static_labels {
+            values = { log_type = "server" }
+          }
+        }
+
         // Loki tenant: application namespaces are "apps"; everything else
         // falls through to loki.write's tenant_id ("platform").
         stage.match {

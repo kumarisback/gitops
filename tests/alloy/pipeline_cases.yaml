@@ -36,7 +36,7 @@ cases:
       - '{"ClientHost":"10.0.0.7","DownstreamStatus":200,"Duration":1532000,"RequestMethod":"GET","RequestPath":"/api/reset?token=s3cr3t&user=alice","RouterName":"development-app-ingress@kubernetes","level":"info","msg":"","time":"2026-10-01T08:35:12Z"}'
     expect:
       - line: '{"ClientHost":"10.0.0.7","DownstreamStatus":200,"Duration":1532000,"RequestMethod":"GET","RequestPath":"/api/reset?token=<redacted>&user=alice","RouterName":"development-app-ingress@kubernetes","level":"info","msg":"","time":"2026-10-01T08:35:12Z"}'
-        log_type: null
+        log_type: edge
         tenant: null
 
   - name: a query-string secret stops at a JSON-escaped ampersand
@@ -46,7 +46,7 @@ cases:
       - '{"DownstreamStatus":401,"RequestMethod":"GET","RequestPath":"/api/reset?token=s3cr3t-value\u0026user=alice","level":"info"}'
     expect:
       - line: '{"DownstreamStatus":401,"RequestMethod":"GET","RequestPath":"/api/reset?token=<redacted>\u0026user=alice","level":"info"}'
-        log_type: null
+        log_type: edge
         tenant: null
 
   - name: MongoDB URI credentials are masked
@@ -82,6 +82,16 @@ cases:
     expect:
       - line: '{"level":"DEBUG","logger":"com.example.demo.security.jwt.JwtUtils","message":"issued","accessToken":"<redacted>","X-Api-Key":"<redacted>","tokenCount":"<redacted>","user":"alice"}'
         log_type: server
+
+  - name: Traefik's own messages are labelled server, in the platform tenant
+    container: traefik
+    namespace: traefik
+    lines:
+      - '{"level":"warn","providerName":"kubernetescrd","time":"2026-10-05T08:18:12Z","message":"SafeNaming is not explicitly set"}'
+    expect:
+      - line: '{"level":"warn","providerName":"kubernetescrd","time":"2026-10-05T08:18:12Z","message":"SafeNaming is not explicitly set"}'
+        log_type: server
+        tenant: null
 
   - name: platform namespaces go to the default tenant
     container: coredns
