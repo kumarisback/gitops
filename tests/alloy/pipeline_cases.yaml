@@ -39,6 +39,16 @@ cases:
         log_type: null
         tenant: null
 
+  - name: a query-string secret stops at a JSON-escaped ampersand
+    container: traefik
+    namespace: traefik
+    lines:
+      - '{"DownstreamStatus":401,"RequestMethod":"GET","RequestPath":"/api/reset?token=s3cr3t-value\u0026user=alice","level":"info"}'
+    expect:
+      - line: '{"DownstreamStatus":401,"RequestMethod":"GET","RequestPath":"/api/reset?token=<redacted>\u0026user=alice","level":"info"}'
+        log_type: null
+        tenant: null
+
   - name: MongoDB URI credentials are masked
     container: order-service
     lines:
