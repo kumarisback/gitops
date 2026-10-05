@@ -1,11 +1,11 @@
 # Applies only to containers that don't set their own requests/limits.
-# All three services already set explicit values, so this is a safety net
-# for anything added later.
+# All three services set explicit values, so this is a safety net for
+# anything added later (a debug pod, a Job): without requests it couldn't
+# be scheduled against the quota at all.
 apiVersion: v1
 kind: LimitRange
 metadata:
-  name: development-limits
-  namespace: development
+  name: container-defaults
 spec:
   limits:
   - type: Container

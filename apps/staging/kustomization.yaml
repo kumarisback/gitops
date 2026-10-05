@@ -24,6 +24,7 @@ images:
 components:
   - ../components/otel-instrumentation
   - ../components/request-logging
+  - ../components/namespace-guardrails
 
 configMapGenerator:
   - name: otel-environment

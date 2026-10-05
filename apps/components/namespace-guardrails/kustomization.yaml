@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Guardrails for each cloud environment's application namespace (the
+# overlay's `namespace:` puts them there): a ResourceQuota that caps what
+# the namespace can request in total, and a LimitRange that gives any
+# container without its own requests/limits sensible defaults.
+#
+# The quota is sized to let every HorizontalPodAutoscaler reach its maximum
+# (10 replicas each, apps/base/*/hpa.yaml) during a rolling update. A quota
+# smaller than that makes autoscaling stop silently: the HPA asks for more
+# pods and the ReplicaSet gets "exceeded quota" errors that only show up as
+# events. Raise it together with maxReplicas or the containers' requests.
+#
+#                  requests          limits
+#   frontend   10 x 100m / 256Mi   250m / 512Mi
+#   user       10 x 250m / 512Mi   500m / 1Gi
+#   order      10 x 250m / 512Mi   500m / 1Gi
+#   total          6 CPU / 12.5Gi    12.5 CPU / 25Gi
+#   + 25% surge of one service, then rounded up for headroom
+resources:
+  - resourcequota.yaml
+  - limitrange.yaml
