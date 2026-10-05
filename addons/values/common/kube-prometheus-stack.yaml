@@ -35,10 +35,12 @@ grafana:
         httpHeaderValue1: apps|platform
       jsonData:
         httpHeaderName1: X-Scope-OrgID
-        # Adds a "trace_id" link on each log line that opens it in Tempo.
+        # Adds a "trace_id" link on each log line that opens it in Tempo:
+        # raw JSON lines ("trace_id":"...") and the dashboards' one-line
+        # summaries (trace_id=...).
         derivedFields:
           - name: trace_id
-            matcherRegex: '"trace_id":"(\w+)"'
+            matcherRegex: '(?:"trace_id":"|trace_id=)(\w+)'
             datasourceUid: Tempo
             url: '$${__value.raw}'
     - name: Tempo

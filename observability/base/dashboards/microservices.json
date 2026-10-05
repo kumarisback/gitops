@@ -205,12 +205,66 @@
     },
     {
       "type": "logs",
-      "title": "Application Logs ($log_type)",
+      "title": "API calls",
+      "description": "One line per request from each service (RequestLoggingFilter, log_type=\"api\"): method, route, status and duration, plus the request payload where the environment logs it (local/dev: every request; staging/prod: failed requests only), with secret fields masked. Response bodies are never logged. Click trace_id to open the trace.",
       "gridPos": {
         "h": 12,
         "w": 24,
         "x": 0,
         "y": 38
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "Loki"
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{namespace=\"$namespace\", log_type=\"api\"} | json | line_format \"{{.container}}  {{.http_request_method}} {{or .http_route .url_path}} → {{.http_response_status_code}} in {{.duration_ms}}ms{{if .http_request_body}}  payload={{.http_request_body}}{{end}}  trace_id={{.trace_id}}\""
+        }
+      ],
+      "id": 12
+    },
+    {
+      "type": "logs",
+      "title": "Edge requests (ingress access log)",
+      "description": "What clients saw at the entrance, one line per request (log_type=\"edge\"): status, total time including the network hop, client address. The trace_id is the same as on the service's API line. Local lab only (Traefik); in the cloud the ALB writes these to S3 (apps/base/ingress.yaml).",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 50
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "Loki"
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{namespace=\"traefik\", log_type=\"edge\"} | json | KubernetesIngressNamespace=\"$namespace\" | line_format \"{{.RequestMethod}} {{.RequestPath}} → {{.DownstreamStatus}} in {{div .Duration 1000000}}ms  client={{.ClientHost}}  service={{.KubernetesServiceName}}  trace_id={{.trace_id}}\""
+        }
+      ],
+      "id": 13
+    },
+    {
+      "type": "logs",
+      "title": "Application Logs ($log_type)",
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 60
       },
       "datasource": {
         "type": "loki",
@@ -242,7 +296,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 50
+        "y": 72
       },
       "targets": [
         {
