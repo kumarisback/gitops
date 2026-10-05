@@ -269,7 +269,7 @@
 
           <!-- ingress access log, routed above the pod -->
           <path d="M298,250 V22 H948 V39" class="ln-logs ln-dash" marker-end="url(#ah-logs)"/>
-          <text x="630" y="17" text-anchor="middle" class="t-lbl logs">ingress access log · plain text</text>
+          <text x="630" y="17" text-anchor="middle" class="t-lbl logs">ingress access log · JSON · log_type=edge</text>
 
           <!-- ingress spans, routed below the pod -->
           <path d="M298,410 V640 H948 V623" class="ln-traces" marker-end="url(#ah-traces)"/>
@@ -372,7 +372,7 @@
           <text x="870" y="99" class="t-mono-logs">loki.source.kubernetes</text>
           <text x="870" y="114" class="t-body">reads pods via API</text>
           <text x="870" y="130" class="t-body">masks tokens, passwords</text>
-          <text x="870" y="146" class="t-mono-logs">log_type: api | server</text>
+          <text x="870" y="146" class="t-mono-logs-sm">log_type: edge|api|server</text>
           <text x="870" y="162" class="t-mono-logs">tenant: apps | platform</text>
           <text x="870" y="180" class="t-body">multiline ^\{ on the</text>
           <text x="870" y="194" class="t-body">Spring pods only</text>
@@ -448,20 +448,25 @@
 
         </svg>
       </div>
-      <figcaption>Logs and traces leave the same JVM by different doors. Both log types are lines from one JSON stream on stdout; Alloy tells them apart by the <code>logger</code> field and labels them <code>log_type</code>. Spans go out over OTLP and never touch stdout. The <code>trace_id</code> the agent copies into every log line is what lets Grafana jump between a log line and its trace. Every span reaches the collector; its sampler tier keeps all errors, every request over 500ms and a share of the rest, after computing span metrics from all of them.</figcaption>
+      <figcaption>Logs and traces leave the same JVM by different doors. Both of a service's log types are lines from one JSON stream on stdout; Alloy tells them apart by the <code>logger</code> field and labels them <code>log_type</code> (<code>api</code> or <code>server</code>). Traefik's access log reaches Alloy the same way and is labelled <code>edge</code>. Spans go out over OTLP and never touch stdout. The <code>trace_id</code> the agent copies into every log line is what lets Grafana jump between a log line and its trace. Every span reaches the collector; its sampler tier keeps all errors, every request over 500ms and a share of the rest, after computing span metrics from all of them.</figcaption>
     </figure>
   </section>
 
   <section class="col" aria-labelledby="kinds-h">
     <div class="section-head">
-      <h2 id="kinds-h">API logs or server logs?</h2>
-      <p>Both are JSON lines from the same Spring Boot process, so there's no Grafana setting that splits them. What differs is who wrote the line, and Alloy records that as the <code>log_type</code> label.</p>
+      <h2 id="kinds-h">Edge, API or server logs?</h2>
+      <p>One request leaves up to three kinds of line, from the outside in. There's no Grafana setting that splits them: what differs is who wrote the line, and Alloy records that as the <code>log_type</code> label. All three carry the request's <code>trace_id</code>.</p>
     </div>
     <div class="pair">
       <div class="kind">
+        <h3>Edge log <span class="chip logs">log_type="edge"</span></h3>
+        <p>One line per request from the ingress (Traefik in the lab), as the client saw it: status, total time including the hop to the pod, client address. It also records requests that never reached a service, such as routing errors or a pod that was down. In the cloud the ALB writes this log to S3 instead.</p>
+        <p class="use">Use it to see what users actually got.</p>
+      </div>
+      <div class="kind">
         <h3>API log <span class="chip logs">log_type="api"</span></h3>
-        <p>One line per HTTP request, written by <code>RequestLoggingFilter</code> after the response is sent. Logger <code>access.&lt;service&gt;.http</code>, message <code>http_request</code>, with method, path, status and duration in milliseconds.</p>
-        <p class="use">Use it to see what was called, how long it took and what status came back.</p>
+        <p>One line per HTTP request inside the service, written by <code>RequestLoggingFilter</code> after the response is sent. Logger <code>access.&lt;service&gt;.http</code>, message <code>http_request</code>, with OpenTelemetry field names: method, path, route template, status, duration, and the request payload where the environment turns it on (lab and dev: every request; staging and prod: failed requests only), with secret fields masked. Response bodies are never logged; health checks aren't logged at all.</p>
+        <p class="use">Use it to see what was called, with what, how long it took and what status came back.</p>
       </div>
       <div class="kind">
         <h3>Server log <span class="chip logs">log_type="server"</span></h3>
@@ -472,18 +477,18 @@
     <ul class="choose">
       <li>
         <span class="where">Dashboard</span>
-        <p class="path-steps"><b>Dashboards</b> → <b>Local Microservices</b> → <b>Log type</b> dropdown at the top: All, api or server. The Application Logs panel follows it.</p>
+        <p class="path-steps"><b>Dashboards</b> → <b>Microservices</b> → <b>API calls</b> (one readable line per request, payload included where logged) and <b>Edge requests</b>. The <b>Log type</b> dropdown at the top (All, api or server) drives the Application Logs panel.</p>
       </li>
       <li>
         <span class="where">Explore</span>
-        <p class="path-steps"><b>Explore</b> → datasource <b>Loki</b> → <b>Label browser</b> → <code>log_type</code> → <b>api</b> or <b>server</b> → <b>Show logs</b>.</p>
+        <p class="path-steps"><b>Explore</b> → datasource <b>Loki</b> → <b>Label browser</b> → <code>log_type</code> → <b>edge</b>, <b>api</b> or <b>server</b> → <b>Show logs</b>.</p>
       </li>
       <li>
         <span class="where">Query</span>
-        <p class="path-steps"><code>{namespace="development", log_type="api"}</code><br>or <code>log_type="server"</code>. The query cards below add parsing and formatting.</p>
+        <p class="path-steps"><code>{namespace="development", log_type="api"}</code><br>or <code>log_type="server"</code>, or <code>{namespace="traefik", log_type="edge"}</code>. The query cards below add parsing and formatting.</p>
       </li>
     </ul>
-    <p class="note">Lines shipped before the label existed don't have <code>log_type</code>. For those, filter on the JSON field instead: <code>| json | logger=~"access\\..*"</code> for API logs, <code>!~</code> for server logs. To follow one request from its API log to its server logs and trace, click <b>trace_id</b> on the log line.</p>
+    <p class="note">To follow one request from its edge or API line to its server logs and trace, click <b>trace_id</b> on the log line.</p>
   </section>
 
   <section class="col" aria-labelledby="lines-h">
@@ -506,10 +511,13 @@
   "span_id": "00f067aa0ba902b7",
   "trace_flags": "01",</span>
   "message": "http_request",
-<span class="hl-lg">  "http.method": "POST",
-  "http.path": "/api/auth/signin",
-  "http.status": 200,
-  "http.duration_ms": 87</span>
+<span class="hl-lg">  "http.request.method": "POST",
+  "url.path": "/api/auth/signin",
+  "http.route": "/api/auth/signin",
+  "http.response.status_code": 200,
+  "duration_ms": 87,
+  "http.request.body.size": 44,
+  "http.request.body": "{\"username\":\"alice\",\"password\":\"&lt;redacted&gt;\"}"</span>
 }</code></pre>
       </div>
       <div class="sample">
@@ -583,13 +591,14 @@
           <tr><td><span class="dot traces"></span>CORS for trace headers</td><td class="path">app/user-service/…/security/WebSecurityConfig.java</td><td class="what">allowed headers include <code>traceparent</code>, <code>tracestate</code>, <code>baggage</code></td></tr>
           <tr><td><span class="dot req"></span>Routing</td><td class="path">gitops/apps/base/ingress.yaml</td><td class="what"><code>/api/orders</code> → order-service, <code>/api</code> → user-service, <code>/</code> → frontend; ALB health checks per Service</td></tr>
           <tr><td><span class="dot traces"></span>Browser span route</td><td class="path">gitops/observability/local/browser-otlp-ingress.yaml, observability/components/browser-otlp-alb</td><td class="what"><code>/otlp</code> → collector gateway <code>:4319</code> (Traefik in the lab, the shared ALB in the cloud)</td></tr>
-          <tr><td><span class="dot traces"></span>Ingress controller</td><td class="path">gitops/local-setup/traefik-values.yaml</td><td class="what">Traefik v3 (lab): host ports 80/443, JSON access logs, a span per request to the collector over OTLP/gRPC</td></tr>
+          <tr><td><span class="dot traces"></span>Ingress controller</td><td class="path">gitops/local-setup/traefik-values.yaml</td><td class="what">Traefik v3 (lab): host ports 80/443, JSON access logs (<code>log_type</code> edge, with <code>trace_id</code>), a span per request to the collector over OTLP/gRPC</td></tr>
           <tr><td><span class="dot traces"></span>Java agent</td><td class="path">app/{user,order}-service/Dockerfile</td><td class="what"><code>ADD … opentelemetry-javaagent.jar</code> v2.13.3, <code>ENTRYPOINT java -javaagent:/app/opentelemetry-javaagent.jar</code></td></tr>
           <tr><td><span class="dot traces"></span>Agent settings</td><td class="path">gitops/apps/components/otel-instrumentation, apps/&lt;env&gt;/kustomization.yaml</td><td class="what">shared endpoint/protocol/exporters in the component; each overlay's <code>otel-environment</code> sets <code>DEPLOYMENT_ENVIRONMENT</code>, resource attributes and <code>parentbased_always_on</code></td></tr>
-          <tr><td><span class="dot logs"></span>API log</td><td class="path">app/*/web/RequestLoggingFilter.java</td><td class="what">logger <code>access.&lt;svc&gt;.http</code>, message <code>http_request</code>, <code>kv()</code> fields for method, path, status, duration</td></tr>
+          <tr><td><span class="dot logs"></span>API log</td><td class="path">app/*/web/RequestLoggingFilter.java</td><td class="what">logger <code>access.&lt;svc&gt;.http</code>, message <code>http_request</code>, OpenTelemetry-named <code>kv()</code> fields (method, path, route, status, duration), optional masked request payload; skips <code>/actuator</code></td></tr>
+          <tr><td><span class="dot logs"></span>Payload setting</td><td class="path">gitops/apps/components/request-logging, apps/&lt;env&gt;/kustomization.yaml</td><td class="what"><code>APP_HTTP_LOGGING_REQUEST_BODY</code>: ALWAYS in local and dev, ERRORS in staging and prod; NEVER when unset</td></tr>
           <tr><td><span class="dot logs"></span>Server log</td><td class="path">app/*/controller/*, security/AuthEntryPointJwt.java, web/GlobalExceptionHandler.java</td><td class="what"><code>audit.&lt;svc&gt;.*</code> loggers for business events; <code>unhandled_exception</code> with the stack trace</td></tr>
           <tr><td><span class="dot logs"></span>JSON encoder</td><td class="path">app/*/src/main/resources/logback-spring.xml</td><td class="what"><code>LoggingEventCompositeJsonEncoder</code> with <code>&lt;mdc/&gt;</code>, <code>&lt;arguments/&gt;</code>, <code>&lt;stackTrace&gt;</code>; <code>environment</code> from <code>deployment.environment</code></td></tr>
-          <tr><td><span class="dot logs"></span>Log shipper</td><td class="path">gitops/addons/values/{common,local,cloud}/alloy.yaml</td><td class="what">Alloy: masks tokens/passwords/URI credentials, <code>log_type</code> api|server, Loki tenant apps|platform, multiline for the Spring containers; tested by <code>tests/alloy</code></td></tr>
+          <tr><td><span class="dot logs"></span>Log shipper</td><td class="path">gitops/addons/values/{common,local,cloud}/alloy.yaml</td><td class="what">Alloy: masks tokens/passwords/URI credentials (also inside logged payloads), <code>log_type</code> edge|api|server, Loki tenant apps|platform, multiline for the Spring containers; tested by <code>tests/alloy</code></td></tr>
           <tr><td><span class="dot logs"></span>Log store</td><td class="path">gitops/addons/values/{common,local,cloud}/loki.yaml</td><td class="what">Loki 3.0 multi-tenant; lab: filesystem, 24h; cloud: S3, 3 replicas, 30 days apps / 7 days platform</td></tr>
           <tr><td><span class="dot traces"></span>Collector</td><td class="path">gitops/addons/values/common/otel-collector.yaml, otel-collector-sampler.yaml</td><td class="what">gateway: k8sattributes, loadbalancing by trace ID; sampler: spanmetrics + servicegraph from all spans, tail sampling (errors, &gt;500ms, <code>TAIL_SAMPLING_PERCENTAGE</code>)</td></tr>
           <tr><td><span class="dot traces"></span>Trace store</td><td class="path">gitops/addons/values/{common,local,cloud}/tempo.yaml</td><td class="what">Tempo 2.9; lab: local disk 24h; cloud: S3, 14 days</td></tr>
@@ -661,9 +670,18 @@
         <span class="where">Loki</span>
         <div class="code-wrap"><pre><code id="q1">{namespace="development", log_type="api"}
   | json
-  | http_path !~ `.*/actuator/.*`
-  | line_format "{{.http_method}} {{.http_path}} {{.http_status}} {{.http_duration_ms}}ms"</code></pre><button class="copy" type="button" data-target="q1" id="copy-q1">Copy</button></div>
-        <p>One line per request. The actuator filter hides the readiness probe every 5s and the liveness probe every 10s.</p>
+  | http_response_status_code >= 400
+  | line_format "{{.http_request_method}} {{.http_route}} {{.http_response_status_code}} {{.duration_ms}}ms {{.http_request_body}}"</code></pre><button class="copy" type="button" data-target="q1" id="copy-q1">Copy</button></div>
+        <p>Failed requests with their payload. Drop the status filter for every request. <code>| json</code> turns fields into filters, with dots replaced by underscores.</p>
+      </div>
+      <div class="q">
+        <h3><span class="dot logs"></span>Edge requests</h3>
+        <span class="where">Loki</span>
+        <div class="code-wrap"><pre><code id="q7">{namespace="traefik", log_type="edge"}
+  | json
+  | KubernetesIngressNamespace="development"
+  | line_format "{{.RequestMethod}} {{.RequestPath}} {{.DownstreamStatus}} {{div .Duration 1000000}}ms"</code></pre><button class="copy" type="button" data-target="q7" id="copy-q7">Copy</button></div>
+        <p>What clients got at the entrance (lab: Traefik). <code>Duration</code> is in nanoseconds.</p>
       </div>
       <div class="q">
         <h3><span class="dot logs"></span>Server logs</h3>

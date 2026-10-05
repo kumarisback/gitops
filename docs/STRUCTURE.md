@@ -34,7 +34,9 @@ Each cluster (local lab, dev, staging, prod) has an **entry folder**,
 gitops/
 ├── apps/                    the 3 services (frontend, order-service, user-service)
 │   ├── base/                  shared YAML for all environments
-│   ├── components/  ★         shared tracing settings (one copy, used by all envs)
+│   ├── components/  ★         shared settings used by all envs: tracing
+│   │                            (otel-instrumentation) and request payload
+│   │                            logging (request-logging)
 │   └── local|dev|staging|prod/  only what differs per environment (the lab also
 │                                runs its own MongoDB: apps/local/mongodb.yaml)
 │
@@ -133,18 +135,36 @@ what it means and what to do.
 ## 6. How logs flow
 
 ```
- Spring app ─► stdout (JSON) ─► Alloy ──────────────────────────────► Loki ─► Grafana
-                                 │ 1. hides passwords, tokens, JWTs
-                                 │ 2. labels: log_type = api | server
-                                 │ 3. tenant: apps (the app namespaces)
-                                 │            platform (everything else)
-                                 │ 4. joins multi-line stack traces (Spring apps only)
+ Traefik (ingress) ─► stdout (JSON) ─┐
+ Spring app ────────► stdout (JSON) ─┴► Alloy ─────────────────────────► Loki ─► Grafana
+                                         │ 1. hides passwords, tokens, JWTs
+                                         │ 2. labels: log_type = edge | api | server
+                                         │ 3. tenant: apps (the app namespaces)
+                                         │            platform (everything else)
+                                         │ 4. joins multi-line stack traces (Spring apps only)
 ```
 
-- **API log:** one line per HTTP request (`RequestLoggingFilter`).
+One request leaves up to three kinds of line, all with the same `trace_id`:
+
+```
+ client ──► Traefik ─────────────► service ─────────────────────────► (code runs)
+            edge line:               api line:                          server lines:
+            what the client got      method, route, status, duration,   business events,
+            (status, total time)     payload where enabled              errors
+```
+
+- **Edge log:** one line per request at the entrance. Lab: Traefik. Cloud:
+  the ALB writes it to S3 (switched on per environment, see
+  `apps/base/ingress.yaml`).
+- **API log:** one line per HTTP request inside the service
+  (`RequestLoggingFilter`). Health checks are not logged.
 - **Server log:** everything else the service writes.
-- In Grafana, pick one with the **Log type** dropdown on the Microservices
-  dashboard, or `{log_type="api"}` in Explore.
+- **Request payloads** are in the API log only where the environment turns
+  them on (`apps/components/request-logging`): every request in local and
+  dev, failed requests only in staging and prod. Secret fields are masked,
+  and response bodies are never logged.
+- In Grafana, the Microservices dashboard has **API calls** and **Edge
+  requests** panels; in Explore use `{log_type="api"}` and so on.
 
 The **tenant** split stops system logs from using up the application logs'
 limits. In the cloud, app logs are kept 30 days and platform logs 7 days.
@@ -226,6 +246,10 @@ Day-to-day commands are in [`LOCAL-LAB-GUIDE.md`](../LOCAL-LAB-GUIDE.md).
 - The `environment` field in logs comes from `DEPLOYMENT_ENVIRONMENT`, so
   logs say `local`, `dev`, `staging` or `production` correctly.
 - The frontend image is built on Node 24, because Node 20 is out of support.
+- The API log uses OpenTelemetry field names (`http.request.method`,
+  `http.route`, `http.response.status_code`, ...) and can include the masked
+  request payload, controlled by `APP_HTTP_LOGGING_REQUEST_BODY`
+  (NEVER / ERRORS / ALWAYS). It has unit tests.
 
 ---
 

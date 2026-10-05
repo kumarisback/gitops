@@ -260,7 +260,7 @@ What each component does:
 | Component | Responsibility |
 |---|---|
 | Traefik | Routes `/` to frontend, `/api` to the backend services and `/otlp` to the collector; traces every request and writes JSON access logs. |
-| Grafana Alloy | One replica reads every pod's stdout through the Kubernetes API, masks tokens and passwords, labels the Spring services' lines `log_type=api` or `log_type=server`, and sends them to Loki as tenant `apps` (application namespaces) or `platform`. |
+| Grafana Alloy | One replica reads every pod's stdout through the Kubernetes API, masks tokens and passwords, labels each line `log_type=edge` (Traefik's access log), `api` (one per request in a service) or `server`, and sends them to Loki as tenant `apps` (application namespaces) or `platform`. |
 | Loki | Stores and searches logs, per tenant; use LogQL in Grafana. |
 | OpenTelemetry web SDK | Records the browser's fetch spans and sends them to `/otlp/v1/traces`; adds `traceparent` to API calls. |
 | OpenTelemetry Java agent | Creates HTTP, MongoDB, and downstream-client spans without custom filters, and sends every span. |
@@ -289,32 +289,71 @@ call to order-service and MongoDB. The browser console logs the same trace ID.
 [`docs/observability-pipeline.html`](docs/observability-pipeline.html) maps every
 hop to the file that configures it.
 
-### 4.1 API logs vs server logs in Grafana
+### 4.1 Edge, API and server logs in Grafana
 
-Both come out of the same Spring Boot process as one JSON line per event on
-stdout. They differ only in the `logger` field:
+One request produces up to three kinds of log line. Alloy labels each with
+`log_type`, so picking one is a label filter, not a setting:
 
-| Log type | Written by | `logger` | Example `message` |
+| `log_type` | Written by | When | Tells you |
 |---|---|---|---|
-| API log | `RequestLoggingFilter`, once per HTTP request | `access.<service>.http` | `http_request` with `http.method`, `http.path`, `http.status`, `http.duration_ms` |
-| Server log | everything else: controllers, `audit.<service>.*`, security, `GlobalExceptionHandler` | the class or `audit.*` logger | `auth_signin_succeeded`, `unhandled_exception` |
+| `edge` | Traefik, the ingress (its access log) | once per request, at the entrance | what the client saw: status, total time, client address |
+| `api` | each service's `RequestLoggingFilter` (logger `access.<service>.http`) | once per request, inside the service | method, route, status, duration and, where enabled, the request payload |
+| `server` | everything else a service (or Traefik) writes | any time | business events (`auth_signin_succeeded`), warnings, errors with stack traces |
 
-Alloy turns that into a `log_type` label (`api` or `server`) when it ships the
-line, so choosing one is a label filter, not a setting:
+All three carry the request's `trace_id`, so from any line you can open the
+trace or find the other two. Health checks (`/actuator/...`) aren't logged as
+API calls: they are Kubernetes and Prometheus traffic, not users.
 
-- **Dashboard:** open *Local Microservices* and pick **Log type** at the top
-  (All / api / server).
-- **Explore:** choose the **Loki** datasource, open the label browser, pick
-  `log_type`, then `api` or `server`.
-- **Query:** `{namespace="development", log_type="api"}` or
-  `{namespace="development", log_type="server"}`.
+API log fields use the OpenTelemetry names, the same as on the trace spans:
 
-Lines shipped before the label existed don't have it; for those, parse the JSON
-instead: `{namespace="development", container=~"user-service|order-service"} | json | logger=~"access\\..*"`
-(add `!~` for server logs).
+| Field | Example |
+|---|---|
+| `http.request.method` | `POST` |
+| `url.path` | `/api/orders/user/alice` (the query string is left out: it can hold secrets) |
+| `http.route` | `/api/orders/user/{userId}`, the same for every user, so group by this |
+| `http.response.status_code` | `201` |
+| `duration_ms` | `12` |
+| `http.request.body.size` | `58` |
+| `http.request.body` | `{"username":"alice","password":"<redacted>"}`, only where enabled (below) |
+| `error.type` | `java.lang.IllegalStateException`, only when an exception escaped |
 
-Every line also carries `trace_id`. Click the **trace_id** link on a log line to
-open its trace in Tempo, or **Logs for this span** on a span to go the other way.
+**Request payloads** are set per environment in `apps/<env>/kustomization.yaml`
+(ConfigMap `request-logging`; see `apps/components/request-logging`):
+
+| Environment | `APP_HTTP_LOGGING_REQUEST_BODY` | Payload logged for |
+|---|---|---|
+| local, dev | `ALWAYS` | every request |
+| staging, prod | `ERRORS` | failed requests (4xx/5xx) only |
+| not set | `NEVER` | none |
+
+Only JSON payloads are logged. Any key containing password, token, secret
+(and similar) is masked by the service, and again by Alloy, and the payload
+is cut at 2048 characters. Response bodies are never logged: they carry the
+most personal data and are rarely needed, because the status code and the
+trace show what happened.
+
+Where to look:
+
+- **Dashboard:** *Microservices* → **API calls**: one readable line per
+  request, e.g. `user-service  POST /api/auth/signin → 200 in 87ms  payload={...}  trace_id=...`.
+  **Edge requests** shows the same requests as Traefik saw them, and
+  **Application Logs** with **Log type** = `server` shows the rest.
+- **Explore** (Loki datasource):
+
+  ```logql
+  # Failed API calls, with their payload
+  {namespace="development", log_type="api"} | json | http_response_status_code >= 400
+  # Slow calls
+  {namespace="development", log_type="api"} | json | duration_ms > 500
+  # What clients saw at the entrance
+  {namespace="traefik", log_type="edge"} | json | KubernetesIngressNamespace="development"
+  ```
+
+  `| json` turns the fields into filters, with dots replaced by underscores
+  (`http.response.status_code` becomes `http_response_status_code`).
+
+Click the **trace_id** link on a log line to open its trace in Tempo, or
+**Logs for this span** on a span to go the other way.
 
 ### 4.2 Alerts, SLOs and dashboards
 

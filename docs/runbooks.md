@@ -87,7 +87,8 @@ Customers are seeing errors now.
 2. Which endpoint: in Prometheus,
    `sum by (uri, status) (rate(http_server_requests_seconds_count{job="<service>", status=~"5.."}[5m]))`.
 3. Why: Explore → Loki
-   `{namespace="<namespace>", log_type="api"} | json | http_status >= 500`,
+   `{namespace="<namespace>", log_type="api"} | json | http_response_status_code >= 500`
+   (in staging and production the line includes the request payload),
    then click the line's **trace_id** to open the trace in Tempo and find the
    failing span (Mongo, the downstream call to order-service, ...).
 4. Did something change? `git log` on `apps/<env>/` and the ArgoCD history.
@@ -116,7 +117,9 @@ month's latency budget is gone in under two days.
 1. Microservices dashboard → *API P95 Latency*, and *Pod CPU* for throttling
    against the CPU limit.
 2. Slow endpoints: Explore → Loki
-   `{namespace="<namespace>", log_type="api"} | json | http_duration_ms > 500`.
+   `{namespace="<namespace>", log_type="api"} | json | duration_ms > 500`,
+   or the *API calls* panel on the Microservices dashboard; `http_route` says
+   which endpoint.
 3. Where the time goes: open a slow request's trace in Tempo, or search
    TraceQL `{ resource.service.name = "<service>" && duration > 500ms }`.
 
