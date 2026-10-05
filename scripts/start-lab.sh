@@ -22,7 +22,18 @@ if kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}$"; then
     echo "▶️  Resuming stopped cluster nodes..."
     docker start $(docker ps -a -q -f name="${CLUSTER_NAME}")
     echo "⏳ Waiting for cluster nodes to be ready..."
-    kubectl wait --for=condition=Ready nodes --all --timeout=60s
+    # Right after a restart the API server answers "Forbidden" until its
+    # authorizer has loaded, so retry rather than stop on the first error.
+    for attempt in $(seq 1 12); do
+      if kubectl --context "kind-${CLUSTER_NAME}" wait --for=condition=Ready nodes --all --timeout=60s > /dev/null 2>&1; then
+        break
+      fi
+      if [ "${attempt}" -eq 12 ]; then
+        echo "❌ Cluster nodes didn't become ready; check: kubectl --context kind-${CLUSTER_NAME} get nodes"
+        exit 1
+      fi
+      sleep 10
+    done
   else
     echo "✅ Cluster '${CLUSTER_NAME}' is already running."
   fi
