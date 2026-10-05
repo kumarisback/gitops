@@ -91,6 +91,16 @@ alloy:
           }
         }
 
+        // Drop successful actuator calls (Kubernetes probes every 5-10s,
+        // Prometheus scrapes every 15s): they outnumber real API calls and
+        // say nothing. A failing probe or scrape (any status but 200) is
+        // still kept as an API log.
+        stage.match {
+          selector            = "{container=~\"user-service|order-service\"} |= \"\\\"logger\\\":\\\"access.\" |= \"/actuator/\" |= \"\\\"http.status\\\":200,\""
+          action              = "drop"
+          drop_counter_reason = "actuator_ok"
+        }
+
         // Label each Spring log line log_type="api" (the per-request
         // access log from RequestLoggingFilter, logger access.<svc>.http)
         // or log_type="server" (everything else) so Grafana can pick
