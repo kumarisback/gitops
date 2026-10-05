@@ -6,7 +6,9 @@ metadata:
   namespace: production
 
 spec:
-  replicas: 2
+  # No replicas here: the HorizontalPodAutoscaler (hpa.yaml) owns the count.
+  # A value in Git would make ArgoCD's self-heal reset it on every sync, so
+  # the HPA and ArgoCD would keep undoing each other.
 
   selector:
     matchLabels:

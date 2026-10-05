@@ -33,28 +33,8 @@ configMapGenerator:
       - APP_HTTP_LOGGING_REQUEST_BODY=ALWAYS
 
 # 100% Local: Do NOT pull from AWS ECR. Use images loaded directly into KinD.
+# One replica each: the HPA patches below lower minReplicas to 1.
 patches:
-  - target:
-      kind: Deployment
-      name: frontend
-    patch: |-
-      - op: replace
-        path: /spec/replicas
-        value: 1
-  - target:
-      kind: Deployment
-      name: order-service
-    patch: |-
-      - op: replace
-        path: /spec/replicas
-        value: 1
-  - target:
-      kind: Deployment
-      name: user-service
-    patch: |-
-      - op: replace
-        path: /spec/replicas
-        value: 1
   - target:
       kind: Deployment
       name: user-service
