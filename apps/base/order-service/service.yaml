@@ -6,6 +6,11 @@ metadata:
   # ServiceMonitor selects Services by these labels, not by spec.selector.
   labels:
     app: order-service
+  # The ALB health-checks targets at "/" unless told otherwise, and this
+  # service answers "/" with 404 (its context path is /api/orders), so every
+  # target would be unhealthy. Ignored by Traefik in the lab.
+  annotations:
+    alb.ingress.kubernetes.io/healthcheck-path: /api/orders/actuator/health/readiness
 spec:
   type: ClusterIP
   selector:
