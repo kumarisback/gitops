@@ -34,6 +34,16 @@ fi
 # Set context
 kubectl config use-context "kind-${CLUSTER_NAME}"
 
+# Download a remote manifest with retries and print the local path.
+# kubectl -f URL has no retry, and behind corporate TLS inspection
+# raw.githubusercontent.com often times out on the first attempt.
+fetch_manifest() {
+  local out
+  out="$(mktemp)"
+  curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --max-time 180 -o "${out}" "$1"
+  echo "${out}"
+}
+
 # 3. Ensure local gp3 StorageClass exists (maps AWS gp3 requests to local-path)
 echo "💾 Ensuring local gp3 StorageClass exists..."
 kubectl apply -f "${REPO_ROOT}/local-setup/gp3-storageclass.yaml" > /dev/null 2>&1
@@ -44,7 +54,8 @@ kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
 # Same ArgoCD version as the EKS clusters (argo-cd chart 7.7.15 in the tf
 # repo), so the lab behaves like them; "stable" changed under us.
 ARGOCD_VERSION="v2.13.3"
-kubectl apply -n argocd --server-side --force-conflicts -f "https://raw.githubusercontent.com/argoproj/argo-cd/${ARGOCD_VERSION}/manifests/install.yaml"
+ARGOCD_MANIFEST="$(fetch_manifest "https://raw.githubusercontent.com/argoproj/argo-cd/${ARGOCD_VERSION}/manifests/install.yaml")"
+kubectl apply -n argocd --server-side --force-conflicts -f "${ARGOCD_MANIFEST}"
 
 echo "⏳ Waiting for ArgoCD server to be ready..."
 kubectl wait --for=condition=available deployment/argocd-server -n argocd --timeout=180s || true
@@ -57,7 +68,7 @@ kubectl wait --for=condition=available deployment/argocd-server -n argocd --time
 INGRESS_NGINX_MANIFEST="https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.1/deploy/static/provider/kind/deploy.yaml"
 if kubectl get namespace ingress-nginx > /dev/null 2>&1; then
   echo "🧹 Removing the retired ingress-nginx controller (replaced by Traefik)..."
-  kubectl delete -f "${INGRESS_NGINX_MANIFEST}" --ignore-not-found --wait=true > /dev/null
+  kubectl delete -f "$(fetch_manifest "${INGRESS_NGINX_MANIFEST}")" --ignore-not-found --wait=true > /dev/null
 fi
 TRAEFIK_CHART_VERSION="41.6.1"
 echo "🌐 Ensuring the Traefik ingress controller is installed..."
