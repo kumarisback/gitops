@@ -47,7 +47,9 @@ gitops/
 │
 ├── observability/  ★        alerts, SLOs, dashboards, alerting secrets
 ├── bootstrap/               ArgoCD entry points, one per environment
-├── platform/                RBAC, the AWS secret store
+├── platform/                cluster-wide settings for the cloud clusters: RBAC,
+│                            the AWS secret store, disk types (storage/), and
+│                            dev's Karpenter node pools (karpenter/dev)
 ├── tests/  ★                tests for the alert rules and the log pipeline
 ├── ci/  ★                   Docker image with all the checking tools (for Jenkins)
 ├── scripts/                 lab scripts, plus validate.sh ★ (checks everything)

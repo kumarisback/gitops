@@ -618,8 +618,8 @@
       <li>
         <span class="num plain">–</span>
         <div class="body">
-          <h3>Storage for Loki and Tempo <span class="chip logs">logs</span><span class="chip traces">traces</span></h3>
-          <p>Real S3 bucket names and region in <code>addons/values/cloud/{loki,tempo}.yaml</code>, and pre-created <code>loki</code> and <code>tempo</code> ServiceAccounts with IRSA roles (tf <code>irsa_roles</code>).</p>
+          <h3>Storage <span class="chip logs">logs</span><span class="chip traces">traces</span><span class="chip both">metrics</span></h3>
+          <p>Apply the tf repo's <code>01-infra</code> and <code>02-services</code> layers first. They create the EBS CSI driver addon, the Loki and Tempo S3 buckets, and the IRSA-annotated <code>loki</code> and <code>tempo</code> ServiceAccounts. <code>platform/storage</code> adds the <code>gp3</code> (default) and <code>gp3-retain</code> StorageClasses. The bucket names in <code>addons/values/&lt;env&gt;/{loki,tempo}.yaml</code> assume account 602367507570; change them if an environment lives in another account.</p>
         </div>
       </li>
       <li>
