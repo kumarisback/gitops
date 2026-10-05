@@ -66,6 +66,23 @@ cases:
         log_type: api
         tenant: apps
 
+  - name: a payload secret the service didn't mask is masked here, inside the escaped JSON
+    container: user-service
+    lines:
+      - '{"level":"INFO","logger":"access.user-service.http","message":"http_request","http.request.method":"POST","url.path":"/api/auth/signup","http.response.status_code":400,"http.request.body":"{\"username\":\"alice\",\"newPassword\":\"hunter2\",\"password\":\"<redacted>\"}"}'
+    expect:
+      - line: '{"level":"INFO","logger":"access.user-service.http","message":"http_request","http.request.method":"POST","url.path":"/api/auth/signup","http.response.status_code":400,"http.request.body":"{\"username\":\"alice\",\"newPassword\":\"<redacted>\",\"password\":\"<redacted>\"}"}'
+        log_type: api
+        tenant: apps
+
+  - name: keys that contain a secret word are masked in any spelling
+    container: user-service
+    lines:
+      - '{"level":"DEBUG","logger":"com.example.demo.security.jwt.JwtUtils","message":"issued","accessToken":"abc","X-Api-Key":"k-9","tokenCount":"3","user":"alice"}'
+    expect:
+      - line: '{"level":"DEBUG","logger":"com.example.demo.security.jwt.JwtUtils","message":"issued","accessToken":"<redacted>","X-Api-Key":"<redacted>","tokenCount":"<redacted>","user":"alice"}'
+        log_type: server
+
   - name: platform namespaces go to the default tenant
     container: coredns
     namespace: kube-system
