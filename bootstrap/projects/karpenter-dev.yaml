@@ -10,7 +10,9 @@ spec:
   source:
     chart: karpenter
     repoURL: oci://public.ecr.aws/karpenter/karpenter
-    targetRevision: 1.0.1
+    # Karpenter supports Kubernetes 1.36 from 1.13 (karpenter.sh compatibility
+    # matrix). 1.1+ serves only the v1 API, which platform/karpenter/dev uses.
+    targetRevision: 1.14.1
     helm:
       values: |
         serviceAccount:

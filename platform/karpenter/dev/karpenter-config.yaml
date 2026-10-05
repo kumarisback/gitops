@@ -1,4 +1,7 @@
-apiVersion: karpenter.sh/v1beta1
+# dev's Karpenter capacity: what kind of nodes it may launch (NodePool) and
+# how to launch them in AWS (EC2NodeClass). Karpenter v1 API, chart
+# version in bootstrap/projects/karpenter-dev.yaml.
+apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
   name: default
@@ -16,25 +19,42 @@ spec:
           operator: In
           values: ["amd64"]
       nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
         name: default
+      # Replace every node after 30 days, so nodes pick up new AMIs and
+      # don't drift for months.
+      expireAfter: 720h
   limits:
     cpu: 100 # Maximum cumulative CPUs this Karpenter pool is allowed to provision
   disruption:
-    consolidationPolicy: WhenUnderutilized # Automatically merges/shrinks under-utilized nodes
-    expireAfter: 720h # Automatically recycle nodes every 30 days
+    # Remove empty nodes and repack under-used ones onto fewer nodes,
+    # respecting PodDisruptionBudgets; wait a minute after the last pod
+    # change so a short dip doesn't churn nodes.
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 1m
 ---
-apiVersion: karpenter.k8s.aws/v1beta1
+apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
 metadata:
   name: default
 spec:
-  amiFamily: AL2 # Amazon Linux 2
-  role: microservices-dev-karpenter-node-role # The Node IAM role built in Phase 2
+  # Amazon Linux 2023, pinned to one EKS AMI release (awslabs/amazon-eks-ami
+  # v20260930, which covers Kubernetes 1.36). EKS publishes no Amazon Linux
+  # 2 AMIs after Kubernetes 1.32. Bump the date to roll nodes onto a newer
+  # AMI: Karpenter replaces them gradually, within disruption budgets.
+  amiSelectorTerms:
+    - alias: al2023@v20260930
+  # Created by the tf repo (01-infra, aws_iam_instance_profile.karpenter)
+  # for the node role. Naming the profile rather than the role means the
+  # controller needs no IAM write access.
+  instanceProfile: microservices-dev-karpenter-instance-profile
+  # Tagged by the tf repo: the private app subnets, and the security group
+  # EKS created for the cluster (the managed node group's nodes use it too,
+  # so all nodes can reach each other's pods).
   subnetSelectorTerms:
     - tags:
-        # Targets subnets with EKS tags created by your network module
-        kubernetes.io/role/internal-elb: "1"
+        karpenter.sh/discovery: microservices-dev-eks-cluster
   securityGroupSelectorTerms:
     - tags:
-        # Targets your control plane security group created by EKS
-        Name: "microservices-dev-eks-cluster-sg"
+        karpenter.sh/discovery: microservices-dev-eks-cluster
