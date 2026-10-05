@@ -12,6 +12,15 @@ metadata:
     # controller creates the new one and deletes the old, so its DNS name
     # changes once.
     alb.ingress.kubernetes.io/group.name: microservices
+    # Edge access log: one line per request as the client saw it at the
+    # ALB, the cloud's counterpart of the lab's Traefik log_type="edge"
+    # lines. ALBs write it to S3 (queried with Athena), not to stdout, so
+    # it needs a bucket whose policy lets ALB log delivery write to it.
+    # Create that in the tf repo first, then add per environment:
+    #   alb.ingress.kubernetes.io/load-balancer-attributes: access_logs.s3.enabled=true,access_logs.s3.bucket=<bucket>,access_logs.s3.prefix=<env>
+    # It applies to the whole ALB group, so set it on this Ingress only.
+    # Not set here: with a bucket that doesn't exist, the controller can't
+    # reconcile the ALB at all.
 
 spec:
   ingressClassName: alb
