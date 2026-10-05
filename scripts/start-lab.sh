@@ -49,14 +49,21 @@ kubectl apply -n argocd --server-side --force-conflicts -f "https://raw.githubus
 echo "⏳ Waiting for ArgoCD server to be ready..."
 kubectl wait --for=condition=available deployment/argocd-server -n argocd --timeout=180s || true
 
-# 5. Ensure local NGINX Ingress is installed for frontend/API routing
-echo "🌐 Ensuring local NGINX Ingress Controller is installed..."
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.1/deploy/static/provider/kind/deploy.yaml > /dev/null
-kubectl rollout status deployment/ingress-nginx-controller -n ingress-nginx --timeout=180s
-# Send the controller's spans to the OTel collector (the controller reloads
-# on ConfigMap changes; spans buffer until the collector is up).
-kubectl patch configmap ingress-nginx-controller -n ingress-nginx --type merge \
-  --patch-file "${REPO_ROOT}/local-setup/ingress-nginx-otel.yaml" > /dev/null
+# 5. Ingress controller for frontend/API routing: Traefik (values in
+#    local-setup/traefik-values.yaml). Labs created before the switch still
+#    run the retired ingress-nginx, which holds host ports 80/443 and leaves a
+#    cluster-wide admission webhook that would reject Ingress changes once
+#    its pods are gone, so remove all of it from the manifest it came from.
+INGRESS_NGINX_MANIFEST="https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.1/deploy/static/provider/kind/deploy.yaml"
+if kubectl get namespace ingress-nginx > /dev/null 2>&1; then
+  echo "🧹 Removing the retired ingress-nginx controller (replaced by Traefik)..."
+  kubectl delete -f "${INGRESS_NGINX_MANIFEST}" --ignore-not-found --wait=true > /dev/null
+fi
+TRAEFIK_CHART_VERSION="41.6.1"
+echo "🌐 Ensuring the Traefik ingress controller is installed..."
+helm upgrade --install traefik traefik --repo https://traefik.github.io/charts \
+  --version "${TRAEFIK_CHART_VERSION}" -n traefik --create-namespace \
+  -f "${REPO_ROOT}/local-setup/traefik-values.yaml" --wait --timeout 5m > /dev/null
 
 # 6. Load locally built application images into KinD. start-lab-podman.sh
 #    sets SKIP_IMAGE_LOAD=1 because it has already loaded them with

@@ -67,14 +67,18 @@ port-forward:
 open http://localhost
 ```
 
-`scripts/start-lab.sh` installs the controller and points its OpenTelemetry
-exporter at the collector. To do it by hand once per KinD cluster:
+`scripts/start-lab.sh` installs Traefik v3 as the ingress controller (it
+replaced ingress-nginx, which was retired upstream in March 2026), bound to
+host ports 80/443 on the control-plane node, with JSON access logs and
+OpenTelemetry tracing to the collector. To do it by hand once per KinD
+cluster:
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.1/deploy/static/provider/kind/deploy.yaml
-kubectl rollout status deployment/ingress-nginx-controller -n ingress-nginx --timeout=180s
-kubectl patch configmap ingress-nginx-controller -n ingress-nginx --type merge \
-  --patch-file local-setup/ingress-nginx-otel.yaml
+helm upgrade --install traefik traefik --repo https://traefik.github.io/charts \
+  --version 41.6.1 -n traefik --create-namespace \
+  -f local-setup/traefik-values.yaml --wait
 ```
+The application Ingress is the same object the cloud ALB serves;
+`apps/local` only sets `ingressClassName: traefik`.
 
 ArgoCD is not part of the application Ingress, so keep a separate secure
 port-forward for its UI:
@@ -210,7 +214,7 @@ kubectl create secret generic app-secrets \
 
 ```mermaid
 flowchart LR
-  B[Browser] --> I[NGINX Ingress]
+  B[Browser] --> I[Traefik Ingress]
   I --> F[Frontend NGINX]
   I --> U[user-service]
   I --> O[order-service]
@@ -241,7 +245,7 @@ What each component does:
 
 | Component | Responsibility |
 |---|---|
-| NGINX Ingress | Routes `/` to frontend and `/api` to backend services. |
+| Traefik | Routes `/` to frontend, `/api` to the backend services and `/otlp` to the collector; traces every request and writes JSON access logs. |
 | Grafana Alloy | One replica reads every pod's stdout through the Kubernetes API, labels the Spring services' lines `log_type=api` or `log_type=server`, and sends them to Loki. |
 | Loki | Stores and searches logs; use LogQL in Grafana. |
 | OpenTelemetry Java agent | Creates HTTP, MongoDB, and downstream-client spans without custom filters. |

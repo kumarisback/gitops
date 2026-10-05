@@ -160,6 +160,18 @@ for env in "${ENVS[@]}"; do
   done < "${OUT}/releases-${env}.jsonl"
 done
 
+# The lab's ingress controller is installed by start-lab.sh, not ArgoCD:
+# render it with the same chart version (its values schema is strict).
+echo "Lab ingress controller"
+traefik_check() {
+  local version dir
+  version=$(sed -n 's/^TRAEFIK_CHART_VERSION="\(.*\)"$/\1/p' scripts/start-lab.sh)
+  dir=$(pull_chart traefik https://traefik.github.io/charts "${version}") || return 1
+  helm template traefik "${dir}" -n traefik --kube-version "${KUBE_VERSION}" \
+    -f local-setup/traefik-values.yaml > "${OUT}/helm/local-traefik.yaml" && kubeconform_file "${OUT}/helm/local-traefik.yaml"
+}
+check "local/traefik: helm template + schema" traefik_check
+
 # --- 3. Prometheus rules and Grafana dashboards ----------------------------
 echo "Prometheus rules"
 for f in "${OUT}"/kustomize/*.yaml "${OUT}"/helm/*.yaml; do

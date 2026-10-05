@@ -78,7 +78,7 @@ alloy:
         // multiline rule: a new entry starts at "{" and anything else
         // (JVM or agent output that bypasses the encoder) joins the
         // previous entry. Applied cluster-wide it glued plain-text
-        // logs from nginx, ingress-nginx, Loki and ArgoCD into blocks
+        // logs from nginx, the ingress controller, Loki and ArgoCD into blocks
         // of up to 128 lines.
         stage.match {
           selector = "{container=~\"user-service|order-service\"}"

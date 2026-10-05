@@ -30,12 +30,14 @@ cases:
         log_type: server
 
   - name: query-string secrets are masked
-    container: ingress-nginx-controller
+    container: traefik
+    namespace: traefik
     lines:
-      - '10.0.0.7 - - [01/Oct/2026:08:35:12 +0000] "GET /api/reset?token=s3cr3t&user=alice HTTP/1.1" 200 12'
+      - '{"ClientHost":"10.0.0.7","DownstreamStatus":200,"Duration":1532000,"RequestMethod":"GET","RequestPath":"/api/reset?token=s3cr3t&user=alice","RouterName":"development-app-ingress@kubernetes","level":"info","msg":"","time":"2026-10-01T08:35:12Z"}'
     expect:
-      - line: '10.0.0.7 - - [01/Oct/2026:08:35:12 +0000] "GET /api/reset?token=<redacted>&user=alice HTTP/1.1" 200 12'
+      - line: '{"ClientHost":"10.0.0.7","DownstreamStatus":200,"Duration":1532000,"RequestMethod":"GET","RequestPath":"/api/reset?token=<redacted>&user=alice","RouterName":"development-app-ingress@kubernetes","level":"info","msg":"","time":"2026-10-01T08:35:12Z"}'
         log_type: null
+        tenant: null
 
   - name: MongoDB URI credentials are masked
     container: order-service

@@ -87,21 +87,16 @@ patches:
       - op: replace
         path: /spec/maxReplicas
         value: 1
-  # Tracing on app-ingress. The controller-side exporter settings (collector
-  # host, sampler) live in local-setup/ingress-nginx-otel.yaml.
+  # Local ingress controller: Traefik (scripts/start-lab.sh). It traces
+  # every request on its own (local-setup/traefik-values.yaml), so the
+  # Ingress needs no per-object tracing annotations.
   - target:
       kind: Ingress
       name: app-ingress
     patch: |-
       - op: replace
         path: /spec/ingressClassName
-        value: nginx
-      - op: add
-        path: /metadata/annotations/nginx.ingress.kubernetes.io~1enable-opentelemetry
-        value: "true"
-      - op: add
-        path: /metadata/annotations/nginx.ingress.kubernetes.io~1opentelemetry-trust-incoming-span
-        value: "true"
+        value: traefik
   - target:
       kind: Deployment
     patch: |-
