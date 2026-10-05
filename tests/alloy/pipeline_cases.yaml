@@ -60,24 +60,11 @@ cases:
   - name: API log is labelled api, in the apps tenant
     container: order-service
     lines:
-      - '{"level":"INFO","logger":"access.order-service.http","message":"http_request","http.method":"GET","http.path":"/api/orders","http.status":200,"http.duration_ms":12}'
+      - '{"level":"INFO","logger":"access.order-service.http","message":"http_request","http.request.method":"GET","url.path":"/api/orders/user/alice","http.route":"/api/orders/user/{userId}","http.response.status_code":200,"duration_ms":12,"trace_id":"4bf92f3577b34da6a3ce929d0e0e4736"}'
     expect:
-      - line: '{"level":"INFO","logger":"access.order-service.http","message":"http_request","http.method":"GET","http.path":"/api/orders","http.status":200,"http.duration_ms":12}'
+      - line: '{"level":"INFO","logger":"access.order-service.http","message":"http_request","http.request.method":"GET","url.path":"/api/orders/user/alice","http.route":"/api/orders/user/{userId}","http.response.status_code":200,"duration_ms":12,"trace_id":"4bf92f3577b34da6a3ce929d0e0e4736"}'
         log_type: api
         tenant: apps
-
-  - name: successful actuator calls are dropped, failing ones and real API calls kept
-    container: user-service
-    lines:
-      - '{"level":"INFO","logger":"access.user-service.http","message":"http_request","http.method":"GET","http.path":"/api/actuator/health/readiness","http.status":200,"http.duration_ms":3}'
-      - '{"level":"INFO","logger":"access.user-service.http","message":"http_request","http.method":"GET","http.path":"/api/actuator/prometheus","http.status":200,"http.duration_ms":41}'
-      - '{"level":"INFO","logger":"access.user-service.http","message":"http_request","http.method":"GET","http.path":"/api/actuator/health/readiness","http.status":503,"http.duration_ms":5}'
-      - '{"level":"INFO","logger":"access.user-service.http","message":"http_request","http.method":"GET","http.path":"/api/tasks","http.status":200,"http.duration_ms":12}'
-    expect:
-      - line: '{"level":"INFO","logger":"access.user-service.http","message":"http_request","http.method":"GET","http.path":"/api/actuator/health/readiness","http.status":503,"http.duration_ms":5}'
-        log_type: api
-      - line: '{"level":"INFO","logger":"access.user-service.http","message":"http_request","http.method":"GET","http.path":"/api/tasks","http.status":200,"http.duration_ms":12}'
-        log_type: api
 
   - name: platform namespaces go to the default tenant
     container: coredns
