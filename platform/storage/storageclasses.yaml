@@ -1,0 +1,48 @@
+# EBS-backed StorageClasses for the EKS clusters. They need the
+# aws-ebs-csi-driver addon (tf repo, infrastructure/app-cluster/01-infra).
+# The kind lab has its own "gp3" class backed by local disks
+# (local-setup/gp3-storageclass.yaml) and doesn't sync platform/.
+#
+#   gp3         The default. The volume is deleted with its PVC. For data
+#               that has another copy or can be rebuilt: Loki and Tempo keep
+#               their data in S3 and use the disk only for the write-ahead
+#               log.
+#   gp3-retain  The volume outlives its PVC, so deleting a PVC or a
+#               namespace by mistake doesn't destroy the data. For data with
+#               no other copy, such as production metrics. A released volume
+#               isn't reused on its own: to restore, bind a new PVC to it.
+#               It's billed until you delete it by hand.
+#
+# Both use gp3 volumes (cheaper than gp2, with 3000 IOPS at any size),
+# encrypted at rest, and can grow by editing the PVC. WaitForFirstConsumer
+# creates a volume only once its pod is scheduled, in that pod's
+# availability zone: an EBS volume can't attach across zones.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+  annotations:
+    # The only default class: EKS clusters created on Kubernetes 1.30 or
+    # later no longer mark their built-in gp2 class as default.
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  encrypted: "true"
+  csi.storage.k8s.io/fstype: ext4
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3-retain
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  encrypted: "true"
+  csi.storage.k8s.io/fstype: ext4
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
