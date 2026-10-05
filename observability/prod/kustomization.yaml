@@ -6,6 +6,7 @@ resources:
 
 components:
   - ../components/cloud-secrets
+  - ../components/browser-otlp-alb
 
 # Picks microservices/prod/... in AWS Secrets Manager (not deployed).
 configMapGenerator:

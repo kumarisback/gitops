@@ -1,0 +1,32 @@
+# Browser spans in the cloud: /otlp on the application's own ALB, to the
+# collector gateway's browser receiver (port 4319, path forwarded
+# unchanged). An Ingress can only reach Services in its own namespace, so
+# this one lives in monitoring and joins the app Ingress's ALB through the
+# "microservices" IngressGroup (see apps/base/ingress.yaml).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: browser-otlp
+  namespace: monitoring
+  annotations:
+    alb.ingress.kubernetes.io/group.name: microservices
+    # Lower runs first: /otlp is matched before the app Ingress's "/".
+    alb.ingress.kubernetes.io/group.order: "-10"
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    # 4319 only answers POST /otlp/v1/traces; health-check the collector's
+    # health_check extension instead.
+    alb.ingress.kubernetes.io/healthcheck-port: "13133"
+    alb.ingress.kubernetes.io/healthcheck-path: /
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /otlp
+            pathType: Prefix
+            backend:
+              service:
+                name: otel-collector-opentelemetry-collector
+                port:
+                  number: 4319

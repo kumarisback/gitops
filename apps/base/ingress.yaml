@@ -6,6 +6,12 @@ metadata:
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
+    # Shares one ALB with observability's browser-otlp Ingress (/otlp in the
+    # monitoring namespace). Joining a group moves this Ingress to the
+    # group's ALB: on an environment that already has an ALB, the
+    # controller creates the new one and deletes the old, so its DNS name
+    # changes once.
+    alb.ingress.kubernetes.io/group.name: microservices
 
 spec:
   ingressClassName: alb
