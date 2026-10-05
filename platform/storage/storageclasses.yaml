@@ -2,6 +2,9 @@
 # aws-ebs-csi-driver addon (tf repo, infrastructure/app-cluster/01-infra).
 # The kind lab has its own "gp3" class backed by local disks
 # (local-setup/gp3-storageclass.yaml) and doesn't sync platform/.
+# The shared-file-system class, "efs" (ReadWriteMany), is created by the tf
+# repo's 02-services layer, because it names each environment's EFS file
+# system ID.
 #
 #   gp3         The default. The volume is deleted with its PVC. For data
 #               that has another copy or can be rebuilt: Loki and Tempo keep

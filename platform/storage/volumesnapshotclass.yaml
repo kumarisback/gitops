@@ -1,0 +1,19 @@
+# Point-in-time snapshots of EBS-backed PVCs: create a VolumeSnapshot of a
+# PVC, then restore it into a new PVC (dataSource). Needs the
+# snapshot-controller and EBS CSI driver EKS add-ons (tf repo, 01-infra).
+#
+# deletionPolicy Delete: the EBS snapshot is removed with its VolumeSnapshot
+# object, so practice snapshots don't pile up on the bill. Backups that must
+# outlive the cluster belong to a backup tool with its own retention
+# (roadmap step 25), not to this class.
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: ebs-snapshot
+  annotations:
+    snapshot.storage.kubernetes.io/is-default-class: "true"
+    # The kind exists once the snapshot-controller add-on has installed its
+    # CRDs; until then ArgoCD skips the dry run for this object.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+driver: ebs.csi.aws.com
+deletionPolicy: Delete
