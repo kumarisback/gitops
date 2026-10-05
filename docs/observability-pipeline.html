@@ -220,6 +220,7 @@
   .chip { font: 700 10.5px/1 var(--font-body); letter-spacing: 0.07em; text-transform: uppercase; padding: 4px 7px; border-radius: 4px; border: 1px solid currentColor; }
   .chip.logs { color: var(--logs); }
   .chip.traces { color: var(--traces); }
+  .chip.both { color: var(--ink-2); }
 
   /* ---------- queries ---------- */
   .queries { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
@@ -244,7 +245,7 @@
     <span class="eyebrow">gitops · observability reference · local KinD lab</span>
     <h1>Request to Grafana</h1>
     <p class="lede">How one API call turns into an API log, server logs and a trace, which component carries each one, which file sets it up, and how to pull API or server logs out separately in Grafana.</p>
-    <p class="scope">Scope: the local lab (<code>bootstrap/envs/local</code> and <code>apps/local</code>). dev, staging and prod run the same pipeline with 100%, 50% and 10% trace sampling, Alloy as two clustered replicas, and Loki on an S3 bucket that still has placeholder names. Metrics aren't drawn here; Prometheus scrapes each service's <code>/actuator/prometheus</code> through its ServiceMonitor.</p>
+    <p class="scope">Scope: the local lab (<code>bootstrap/envs/local</code>, <code>apps/local</code>, <code>observability/local</code>). dev, staging and prod run the same pipeline from the same files with production sizing: two collector tiers with 100%, 50% and 10% of healthy, fast traces kept, Alloy as two clustered replicas, Loki and Tempo on S3, Prometheus and Alertmanager in HA, Grafana behind OIDC. Metrics aren't drawn here; Prometheus scrapes each service's <code>/actuator/prometheus</code> through its ServiceMonitor and the collector's span metrics.</p>
   </header>
 
   <section class="wide" aria-labelledby="flow-h">
@@ -255,12 +256,11 @@
         <span><svg width="30" height="10"><line x1="1" y1="5" x2="29" y2="5" class="lg-logs" stroke-width="2"/></svg>logs</span>
         <span><svg width="30" height="10"><line x1="1" y1="5" x2="29" y2="5" class="lg-traces" stroke-width="2"/></svg>traces</span>
         <span><svg width="30" height="10"><line x1="1" y1="5" x2="29" y2="5" class="lg-traces" stroke-width="1.6" stroke-dasharray="5 4"/></svg>trace context only, no span data</span>
-        <span><svg width="18" height="18"><circle cx="9" cy="9" r="8" class="lg-badge"/><text x="9" y="9" text-anchor="middle" dominant-baseline="central" class="lg-badge-t">1</text></svg>known limit, see below</span>
       </div>
     </div>
     <figure>
       <div class="scroll">
-        <svg viewBox="0 0 1440 664" role="img" aria-label="One request flows from the browser through NGINX Ingress into the user-service and order-service pod. Inside the pod, RequestLoggingFilter writes the API log and the app loggers write server logs; logback encodes both as one JSON line per event on stdout, and Grafana Alloy labels them log_type api or server and ships them to Loki. The OpenTelemetry Java agent in the same JVM records spans and sends them over OTLP port 4318 to the OpenTelemetry Collector; the ingress sends its own spans to the collector on port 4317. The collector forwards spans to Tempo. Grafana queries Loki and Tempo and links log lines to traces through trace_id.">
+        <svg viewBox="0 0 1440 690" role="img" aria-label="One request flows from the browser, which exports its own span, through the Traefik ingress into the user-service and order-service pod. Inside the pod, RequestLoggingFilter writes the API log and the app loggers write server logs; logback encodes both as one JSON line per event on stdout, and Grafana Alloy masks credentials, labels them log_type api or server, assigns the apps tenant and ships them to Loki. The OpenTelemetry Java agent in the same JVM sends every span over OTLP port 4318 to the collector gateway; Traefik sends its spans on port 4317 and the browser on port 4319 through /otlp. The gateway forwards each trace to the sampler tier, which computes span metrics and keeps errors, slow requests and a share of the rest for Tempo. Grafana queries Loki and Tempo and links log lines to traces through trace_id.">
           <defs>
             <marker id="ah-req" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-req"/></marker>
             <marker id="ah-logs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-logs"/></marker>
@@ -273,31 +273,35 @@
 
           <!-- ingress spans, routed below the pod -->
           <path d="M298,410 V640 H948 V623" class="ln-traces" marker-end="url(#ah-traces)"/>
-          <text x="623" y="656" text-anchor="middle" class="t-lbl traces">ingress spans · OTLP gRPC :4317</text>
+          <text x="623" y="656" text-anchor="middle" class="t-lbl traces">Traefik spans · OTLP gRPC :4317</text>
+
+          <!-- browser spans, through Traefik at /otlp -->
+          <path d="M86,410 V672 H968 V623" class="ln-traces" marker-end="url(#ah-traces)"/>
+          <text x="560" y="684" text-anchor="middle" class="t-lbl traces">browser spans · POST /otlp/v1/traces via Traefik → :4319</text>
 
           <!-- ===== Browser ===== -->
           <rect x="16" y="250" width="140" height="160" rx="8" class="box-neutral"/>
           <text x="28" y="273" class="t-title">Browser</text>
           <text x="28" y="290" class="t-mono">React frontend</text>
-          <text x="28" y="313" class="t-mono-traces">traceFetch()</text>
-          <text x="28" y="330" class="t-body">adds traceparent</text>
-          <text x="28" y="346" class="t-mono">00-trace-span-01</text>
-          <text x="28" y="368" class="t-body">console.info only,</text>
-          <text x="28" y="383" class="t-body">span not exported</text>
+          <text x="28" y="313" class="t-mono-traces">OTel web SDK</text>
+          <text x="28" y="330" class="t-body">fetch spans, batched</text>
+          <text x="28" y="346" class="t-body">traceparent on API</text>
+          <text x="28" y="362" class="t-body">calls; logs trace_id</text>
+          <text x="28" y="383" class="t-mono">service: frontend</text>
 
           <path d="M156,330 H218" class="ln-req" marker-end="url(#ah-req)"/>
           <text x="188" y="321" text-anchor="middle" class="t-lbl req">HTTP</text>
 
           <!-- ===== Ingress ===== -->
           <rect x="220" y="250" width="156" height="160" rx="8" class="box-neutral"/>
-          <text x="232" y="273" class="t-title">NGINX Ingress</text>
-          <text x="232" y="290" class="t-mono">controller v1.12.1</text>
+          <text x="232" y="273" class="t-title">Traefik ingress</text>
+          <text x="232" y="290" class="t-mono">v3.7 · hostPort 80</text>
           <text x="232" y="311" class="t-mono-ink">/api/orders</text>
           <text x="232" y="325" class="t-body">→ order-service</text>
           <text x="232" y="343" class="t-mono-ink">/api</text>
           <text x="232" y="357" class="t-body">→ user-service</text>
-          <text x="232" y="378" class="t-mono-traces-sm">enable-opentelemetry</text>
-          <text x="232" y="393" class="t-body">sampler AlwaysOn</text>
+          <text x="232" y="378" class="t-mono-traces-sm">/otlp → collector</text>
+          <text x="232" y="393" class="t-body">JSON access log</text>
 
           <path d="M376,330 H486" class="ln-req" marker-end="url(#ah-req)"/>
           <text x="424" y="321" text-anchor="middle" class="t-lbl req">traceparent</text>
@@ -351,8 +355,8 @@
           <text x="500" y="499" class="t-mono-traces">-javaagent (Dockerfile ENTRYPOINT)</text>
           <text x="500" y="517" class="t-body">spans: HTTP server, Mongo, HTTP client</text>
           <text x="500" y="533" class="t-body">one trace across user → order-service</text>
-          <text x="500" y="551" class="t-mono">OTEL_* env ← apps/local/kustomization</text>
-          <text x="500" y="567" class="t-body">sampler always_on, OTLP http/protobuf</text>
+          <text x="500" y="551" class="t-mono">OTEL_* env ← otel-instrumentation</text>
+          <text x="500" y="567" class="t-body">sends every span, OTLP http/protobuf</text>
           <text x="500" y="585" class="t-body">writes trace_id, span_id into the MDC</text>
 
           <path d="M778,150 H856" class="ln-logs" marker-end="url(#ah-logs)"/>
@@ -367,9 +371,9 @@
           <text x="870" y="79" class="t-mono">Deployment · 1 replica</text>
           <text x="870" y="99" class="t-mono-logs">loki.source.kubernetes</text>
           <text x="870" y="114" class="t-body">reads pods via API</text>
-          <text x="870" y="130" class="t-body">labels: namespace, pod,</text>
-          <text x="870" y="144" class="t-body">container, job</text>
-          <text x="870" y="164" class="t-mono-logs">log_type: api | server</text>
+          <text x="870" y="130" class="t-body">masks tokens, passwords</text>
+          <text x="870" y="146" class="t-mono-logs">log_type: api | server</text>
+          <text x="870" y="162" class="t-mono-logs">tenant: apps | platform</text>
           <text x="870" y="180" class="t-body">multiline ^\{ on the</text>
           <text x="870" y="194" class="t-body">Spring pods only</text>
 
@@ -384,7 +388,7 @@
           <text x="1098" y="99" class="t-mono-logs">/loki/api/v1/push</text>
           <text x="1098" y="117" class="t-body">filesystem, tsdb v13</text>
           <text x="1098" y="133" class="t-body">retention 24h</text>
-          <text x="1098" y="149" class="t-body">gateway off</text>
+          <text x="1098" y="149" class="t-body">multi-tenant</text>
           <text x="1098" y="169" class="t-body">trace_id is in the</text>
           <text x="1098" y="184" class="t-body">line, not a label</text>
 
@@ -395,13 +399,13 @@
           <rect x="858" y="460" width="180" height="160" rx="8" class="box-traces"/>
           <text x="870" y="482" class="t-title-sm">OTel Collector</text>
           <text x="1026" y="482" text-anchor="end" class="t-mono">0.173.1</text>
-          <text x="870" y="499" class="t-mono">Deployment · monitoring</text>
-          <text x="870" y="519" class="t-mono-traces">receivers: otlp</text>
-          <text x="870" y="535" class="t-body">gRPC :4317, HTTP :4318</text>
-          <text x="870" y="553" class="t-mono-traces">memory_limiter → batch</text>
-          <text x="870" y="571" class="t-mono-traces">exporters: otlp</text>
-          <text x="870" y="587" class="t-body">→ tempo.monitoring:4317</text>
-          <text x="870" y="605" class="t-body">traces pipeline only</text>
+          <text x="870" y="499" class="t-mono">2 tiers · :4317-4319</text>
+          <text x="870" y="519" class="t-mono-traces">gateway</text>
+          <text x="870" y="535" class="t-body">k8s metadata, by trace ID</text>
+          <text x="870" y="553" class="t-mono-traces">sampler</text>
+          <text x="870" y="569" class="t-body">keeps errors, &gt;500ms,</text>
+          <text x="870" y="584" class="t-body">N% of the rest → Tempo</text>
+          <text x="870" y="603" class="t-body">span metrics → Prometheus</text>
 
           <path d="M1038,540 H1084" class="ln-traces" marker-end="url(#ah-traces)"/>
           <text x="1062" y="531" text-anchor="middle" class="t-lbl traces">:4317</text>
@@ -429,8 +433,8 @@
           <text x="1310" y="115" class="t-title-sm logs">Loki</text>
           <text x="1310" y="131" class="t-mono">uid Loki</text>
           <text x="1310" y="145" class="t-body">Explore</text>
-          <text x="1300" y="176" class="t-body">dashboard panel</text>
-          <text x="1300" y="191" class="t-body">Log type dropdown</text>
+          <text x="1300" y="176" class="t-body">Log type dropdown,</text>
+          <text x="1300" y="191" class="t-body">SLO dashboard</text>
 
           <path d="M1356,208 V504" class="ln-req" marker-start="url(#ah-req)" marker-end="url(#ah-req)"/>
           <text x="1356" y="350" text-anchor="middle" class="t-lbl req on2">trace_id</text>
@@ -440,13 +444,11 @@
           <rect x="1300" y="512" width="112" height="56" rx="5" class="box-inner-traces"/>
           <text x="1310" y="531" class="t-title-sm traces">Tempo</text>
           <text x="1310" y="547" class="t-mono">uid Tempo</text>
-          <text x="1310" y="561" class="t-body">Explore</text>
+          <text x="1310" y="561" class="t-body">service map</text>
 
-          <!-- ===== known limit ===== -->
-          <g class="badge"><circle cx="156" cy="250" r="9"/><text x="156" y="250">1</text></g>
         </svg>
       </div>
-      <figcaption>Logs and traces leave the same JVM by different doors. Both log types are lines from one JSON stream on stdout; Alloy tells them apart by the <code>logger</code> field and labels them <code>log_type</code>. Spans go out over OTLP and never touch stdout. The <code>trace_id</code> the agent copies into every log line is what lets Grafana jump between a log line and its trace.</figcaption>
+      <figcaption>Logs and traces leave the same JVM by different doors. Both log types are lines from one JSON stream on stdout; Alloy tells them apart by the <code>logger</code> field and labels them <code>log_type</code>. Spans go out over OTLP and never touch stdout. The <code>trace_id</code> the agent copies into every log line is what lets Grafana jump between a log line and its trace. Every span reaches the collector; its sampler tier keeps all errors, every request over 500ms and a share of the rest, after computing span metrics from all of them.</figcaption>
     </figure>
   </section>
 
@@ -555,15 +557,15 @@
       </li>
       <li>
         <span class="cmd">start-lab.sh via with-podman.sh</span>
-        <p>Adds the gp3 StorageClass, ArgoCD, ingress-nginx v1.12.1 with its OTel exporter pointed at the collector, and the <code>app-secrets</code> Secret from <code>apps/local/app-secrets.env</code>.</p>
+        <p>Adds the gp3 StorageClass, ArgoCD v2.13.3, Traefik v3 as the ingress controller (removing an old ingress-nginx first), and the <code>app-secrets</code> Secret from <code>apps/local/app-secrets.env</code>.</p>
       </li>
       <li>
         <span class="cmd">scripts/sync-local-stack.rb</span>
-        <p>Turns ArgoCD auto-sync off if it's on, then runs <code>helm upgrade --install</code> with the charts in <code>addons/applications</code> and the values in <code>addons/values</code>: kube-prometheus-stack, metrics-server, loki, tempo, otel-collector, alloy.</p>
+        <p>Turns ArgoCD auto-sync off if it\'s on, then runs <code>helm upgrade --install</code> for each add-on in <code>addons/applications</code> with its values from <code>addons/values/{common,local}</code>: kube-prometheus-stack, metrics-server, loki, tempo, otel-collector, otel-collector-sampler, alloy.</p>
       </li>
       <li>
-        <span class="cmd">kubectl apply -k apps/local</span>
-        <p>Adds the <code>OTEL_*</code> and <code>DEPLOYMENT_ENVIRONMENT</code> env vars to both services, the ingress OTel annotations, the Grafana dashboard ConfigMap and the PrometheusRule.</p>
+        <span class="cmd">kubectl apply -k apps/local · observability/local</span>
+        <p>The services with their <code>OTEL_*</code> and <code>DEPLOYMENT_ENVIRONMENT</code> settings, then the alert rules, SLO rules, dashboards and the <code>/otlp</code> Ingress.</p>
       </li>
     </ol>
   </section>
@@ -577,23 +579,22 @@
       <table>
         <thead><tr><th>Hop</th><th style="width:36%">File</th><th>What sets it</th></tr></thead>
         <tbody>
-          <tr><td><span class="dot traces"></span>Browser context</td><td class="path">app/frontend/src/lib/tracing.js</td><td class="what"><code>traceFetch()</code> adds <code>traceparent: 00-&lt;trace&gt;-&lt;span&gt;-01</code> to every API call</td></tr>
+          <tr><td><span class="dot traces"></span>Browser tracing</td><td class="path">app/frontend/src/lib/otel.js, tracing.js</td><td class="what">OTel web SDK: fetch spans batched to <code>/otlp/v1/traces</code>; the fetch instrumentation adds <code>traceparent</code> to API calls</td></tr>
           <tr><td><span class="dot traces"></span>CORS for trace headers</td><td class="path">app/user-service/…/security/WebSecurityConfig.java</td><td class="what">allowed headers include <code>traceparent</code>, <code>tracestate</code>, <code>baggage</code></td></tr>
-          <tr><td><span class="dot req"></span>Routing</td><td class="path">gitops/apps/base/ingress.yaml</td><td class="what"><code>/api/orders</code> → order-service, <code>/api</code> → user-service, <code>/</code> → frontend</td></tr>
-          <tr><td><span class="dot traces"></span>Ingress tracing</td><td class="path">gitops/apps/local/kustomization.yaml</td><td class="what">Ingress patch: <code>ingressClassName: nginx</code>, <code>enable-opentelemetry</code>, <code>opentelemetry-trust-incoming-span</code></td></tr>
-          <tr><td><span class="dot traces"></span>Ingress exporter</td><td class="path">gitops/local-setup/ingress-nginx-otel.yaml</td><td class="what">merged into the controller ConfigMap by <code>start-lab.sh</code>: collector host and port 4317, service name <code>ingress-nginx</code>, sampler <code>AlwaysOn</code></td></tr>
+          <tr><td><span class="dot req"></span>Routing</td><td class="path">gitops/apps/base/ingress.yaml</td><td class="what"><code>/api/orders</code> → order-service, <code>/api</code> → user-service, <code>/</code> → frontend; ALB health checks per Service</td></tr>
+          <tr><td><span class="dot traces"></span>Browser span route</td><td class="path">gitops/observability/local/browser-otlp-ingress.yaml, observability/components/browser-otlp-alb</td><td class="what"><code>/otlp</code> → collector gateway <code>:4319</code> (Traefik in the lab, the shared ALB in the cloud)</td></tr>
+          <tr><td><span class="dot traces"></span>Ingress controller</td><td class="path">gitops/local-setup/traefik-values.yaml</td><td class="what">Traefik v3 (lab): host ports 80/443, JSON access logs, a span per request to the collector over OTLP/gRPC</td></tr>
           <tr><td><span class="dot traces"></span>Java agent</td><td class="path">app/{user,order}-service/Dockerfile</td><td class="what"><code>ADD … opentelemetry-javaagent.jar</code> v2.13.3, <code>ENTRYPOINT java -javaagent:/app/opentelemetry-javaagent.jar</code></td></tr>
-          <tr><td><span class="dot traces"></span>Agent settings</td><td class="path">gitops/apps/local/kustomization.yaml</td><td class="what">Deployment patches: <code>OTEL_SERVICE_NAME</code>, <code>OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector-opentelemetry-collector.monitoring:4318</code>, <code>http/protobuf</code>, <code>always_on</code>, metrics and logs exporters <code>none</code>, <code>OTEL_RESOURCE_ATTRIBUTES</code></td></tr>
-          <tr><td><span class="dot logs"></span>API log</td><td class="path">app/*/web/RequestLoggingFilter.java</td><td class="what">logger <code>access.&lt;svc&gt;.http</code>, message <code>http_request</code>, <code>kv()</code> fields for method, path, status, duration; <code>@Order(HIGHEST_PRECEDENCE)</code></td></tr>
+          <tr><td><span class="dot traces"></span>Agent settings</td><td class="path">gitops/apps/components/otel-instrumentation, apps/&lt;env&gt;/kustomization.yaml</td><td class="what">shared endpoint/protocol/exporters in the component; each overlay's <code>otel-environment</code> sets <code>DEPLOYMENT_ENVIRONMENT</code>, resource attributes and <code>parentbased_always_on</code></td></tr>
+          <tr><td><span class="dot logs"></span>API log</td><td class="path">app/*/web/RequestLoggingFilter.java</td><td class="what">logger <code>access.&lt;svc&gt;.http</code>, message <code>http_request</code>, <code>kv()</code> fields for method, path, status, duration</td></tr>
           <tr><td><span class="dot logs"></span>Server log</td><td class="path">app/*/controller/*, security/AuthEntryPointJwt.java, web/GlobalExceptionHandler.java</td><td class="what"><code>audit.&lt;svc&gt;.*</code> loggers for business events; <code>unhandled_exception</code> with the stack trace</td></tr>
-          <tr><td><span class="dot logs"></span>JSON encoder</td><td class="path">app/*/src/main/resources/logback-spring.xml</td><td class="what"><code>LoggingEventCompositeJsonEncoder</code> with <code>&lt;mdc/&gt;</code>, <code>&lt;arguments/&gt;</code>, <code>&lt;stackTrace&gt;</code>; <code>environment</code> from <code>deployment.environment</code>; root level INFO</td></tr>
-          <tr><td><span class="dot logs"></span>Environment field</td><td class="path">gitops/apps/&lt;env&gt;/kustomization.yaml</td><td class="what"><code>DEPLOYMENT_ENVIRONMENT</code>, same value as <code>deployment.environment</code> in <code>OTEL_RESOURCE_ATTRIBUTES</code></td></tr>
-          <tr><td><span class="dot logs"></span>Log shipper</td><td class="path">gitops/addons/values/{common,local}/alloy.yaml</td><td class="what">Alloy 1.11.1, one Deployment replica; <code>loki.source.kubernetes</code>, labels <code>namespace</code>/<code>pod</code>/<code>container</code>/<code>job</code>, multiline and <code>log_type</code> on the Spring containers only, <code>loki.write</code> to <code>loki.monitoring:3100</code></td></tr>
-          <tr><td><span class="dot logs"></span>Log store</td><td class="path">gitops/addons/values/{common,local}/loki.yaml</td><td class="what">Loki chart 6.6.2, SingleBinary, filesystem, schema v13, <code>retention_period: 24h</code></td></tr>
-          <tr><td><span class="dot traces"></span>Collector</td><td class="path">gitops/addons/values/common/otel-collector.yaml</td><td class="what">chart 0.173.1, contrib image; <code>alternateConfig</code>: otlp → memory_limiter → batch → otlp <code>tempo.monitoring:4317</code></td></tr>
-          <tr><td><span class="dot traces"></span>Trace store</td><td class="path">gitops/addons/values/{common,local}/tempo.yaml</td><td class="what">Tempo chart 1.24.4, local backend, PVC 2Gi on <code>standard</code>, retention 24h</td></tr>
-          <tr><td><span class="dot both"></span>Grafana</td><td class="path">gitops/addons/values/{common,local}/kube-prometheus-stack.yaml</td><td class="what"><code>additionalDataSources</code>: Loki (uid <code>Loki</code>) with a <code>trace_id</code> derived field, Tempo (uid <code>Tempo</code>) with <code>tracesToLogsV2</code>; dashboard sidecar on all namespaces</td></tr>
-          <tr><td><span class="dot logs"></span>Dashboard</td><td class="path">gitops/apps/local/observability.yaml</td><td class="what">ConfigMap labelled <code>grafana_dashboard: "1"</code>; <code>log_type</code> variable drives the Application Logs panel</td></tr>
+          <tr><td><span class="dot logs"></span>JSON encoder</td><td class="path">app/*/src/main/resources/logback-spring.xml</td><td class="what"><code>LoggingEventCompositeJsonEncoder</code> with <code>&lt;mdc/&gt;</code>, <code>&lt;arguments/&gt;</code>, <code>&lt;stackTrace&gt;</code>; <code>environment</code> from <code>deployment.environment</code></td></tr>
+          <tr><td><span class="dot logs"></span>Log shipper</td><td class="path">gitops/addons/values/{common,local,cloud}/alloy.yaml</td><td class="what">Alloy: masks tokens/passwords/URI credentials, <code>log_type</code> api|server, Loki tenant apps|platform, multiline for the Spring containers; tested by <code>tests/alloy</code></td></tr>
+          <tr><td><span class="dot logs"></span>Log store</td><td class="path">gitops/addons/values/{common,local,cloud}/loki.yaml</td><td class="what">Loki 3.0 multi-tenant; lab: filesystem, 24h; cloud: S3, 3 replicas, 30 days apps / 7 days platform</td></tr>
+          <tr><td><span class="dot traces"></span>Collector</td><td class="path">gitops/addons/values/common/otel-collector.yaml, otel-collector-sampler.yaml</td><td class="what">gateway: k8sattributes, loadbalancing by trace ID; sampler: spanmetrics + servicegraph from all spans, tail sampling (errors, &gt;500ms, <code>TAIL_SAMPLING_PERCENTAGE</code>)</td></tr>
+          <tr><td><span class="dot traces"></span>Trace store</td><td class="path">gitops/addons/values/{common,local,cloud}/tempo.yaml</td><td class="what">Tempo 2.9; lab: local disk 24h; cloud: S3, 14 days</td></tr>
+          <tr><td><span class="dot both"></span>Grafana</td><td class="path">gitops/addons/values/common/kube-prometheus-stack.yaml</td><td class="what">Loki (both tenants, <code>trace_id</code> link), Tempo (logs for a span, service map), Prometheus exemplars → Tempo; cloud: OIDC SSO</td></tr>
+          <tr><td><span class="dot both"></span>Alerts and dashboards</td><td class="path">gitops/observability/base</td><td class="what">SLO, service and pipeline rules (unit-tested in <code>tests/prometheus</code>), Microservices and SLO dashboards; routing in <code>addons/values/cloud/kube-prometheus-stack.yaml</code></td></tr>
         </tbody>
       </table>
     </div>
@@ -601,26 +602,52 @@
 
   <section class="col" aria-labelledby="limits-h">
     <div class="section-head">
-      <h2 id="limits-h">Known limits</h2>
-      <p>Number 1 matches the marker on the diagram.</p>
+      <h2 id="limits-h">Before a cloud environment goes live</h2>
+      <p>The lab runs as committed. dev, staging and prod still need values only their AWS account has; until then the pieces below won't start or won't notify.</p>
     </div>
     <ol class="limits">
       <li>
-        <span class="num">1</span>
+        <span class="num plain">–</span>
         <div class="body">
-          <h3>The browser span never reaches Tempo <span class="chip traces">traces</span></h3>
-          <p><code>traceFetch()</code> makes up a parent span ID and only writes it to the browser console. The ingress trusts that header, so its span hangs off a parent Tempo never receives and the trace view shows a missing root. The upside is that the trace ID in the browser console matches the backend logs and Tempo.</p>
-          <p class="fix"><strong>To close it:</strong> replace <code>traceFetch()</code> with the OpenTelemetry browser SDK and export to the collector through the ingress (needs an OTLP/HTTP route and CORS on the receiver).</p>
+          <h3>Storage for Loki and Tempo <span class="chip logs">logs</span><span class="chip traces">traces</span></h3>
+          <p>Real S3 bucket names and region in <code>addons/values/cloud/{loki,tempo}.yaml</code>, and pre-created <code>loki</code> and <code>tempo</code> ServiceAccounts with IRSA roles (tf <code>irsa_roles</code>).</p>
         </div>
       </li>
       <li>
         <span class="num plain">–</span>
         <div class="body">
-          <h3>Loki in dev, staging and prod needs real S3 settings <span class="chip logs">logs</span></h3>
-          <p><code>addons/values/cloud/loki.yaml</code> still has placeholder bucket names and region, and expects a pre-created <code>loki</code> ServiceAccount with an IRSA role. Until both exist, Loki won't start in those environments.</p>
+          <h3>Secrets in AWS Secrets Manager <span class="chip both">alerting · Grafana</span></h3>
+          <p><code>microservices/&lt;env&gt;/alerting</code> (slack_webhook_url, pagerduty_routing_key, heartbeat_url), <code>/grafana</code> (admin_user, admin_password) and <code>/grafana-oauth</code> (client_id, client_secret, auth_url, token_url, api_url, root_url).</p>
+        </div>
+      </li>
+      <li>
+        <span class="num plain">–</span>
+        <div class="body">
+          <h3>Hosts, DNS and the shared ALB <span class="chip both">ingress</span></h3>
+          <p>Grafana's host per environment (<code>addons/values/&lt;env&gt;/kube-prometheus-stack.yaml</code>) with an ACM certificate. Joining the <code>microservices</code> IngressGroup gives an existing environment a new app ALB DNS name once. Put a WAF rate limit on <code>/otlp</code> before relying on it in prod.</p>
+        </div>
+      </li>
+      <li>
+        <span class="num plain">–</span>
+        <div class="body">
+          <h3>Optional: long-term metrics <span class="chip both">metrics</span></h3>
+          <p>Remote write to Amazon Managed Prometheus is documented in <code>addons/values/cloud/kube-prometheus-stack.yaml</code> and left off until a workspace and IRSA role exist.</p>
         </div>
       </li>
     </ol>
+  </section>
+
+  <section class="col" aria-labelledby="alerts-h">
+    <div class="section-head">
+      <h2 id="alerts-h">Alerts and SLOs</h2>
+      <p>Rules live in <code>observability/base</code>, are deployed to every environment, and are unit-tested with <code>promtool</code>. Every alert links to its section of <code>docs/runbooks.md</code>.</p>
+    </div>
+    <dl class="providers">
+      <dt>SLOs</dt><dd>99.5% of requests without a 5xx and 99% within 500ms, per service, over 30 days; multi-window burn-rate alerts page at 14.4x/6x and open a ticket at 3x/1x (Google SRE workbook).</dd>
+      <dt>Service</dt><dd><code>ServiceDown</code>, <code>ServiceMetricsMissing</code>; pod and node health come from kube-prometheus-stack's default rules.</dd>
+      <dt>Pipeline</dt><dd>Alloy missing, stalled or dropping lines; Loki rejecting or failing pushes; the collector losing spans, its queue filling, the sampler overloaded or unreachable; Tempo discarding spans.</dd>
+      <dt>Routing</dt><dd>Cloud: critical → PagerDuty and Slack, warning → Slack, Watchdog → a dead man's switch heartbeat. Lab: shown in Grafana and the Alertmanager UI only.</dd>
+    </dl>
   </section>
 
   <section class="col" aria-labelledby="q-h">
@@ -673,7 +700,7 @@
     </div>
   </section>
 
-  <footer class="col">Reflects branch 05-storage-statefulsets as of 1 October 2026, with the app repo's fix/log-environment-field branch for the environment field. Example log lines and IDs are illustrative. Update this page when a chart version, port or file path changes.</footer>
+  <footer class="col">Reflects branch 05-storage-statefulsets as of 5 October 2026, with the app repo's feat/browser-tracing branch (which includes fix/log-environment-field). Example log lines and IDs are illustrative. Update this page when a chart version, port or file path changes.</footer>
 </main>
 
 <script>

@@ -229,15 +229,19 @@ flowchart LR
   P --> L[Loki]
   G[Grafana] --> L
 
-  I -. OTLP gRPC spans .-> C[OTel Collector]
+  B -. browser spans via /otlp .-> I
+  I -. spans .-> C[Collector gateway]
   U -. OpenTelemetry Java agent .-> C
   O -. OpenTelemetry Java agent .-> C
-  C --> T[Tempo]
+  C -- by trace ID --> S[Collector sampler]
+  S -- kept traces --> T[Tempo]
+  S -- span metrics, service graph --> R
   G --> T
 
   U -. Actuator metrics .-> R[Prometheus]
   O -. Actuator metrics .-> R
   K[Kubernetes exporters] --> R
+  R --> A[Alertmanager]
   G --> R
 ```
 
@@ -246,29 +250,31 @@ What each component does:
 | Component | Responsibility |
 |---|---|
 | Traefik | Routes `/` to frontend, `/api` to the backend services and `/otlp` to the collector; traces every request and writes JSON access logs. |
-| Grafana Alloy | One replica reads every pod's stdout through the Kubernetes API, labels the Spring services' lines `log_type=api` or `log_type=server`, and sends them to Loki. |
-| Loki | Stores and searches logs; use LogQL in Grafana. |
-| OpenTelemetry Java agent | Creates HTTP, MongoDB, and downstream-client spans without custom filters. |
-| OpenTelemetry Collector | Receives OTLP traces and forwards them to Tempo. |
+| Grafana Alloy | One replica reads every pod's stdout through the Kubernetes API, masks tokens and passwords, labels the Spring services' lines `log_type=api` or `log_type=server`, and sends them to Loki as tenant `apps` (application namespaces) or `platform`. |
+| Loki | Stores and searches logs, per tenant; use LogQL in Grafana. |
+| OpenTelemetry web SDK | Records the browser's fetch spans and sends them to `/otlp/v1/traces`; adds `traceparent` to API calls. |
+| OpenTelemetry Java agent | Creates HTTP, MongoDB, and downstream-client spans without custom filters, and sends every span. |
+| Collector gateway | Receives all spans (apps, Traefik, browser), adds pod/deployment/namespace, forwards each trace to one sampler by trace ID. |
+| Collector sampler | Computes span metrics and the service graph from every span, then keeps every error trace, every trace over 500ms and a share of the rest (100% in the lab) for Tempo. |
 | Tempo | Stores and searches distributed traces. |
-| Prometheus | Scrapes Kubernetes and Spring Boot metrics. |
-| Grafana | Queries Prometheus, Loki, and Tempo in one UI. |
+| Prometheus | Scrapes Kubernetes, Spring Boot and span metrics; evaluates the SLO, service and pipeline rules. |
+| Alertmanager | Routes alerts (in the lab: shown in its UI and Grafana only). |
+| Grafana | Queries Prometheus, Loki, and Tempo in one UI, with links between logs, traces and metrics. |
 
 Typical request flow:
 
 ```text
-Browser -> Ingress -> user-service -> order-service -> MongoDB
-             |            |                |
-             |            |                +-- span -> Collector -> Tempo
-             |            +------------------- span -> Collector -> Tempo
-             +-- span -> Collector -> Tempo
-             +-- access log -> Alloy -> Loki
+Browser -> Traefik -> user-service -> order-service -> MongoDB
+   |          |            |                |
+   |          |            |                +-- span -> gateway -> sampler -> Tempo
+   |          |            +------------------- span -> gateway -> sampler -> Tempo
+   |          +-- span -> gateway; access log -> Alloy -> Loki
+   +-- span via /otlp -> gateway
 ```
 
-The frontend's `traceFetch()` sends a W3C `traceparent` header, so the browser,
-ingress and backend share one trace ID, but the browser's own span is not
-exported (there is no browser OpenTelemetry SDK yet). Tempo therefore shows each
-trace with a missing root above the ingress span.
+All of a request's spans share one trace ID from the browser onward, so Tempo
+shows the whole request: the browser's fetch, Traefik, user-service, the
+call to order-service and MongoDB. The browser console logs the same trace ID.
 
 [`docs/observability-pipeline.html`](docs/observability-pipeline.html) maps every
 hop to the file that configures it.
@@ -299,6 +305,24 @@ instead: `{namespace="development", container=~"user-service|order-service"} | j
 
 Every line also carries `trace_id`. Click the **trace_id** link on a log line to
 open its trace in Tempo, or **Logs for this span** on a span to go the other way.
+
+### 4.2 Alerts, SLOs and dashboards
+
+`observability/base` holds what is deployed to every environment:
+
+- **Dashboards** (Grafana → Dashboards): *Microservices* (pods, API rates,
+  latency, logs with a Log type dropdown, failed requests whose dots open the
+  trace) and *Service Level Objectives* (30-day attainment, error budget
+  left, burn rates).
+- **SLOs:** 99.5% of requests without a 5xx and 99% within 500ms, per
+  service. Alerts use multi-window burn rates: they page when the error
+  budget is burning fast and clear soon after a fix.
+- **Pipeline alerts** if logs or traces stop reaching Loki or Tempo.
+
+In the lab, alerts are only shown in Grafana (Alerting) and Alertmanager
+(`kubectl port-forward svc/kube-prometheus-stack-alertmanager 9093 -n monitoring`).
+Each alert links to its runbook in [`docs/runbooks.md`](docs/runbooks.md). The rules
+are unit-tested (`tests/prometheus`) by `./scripts/validate.sh`.
 
 ### Phase A: Core Kubernetes (Steps 01 – 06)
 

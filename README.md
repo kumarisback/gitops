@@ -63,7 +63,11 @@ docker run --rm -v "$PWD:/repo" -w /repo gitops-ci ./scripts/validate.sh
 - `platform/`: Cluster-level add-ons that don't need per-environment values — RBAC (`platform/rbac/`) and the `ClusterSecretStore` that tells External Secrets Operator where to pull database passwords from in AWS.
 - `bootstrap/projects/`: One Application manifest per thing ArgoCD deploys — the per-environment app sets (`dev.yaml`, `staging.yaml`, `prod.yaml`), the shared `platform.yaml`, and the platform *controllers themselves* (`aws-lb-controller-dev.yaml`, `external-secrets-operator-dev.yaml`) — these install the AWS Load Balancer Controller and External Secrets Operator as ArgoCD Applications, not via Terraform, and are env-specific (a `-staging`/`-prod` sibling is needed once those environments exist — see the TODO comments in `bootstrap/envs/staging|prod/kustomization.yaml`).
 - `bootstrap/envs/`: The App-of-Apps master configurations, one per environment, that tell each environment's ArgoCD which of the manifests above to deploy.
-- `addons/`: Cluster add-ons installed from Helm charts (kube-prometheus-stack, Loki, Alloy, Tempo, OTel Collector, metrics-server). `addons/applications/` holds one environment-agnostic ArgoCD Application per add-on; `addons/values/` holds its Helm values in layers: `common/`, then `local/` (KinD lab) or `cloud/` (EKS), then an optional per-environment file. Each `bootstrap/envs/<env>` picks its layers through `addons/select-env`.
+- `observability/`: Alerting rules (SLO, service, pipeline), Grafana dashboards, and per-environment extras (cloud: ExternalSecrets for alerting and Grafana, the `/otlp` ALB route; lab: the Traefik `/otlp` route). Deployed into `monitoring` by the `observability-config` Application.
+- `tests/`: `promtool` unit tests for the rules (`tests/prometheus`) and log-pipeline cases run in a real Alloy (`tests/alloy`), both run by `scripts/validate.sh`.
+- `ci/`: The pinned toolbox image Jenkins runs `scripts/validate.sh` in.
+- `docs/`: `observability-pipeline.html` (how logs, traces and metrics flow) and `runbooks.md` (one section per alert).
+- `addons/`: Cluster add-ons installed from Helm charts (kube-prometheus-stack, Loki, Alloy, Tempo, OTel Collector gateway and sampler, metrics-server). `addons/applications/` holds one environment-agnostic ArgoCD Application per add-on; `addons/values/` holds its Helm values in layers: `common/`, then `local/` (KinD lab) or `cloud/` (EKS), then an optional per-environment file. Each `bootstrap/envs/<env>` picks its layers through `addons/select-env`.
 
 ---
 
