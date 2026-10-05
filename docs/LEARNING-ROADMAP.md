@@ -118,20 +118,20 @@ without notes. If you can't do (c), don't move on.
 ## Progress tracker
 
 ✅ done · 🟡 partly done · ☐ not started. Last reviewed against the `tf`, `gitops` and
-app repos on 2026-10-05; the `tf/learning-topics` notes cover the steps marked done or partly done.
+app repos on 2026-10-05 (updated after completing steps 01–10); the `tf/learning-topics` notes cover the steps marked done or partly done.
 
 | # | Branch | Phase | 💰 | Done | Notes |
 |---|---|---|---|---|---|
-| 01 | `01-k8s-rbac` | A: Close gaps |  | ✅ | Pending: ResourceQuota/LimitRange for staging and prod |
-| 02 | `02-production-workloads` | A |  | ✅ | Pending: dev and staging still deploy `newTag: "latest"` (item 6) |
-| 03 | `03-ingress-tls-dns` | A |  | 🟡 | Done: one shared ALB with path routing, frontend on ClusterIP. Pending: domain + Route53 zone, ACM cert, ExternalDNS, cert-manager |
-| 04 | `04-autoscaling` | A |  | 🟡 | Done: metrics-server, HPAs, Karpenter (tf + NodePool). Pending: AL2→AL2023 AMI, v1beta1→v1 API, VPA, load/spot tests (tf topic 05) |
-| 05 | `05-storage-statefulsets` | A |  | 🟡 | Done: EBS CSI driver, gp3/gp3-retain classes, StatefulSet, S3 for Loki/Tempo. Pending: EFS, VolumeSnapshot restore (tf topic 06) |
+| 01 | `01-k8s-rbac` | A: Close gaps |  | ✅ | Incl. quotas/limits for every cloud namespace, sized to the HPAs (tf topic 03, 05) |
+| 02 | `02-production-workloads` | A |  | ✅ | Images pinned to commit-SHA tags everywhere; ECR tags immutable (tf topic 04) |
+| 03 | `03-ingress-tls-dns` | A |  | 🟡 | Deferred to the end (no domain yet). Done: one shared ALB with path routing, frontend on ClusterIP. Pending: domain + Route53 zone, ACM cert, ExternalDNS, cert-manager |
+| 04 | `04-autoscaling` | A |  | ✅ | HPA, VPA (recommend-only), Karpenter 1.14 / v1 / AL2023; Cluster Autoscaler skipped for Karpenter. To run on dev: load + spot-interruption tests (tf topic 05) |
+| 05 | `05-storage-statefulsets` | A |  | ✅ | EBS CSI + gp3/gp3-retain, EFS, snapshots, StatefulSet, S3 for Loki/Tempo. To run on dev: the topic's exercises (tf topic 06) |
 | 06 | `06-helm-authoring` | A |  | ☐ |  |
 | 07 | `07-prometheus-grafana` | B: Observability | 💰 | ✅ | tf topic 07 |
-| 08 | `08-alerting-slo` | B |  | ✅ | Built and unit-tested. Pending: real Slack/PagerDuty keys and the live "break it" test |
-| 09 | `09-elk-logging` | B | 💰💰 | 🟡 | Done with Loki instead (item 9) + JSON logs, correlation, masking. Pending: ECK, Fluent Bit, ILM, Kibana, OpenSearch (tf topic 08) |
-| 10 | `10-tracing-otel` | B | 💰 | ✅ | Pending only the 2s-delay exercise (tf topic 09) |
+| 08 | `08-alerting-slo` | B |  | ✅ | Built, unit-tested, with scripts/alert-drill.sh. To do: real Slack/PagerDuty keys in Secrets Manager (tf topic 07) |
+| 09 | `09-elk-logging` | B | 💰💰 | ✅ | Done with Loki instead of ELK (decision 2026-10-05): JSON logs, correlation, masking, edge/api/server (tf topic 08) |
+| 10 | `10-tracing-otel` | B | 💰 | ✅ | The 2s-delay exercise is optional practice (tf topic 09) |
 | 11 | `11-synthetic-blackbox` | B |  | ☐ |  |
 | 12 | `12-kafka-strimzi` | C: Streaming | 💰💰 | ☐ |  |
 | 13 | `13-kafka-ecosystem` | C | 💰💰 | ☐ |  |
