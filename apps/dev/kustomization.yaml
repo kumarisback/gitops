@@ -8,13 +8,20 @@ resources:
 
 namespace: development
 
+# Every service runs the image Jenkins built from one app-repo commit: the
+# tag is that commit's full SHA (app Jenkinsfiles), and ECR tags are
+# immutable (tf shared-services), so a tag always means the same image.
+# Never `latest`: a tag that moves can't be rolled back to, and ArgoCD
+# doesn't see a new image behind an unchanged tag. The gitops Jenkins job
+# bumps one service per pull request (kustomize edit set image); promote to
+# staging and prod by copying a tag that has run in the environment before.
 images:
-  # Update the newTag value to deploy a new version of the frontend service
   - name: 602367507570.dkr.ecr.us-east-1.amazonaws.com/frontend
-    newTag: "latest"
-  # You can add other services here like order-service or user-service
-  # - name: 602367507570.dkr.ecr.us-east-1.amazonaws.com/order-service
-  #   newTag: "latest"
+    newTag: "6d9dfdcb454b4596b14a6cc09e19d9fa5ead7e35"
+  - name: 602367507570.dkr.ecr.us-east-1.amazonaws.com/order-service
+    newTag: "6d9dfdcb454b4596b14a6cc09e19d9fa5ead7e35"
+  - name: 602367507570.dkr.ecr.us-east-1.amazonaws.com/user-service
+    newTag: "6d9dfdcb454b4596b14a6cc09e19d9fa5ead7e35"
 
 # OpenTelemetry: shared agent settings come from ../components/otel-instrumentation.
 # The agent sends every span (parentbased_always_on); which traces are kept

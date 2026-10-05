@@ -56,12 +56,22 @@ if aws sts get-caller-identity > /dev/null 2>&1; then
   echo "🔑 Authenticating Docker with AWS ECR (${ECR_REGISTRY})..."
   aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
 
-  echo "🚀 Pushing images to ECR..."
+  # ECR tags are immutable and the cloud overlays pin images by the app
+  # commit's full SHA (the tag Jenkins uses), so push under that tag, never
+  # `latest`. With uncommitted changes no commit describes the image, so
+  # refuse rather than push a mislabelled one.
+  if [ -n "$(git -C "${APP_DIR}" status --porcelain --untracked-files=no)" ]; then
+    echo "❌ ${APP_DIR} has uncommitted changes. Commit them first: the image tag is the commit SHA."
+    exit 1
+  fi
+  APP_SHA="$(git -C "${APP_DIR}" rev-parse HEAD)"
+  echo "🚀 Pushing images to ECR as ${APP_SHA}..."
   for svc in "${SERVICES[@]}"; do
     echo "⬆️  Pushing ${svc}..."
-    docker push "${ECR_REGISTRY}/${svc}:latest"
+    docker tag "${ECR_REGISTRY}/${svc}:latest" "${ECR_REGISTRY}/${svc}:${APP_SHA}"
+    docker push "${ECR_REGISTRY}/${svc}:${APP_SHA}"
   done
-  echo "🎉 All images pushed to AWS ECR successfully!"
+  echo "🎉 All images pushed to AWS ECR. Pin them with tag ${APP_SHA} in apps/<env>/kustomization.yaml."
 else
   echo "⚠️  AWS CLI is not currently authenticated."
   echo ""
