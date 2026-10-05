@@ -1,17 +1,16 @@
 tempo:
   # Traces in S3 (14 days), not on the pod's disk: survives the pod and the
-  # node, and doesn't fill a PVC. TODO: placeholder bucket and region, like
-  # addons/values/cloud/loki.yaml; fill them in and create the IRSA-annotated
-  # `tempo` ServiceAccount (s3:GetObject/PutObject/ListBucket/DeleteObject on
-  # the bucket) before the environment goes live.
+  # node, and doesn't fill a PVC. The bucket is per environment, so its name
+  # is in addons/values/<env>/tempo.yaml; every environment is in us-east-1.
+  # Tempo reaches the bucket through the IRSA-annotated `tempo`
+  # ServiceAccount (tf repo, 02-services).
   retention: 336h
   storage:
     trace:
       backend: s3
       s3:
-        bucket: <your-tempo-s3-bucket-name>
-        endpoint: s3.<your-aws-region>.amazonaws.com
-        region: <your-aws-region>
+        endpoint: s3.us-east-1.amazonaws.com
+        region: us-east-1
 serviceAccount:
   create: false
   name: tempo

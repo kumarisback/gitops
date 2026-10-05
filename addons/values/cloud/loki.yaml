@@ -12,19 +12,14 @@ loki:
           prefix: loki_index_
           period: 24h
 
-  # TODO: placeholder values — fill in the real bucket names and region
-  # for each environment (dev/staging/prod) before this Application is
-  # synced there. Until these are real, Loki will crash-loop on startup
-  # and nothing will be ingested. ruler/admin may be the same bucket
-  # as chunks; the chart renders all three into the config.
+  # Chunks and index in S3. The bucket is per environment, so its name is
+  # in addons/values/<env>/loki.yaml; every environment is in us-east-1
+  # (tf repo, environments/app-cluster/*.tfvars). Loki reaches the bucket
+  # through the IRSA-annotated `loki` ServiceAccount below.
   storage:
     type: s3
-    bucketNames:
-      chunks: <your-loki-s3-bucket-name>
-      ruler: <your-loki-s3-bucket-name>
-      admin: <your-loki-s3-bucket-name>
     s3:
-      region: <your-aws-region>
+      region: us-east-1
       s3ForcePathStyle: false
 
   # 30 days for application logs, 7 for platform logs; the compactor

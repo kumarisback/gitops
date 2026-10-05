@@ -1,0 +1,10 @@
+# dev's S3 bucket, created by the tf repo (infrastructure/app-cluster/
+# 01-infra, output observability_bucket_names) as
+# <project>-<env>-<component>-storage-<AWS account id>. Change it here if
+# the project name or account changes there.
+loki:
+  storage:
+    bucketNames:
+      chunks: microservices-dev-loki-storage-602367507570
+      ruler: microservices-dev-loki-storage-602367507570
+      admin: microservices-dev-loki-storage-602367507570
