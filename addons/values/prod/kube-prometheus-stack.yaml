@@ -13,3 +13,12 @@ prometheus:
     # federated alongside other clusters'.
     externalLabels:
       cluster: microservices-prod-eks-cluster
+    # Production metrics have no other copy, so their volume outlives its
+    # PVC (gp3-retain, platform/storage): deleting the PVC or the monitoring
+    # namespace by mistake doesn't destroy 30 days of history. Set before
+    # prod's first sync: a StatefulSet's volume claim template can't be
+    # changed in place.
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp3-retain
