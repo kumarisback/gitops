@@ -36,11 +36,13 @@ gitops/
 │   ├── base/                  shared YAML for all environments
 │   ├── components/  ★         shared settings used by all envs: tracing
 │   │                            (otel-instrumentation) and request payload
-│   │                            logging (request-logging)
+│   │                            logging (request-logging), quotas and default
+│   │                            limits per namespace (namespace-guardrails)
 │   └── local|dev|staging|prod/  only what differs per environment (the lab also
 │                                runs its own MongoDB: apps/local/mongodb.yaml)
 │
-├── addons/  ★               the "tools": Prometheus, Grafana, Loki, Tempo, collector, Alloy
+├── addons/  ★               the "tools": Prometheus, Grafana, Loki, Tempo, collector, Alloy,
+│                            metrics-server, VPA (recommends container sizes)
 │   ├── applications/          one ArgoCD app per tool
 │   ├── values/                the tools' settings, in layers (section 3)
 │   └── select-env/            picks the right layers for each environment
@@ -52,7 +54,8 @@ gitops/
 │                            dev's Karpenter node pools (karpenter/dev)
 ├── tests/  ★                tests for the alert rules and the log pipeline
 ├── ci/  ★                   Docker image with all the checking tools (for Jenkins)
-├── scripts/                 lab scripts, plus validate.sh ★ (checks everything)
+├── scripts/                 lab scripts, plus validate.sh ★ (checks everything) and
+│                            alert-drill.sh ★ (breaks a service, checks the alert fires)
 ├── local-setup/             lab-only settings: Traefik ingress, gp3 StorageClass
 └── docs/                    this guide, the pipeline page, runbooks.md ★
 ```
