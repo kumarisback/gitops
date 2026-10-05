@@ -35,7 +35,8 @@ gitops/
 ├── apps/                    the 3 services (frontend, order-service, user-service)
 │   ├── base/                  shared YAML for all environments
 │   ├── components/  ★         shared tracing settings (one copy, used by all envs)
-│   └── local|dev|staging|prod/  only what differs per environment (~30 lines each)
+│   └── local|dev|staging|prod/  only what differs per environment (the lab also
+│                                runs its own MongoDB: apps/local/mongodb.yaml)
 │
 ├── addons/  ★               the "tools": Prometheus, Grafana, Loki, Tempo, collector, Alloy
 │   ├── applications/          one ArgoCD app per tool
@@ -209,6 +210,10 @@ opens a pull request instead of pushing straight to `main`.
   ArgoCD and the script don't undo each other's changes.
 - **`sync-local-stack.rb`** reads the same `addons/` files ArgoCD uses;
   `--dry-run` prints what it would do.
+- **MongoDB in the lab** (`apps/local/mongodb.yaml`): a StatefulSet with its
+  own volume, so the services need no external database or secrets file.
+  Put an Atlas URI in the git-ignored `apps/local/app-secrets.env` to use
+  Atlas instead.
 
 Day-to-day commands are in [`LOCAL-LAB-GUIDE.md`](../LOCAL-LAB-GUIDE.md).
 

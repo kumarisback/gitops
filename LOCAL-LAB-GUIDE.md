@@ -194,17 +194,27 @@ There are two ways to deploy it:
 After a code change in `../app`, rebuild and restart one or more services with
 `./scripts/update-and-redeploy-podman.sh order-service`.
 
-The local application workloads expect an `app-secrets` Secret, but Argo CD does not manage that Secret because it contains local-only credentials. Create it directly in the cluster from an ignored file before syncing the local application:
+The lab runs its own MongoDB (`apps/local/mongodb.yaml`): a one-replica
+StatefulSet with a 2Gi volume, so the services work with no external
+database and no setup. The services read their connection string from the
+`app-secrets` Secret, which `start-lab.sh` creates from
+`apps/local/app-secrets.env` if you have that git-ignored file (for example
+with a MongoDB Atlas URI), and otherwise from the committed
+`app-secrets.env.example`, which points at the lab MongoDB. ArgoCD doesn't
+manage this Secret. To change it by hand:
 
 ```bash
 cp apps/local/app-secrets.env.example apps/local/app-secrets.env
-# Edit apps/local/app-secrets.env with the local MongoDB URI.
-kubectl create namespace development --dry-run=client -o yaml | kubectl apply -f -
+# Edit apps/local/app-secrets.env, e.g. set MONGO_URI to your Atlas URI.
 kubectl create secret generic app-secrets \
   --namespace development \
   --from-env-file=apps/local/app-secrets.env \
   --dry-run=client -o yaml | kubectl apply -f -
+kubectl rollout restart deploy/order-service deploy/user-service -n development
 ```
+
+Look inside the lab database with
+`kubectl exec -it mongodb-0 -n development -- mongosh microservices`.
 
 ---
 

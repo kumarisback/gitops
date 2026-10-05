@@ -111,17 +111,20 @@ else
   done
 fi
 
-# 7. Restore the local-only Secret when the ignored file exists
-if [ -f "${REPO_ROOT}/apps/local/app-secrets.env" ]; then
-  echo "🔐 Restoring local app Secret..."
-  kubectl create namespace development --dry-run=client -o yaml | kubectl apply -f - > /dev/null
-  kubectl create secret generic app-secrets \
-    --namespace development \
-    --from-env-file="${REPO_ROOT}/apps/local/app-secrets.env" \
-    --dry-run=client -o yaml | kubectl apply -f - > /dev/null
-else
-  echo "⚠️  Missing apps/local/app-secrets.env; services requiring MongoDB will not start."
+# 7. The services' Secret (app-secrets): from the git-ignored
+#    apps/local/app-secrets.env if you have one (e.g. a MongoDB Atlas URI),
+#    otherwise from the committed example, which points at the lab's own
+#    MongoDB (apps/local/mongodb.yaml).
+SECRETS_FILE="${REPO_ROOT}/apps/local/app-secrets.env"
+if [ ! -f "${SECRETS_FILE}" ]; then
+  SECRETS_FILE="${REPO_ROOT}/apps/local/app-secrets.env.example"
 fi
+echo "🔐 Creating the app Secret from $(basename "${SECRETS_FILE}")..."
+kubectl create namespace development --dry-run=client -o yaml | kubectl apply -f - > /dev/null
+kubectl create secret generic app-secrets \
+  --namespace development \
+  --from-env-file="${SECRETS_FILE}" \
+  --dry-run=client -o yaml | kubectl apply -f - > /dev/null
 
 # 8. Restore the local Argo app-of-apps. start-lab-podman.sh sets
 #    SKIP_ROOT_APP=1 because it deploys with sync-local-stack.rb instead,

@@ -6,6 +6,8 @@ resources:
   - ../base
   - resourcequota.yaml
   - limitrange.yaml
+  # Lab-only database (see mongodb.yaml).
+  - mongodb.yaml
 
 namespace: development
 
