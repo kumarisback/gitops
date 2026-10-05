@@ -1,0 +1,40 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Request payloads in the API log of order-service and user-service
+# (RequestLoggingFilter in the app repo). One line is written per request
+# either way, with method, route, status and duration; this decides whether
+# the request body is added to it:
+#
+#   NEVER   no payloads (also the services' own default)
+#   ERRORS  payload of 4xx/5xx requests only
+#   ALWAYS  every payload
+#
+# Payloads are JSON only, with password/token/secret-like fields masked and
+# cut at 2048 characters. Response bodies are never logged.
+#
+# This component only connects the setting to the Deployments. Each overlay
+# sets its level by generating ConfigMap request-logging (the same pattern as
+# otel-environment in ../otel-instrumentation):
+#
+#   configMapGenerator:
+#     - name: request-logging
+#       literals:
+#         - APP_HTTP_LOGGING_REQUEST_BODY=ERRORS
+#
+# The reference is optional: an overlay without that ConfigMap gets the
+# services' default, NEVER, rather than pods that fail to start.
+patches:
+  - target:
+      kind: Deployment
+      name: order-service|user-service
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: APP_HTTP_LOGGING_REQUEST_BODY
+          valueFrom:
+            configMapKeyRef:
+              name: request-logging
+              key: APP_HTTP_LOGGING_REQUEST_BODY
+              optional: true

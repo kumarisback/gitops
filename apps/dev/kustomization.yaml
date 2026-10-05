@@ -25,6 +25,7 @@ images:
 # over 500ms, and a share of the rest per environment.
 components:
   - ../components/otel-instrumentation
+  - ../components/request-logging
 
 configMapGenerator:
   - name: otel-environment
@@ -32,3 +33,8 @@ configMapGenerator:
       - DEPLOYMENT_ENVIRONMENT=dev
       - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=dev,k8s.namespace.name=development
       - OTEL_TRACES_SAMPLER=parentbased_always_on
+  # Request payloads in the API log (see ../components/request-logging):
+  # shared dev: see every payload while testing.
+  - name: request-logging
+    literals:
+      - APP_HTTP_LOGGING_REQUEST_BODY=ALWAYS
