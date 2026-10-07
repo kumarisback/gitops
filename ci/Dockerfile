@@ -23,6 +23,8 @@ ARG ALERTMANAGER_VERSION=0.27.0
 ARG ALLOY_VERSION=1.18.1
 ARG OTELCOL_VERSION=0.160.0
 ARG LOKI_VERSION=3.0.0
+# appVersion of prometheus-blackbox-exporter 11.19.1.
+ARG BLACKBOX_VERSION=0.28.0
 # helm unittest, for charts/*/tests. 1.0.3 is the last release Helm 3 can
 # load: from 1.1.0 its plugin.yaml has platformHooks, which Helm 3 rejects.
 ARG HELM_UNITTEST_VERSION=1.0.3
@@ -45,6 +47,8 @@ ARG OTELCOL_SHA256_amd64=7bb60c584c241c86261c2b8697cd3725dd8c56691f5ad5d98454eaa
 ARG OTELCOL_SHA256_arm64=bff414e6a287309dfd0c51350c1e13c96c4ab807127b4320bd684f605e781326
 ARG LOKI_SHA256_amd64=6f6cb5cfb1ea9c00794b3928a7af0e448930b2854938f3a18012c707158c4f7a
 ARG LOKI_SHA256_arm64=2f7b406fea48eccd7a6e08187d7dedb77cff38f4f04e271982a7185d3a68225c
+ARG BLACKBOX_SHA256_amd64=caf5d242fb1cf6d5cb678f3f799f22703d4fafea26b03dcbbd7e1f1825e06329
+ARG BLACKBOX_SHA256_arm64=63312be0983d85e5109710a7dc93df3051157ae581853fa3655d171cc1b2806e
 ARG HELM_UNITTEST_SHA256_amd64=9761f23d9509c98770c026e019e743b524b57010f4bc29175f78d2582ace0633
 ARG HELM_UNITTEST_SHA256_arm64=1e645d96b36582cd8b9fbd53240110267f14d80aa01137341251c60438bbe6b0
 
@@ -80,11 +84,13 @@ RUN set -eux; \
     tar -xzf otelcol.tgz -C /usr/local/bin otelcol-contrib; \
     fetch "https://github.com/grafana/loki/releases/download/v${LOKI_VERSION}/loki-linux-${arch}.zip" loki.zip "$(sha LOKI)"; \
     unzip -q loki.zip && install -m 0755 "loki-linux-${arch}" /usr/local/bin/loki; \
+    fetch "https://github.com/prometheus/blackbox_exporter/releases/download/v${BLACKBOX_VERSION}/blackbox_exporter-${BLACKBOX_VERSION}.linux-${arch}.tar.gz" blackbox.tgz "$(sha BLACKBOX)"; \
+    tar -xzf blackbox.tgz --strip-components=1 -C /usr/local/bin "blackbox_exporter-${BLACKBOX_VERSION}.linux-${arch}/blackbox_exporter"; \
     fetch "https://github.com/helm-unittest/helm-unittest/releases/download/v${HELM_UNITTEST_VERSION}/helm-unittest-linux-${arch}-${HELM_UNITTEST_VERSION}.tgz" helm-unittest.tgz "$(sha HELM_UNITTEST)"; \
     mkdir -p "${HELM_PLUGINS}/helm-unittest"; \
     tar -xzf helm-unittest.tgz -C "${HELM_PLUGINS}/helm-unittest" plugin.yaml untt; \
     rm -rf /tmp/*; \
-    for t in kubectl kustomize helm kubeconform promtool amtool alloy otelcol-contrib loki; do command -v "$t"; done; \
+    for t in kubectl kustomize helm kubeconform promtool amtool alloy otelcol-contrib loki blackbox_exporter; do command -v "$t"; done; \
     helm unittest --help > /dev/null
 
 # Jenkins runs the container as its own uid with no writable home; keep

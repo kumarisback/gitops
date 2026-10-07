@@ -1,0 +1,56 @@
+# Service name blackbox-exporter.monitoring.svc, the prober address in
+# every Probe object.
+fullnameOverride: blackbox-exporter
+
+# How to probe. Each Probe object picks one module; what the module checks
+# is what "up" means for that endpoint. Every request carries the same
+# User-Agent, so synthetic traffic can be told apart in the API logs.
+config:
+  modules:
+    # Answers with a 2xx (the frontend).
+    http_2xx:
+      prober: http
+      timeout: 5s
+      http:
+        preferred_ip_protocol: ip4
+        headers:
+          User-Agent: blackbox-exporter (synthetic probe)
+    # 2xx, and the body says the service is ONLINE (order-service's
+    # /api/orders/status).
+    http_2xx_online:
+      prober: http
+      timeout: 5s
+      http:
+        preferred_ip_protocol: ip4
+        headers:
+          User-Agent: blackbox-exporter (synthetic probe)
+        fail_if_body_not_matches_regexp:
+          - '"status"\s*:\s*"ONLINE"'
+    # Sign-in with a user that doesn't exist must be refused with 401. A
+    # 401 means user-service answered, its security chain ran and MongoDB
+    # was asked for the user: if MongoDB can't be reached, sign-in returns
+    # 500 and the probe fails. Not a real credential: the probe never
+    # signs in, so no secret is needed.
+    http_signin_rejected:
+      prober: http
+      timeout: 5s
+      http:
+        method: POST
+        preferred_ip_protocol: ip4
+        headers:
+          Content-Type: application/json
+          User-Agent: blackbox-exporter (synthetic probe)
+        body: '{"username":"synthetic-probe","password":"synthetic-probe-not-a-password"}'
+        valid_status_codes: [401]
+
+# Its own metrics (probe counts, config reloads), not the probe results.
+serviceMonitor:
+  selfMonitor:
+    enabled: true
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    memory: 64Mi

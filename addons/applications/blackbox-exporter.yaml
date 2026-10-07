@@ -1,0 +1,39 @@
+# Probes endpoints the way a client would (HTTP status, body, TLS) and
+# reports the result as metrics. What it probes is in Probe objects
+# (observability/components/synthetic-probes, observability/local), which
+# Prometheus turns into scrapes of /probe?target=...&module=...
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: blackbox-exporter
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: cluster-addons
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - chart: prometheus-blackbox-exporter
+      repoURL: https://prometheus-community.github.io/helm-charts
+      targetRevision: 11.19.1
+      helm:
+        # TIER and ENV are filled in by addons/select-env (see
+        # kustomization.yaml); missing files are skipped.
+        ignoreMissingValueFiles: true
+        valueFiles:
+          - $values/addons/values/common/blackbox-exporter.yaml
+          - $values/addons/values/TIER/blackbox-exporter.yaml
+          - $values/addons/values/ENV/blackbox-exporter.yaml
+    - repoURL: https://github.com/kumarisback/gitops.git
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

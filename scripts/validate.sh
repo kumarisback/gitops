@@ -12,9 +12,10 @@
 #   - every Helm add-on renders with its layered values and passes kubeconform
 #   - this repo's own charts (charts/) lint with every environment's values,
 #     and their unit tests (charts/*/tests, helm-unittest) pass
-#   - Alloy, OpenTelemetry Collector, Loki and Alertmanager accept the
-#     config they will actually be given (alloy validate, otelcol validate,
-#     loki -verify-config, amtool check-config)
+#   - Alloy, OpenTelemetry Collector, Loki, Alertmanager and the blackbox
+#     exporter accept the config they will actually be given (alloy
+#     validate, otelcol validate, loki -verify-config, amtool check-config,
+#     blackbox_exporter --config.check)
 #   - every PrometheusRule passes promtool check rules, and the rule unit
 #     tests in tests/prometheus pass
 #   - every Grafana dashboard ConfigMap holds valid JSON
@@ -40,7 +41,7 @@ rm -rf "${OUT}"
 mkdir -p "${OUT}"/{kustomize,helm,configs,rules,logs} "${CACHE}"/{charts,kubeconform}
 
 missing=()
-for tool in kubectl helm kubeconform promtool amtool alloy otelcol-contrib loki ruby; do
+for tool in kubectl helm kubeconform promtool amtool alloy otelcol-contrib loki blackbox_exporter ruby; do
   command -v "${tool}" > /dev/null 2>&1 || missing+=("${tool}")
 done
 helm unittest --help > /dev/null 2>&1 || missing+=("helm-unittest plugin")
@@ -146,6 +147,7 @@ otelcol_check() {
 }
 loki_check()   { extract configmap "$1" config.yaml '^loki$' "$2" && loki -verify-config -config.expand-env=true -config.file="$2"; }
 am_check()     { extract secret "$1" alertmanager.yaml '^alertmanager-' "$2" && amtool check-config "$2"; }
+blackbox_check() { extract configmap "$1" blackbox.yaml "$2" && blackbox_exporter --config.check --config.file="$2"; }
 
 for env in "${ENVS[@]}"; do
   echo "Helm add-ons (${env})"
@@ -165,6 +167,7 @@ for env in "${ENVS[@]}"; do
       opentelemetry-collector) check "${env}/${name}: otelcol validate" otelcol_check "${dest}" "${cfg}.yaml" ;;
       loki) check "${env}/${name}: loki -verify-config" loki_check "${dest}" "${cfg}.yaml" ;;
       kube-prometheus-stack) check "${env}/${name}: amtool check-config" am_check "${dest}" "${cfg}.yaml" ;;
+      prometheus-blackbox-exporter) check "${env}/${name}: blackbox_exporter --config.check" blackbox_check "${dest}" "${cfg}.yaml" ;;
     esac
   done < "${OUT}/releases-${env}.jsonl"
 done

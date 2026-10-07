@@ -1,7 +1,7 @@
 pipeline {
   // ci/Dockerfile pins every tool scripts/validate.sh needs (kubectl,
   // kustomize, helm + helm-unittest, kubeconform, promtool, amtool, alloy, otelcol-contrib,
-  // loki), so a build validates with the same versions the clusters run.
+  // loki, blackbox_exporter), so a build validates with the same versions the clusters run.
   agent {
     dockerfile {
       dir 'ci'
