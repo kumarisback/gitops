@@ -191,6 +191,10 @@ There are two ways to deploy it:
 | Docker Desktop | `./scripts/start-lab.sh` | ArgoCD, from `root-app-local` (syncs the checked-out branch, which must be pushed; set `LAB_REVISION` to pick another) |
 | Podman | `./scripts/start-lab-podman.sh` | `scripts/sync-local-stack.rb`, which runs `helm upgrade --install` with the chart versions from `addons/applications` and the values from `addons/values/{common,local}` and `kubectl apply -k apps/local` from your working tree. ArgoCD stays installed for its UI, with auto-sync off. |
 
+order-service is deployed from this repo's own Helm chart (`charts/microservice`,
+values in `apps/local/order-service.values.yaml`; see `docs/HELM.md`); the
+other two services from `apps/local` with Kustomize. The sync handles both.
+
 After a code change in `../app`, rebuild and restart one or more services with
 `./scripts/update-and-redeploy-podman.sh order-service`.
 

@@ -81,7 +81,9 @@ kubectl get endpoints -n <namespace> <service>               # empty = no ready 
 
 Prometheus → Status → Targets should list `serviceMonitor/<namespace>/<service>-monitor/0`.
 
-**Act:** restore the label or ServiceMonitor from Git (`apps/base/<service>/`).
+**Act:** restore the label or ServiceMonitor from Git: `apps/base/<service>/` for
+frontend and user-service, `charts/microservice` (and `apps/<env>/order-service.values.yaml`)
+for order-service.
 Until this is fixed, the service's SLO alerts can't fire.
 
 ---

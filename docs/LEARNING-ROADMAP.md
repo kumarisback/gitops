@@ -118,7 +118,7 @@ without notes. If you can't do (c), don't move on.
 ## Progress tracker
 
 ✅ done · 🟡 partly done · ☐ not started. Last reviewed against the `tf`, `gitops` and
-app repos on 2026-10-05 (updated after completing steps 01–10); the `tf/learning-topics` notes cover the steps marked done or partly done.
+app repos on 2026-10-05 (updated after completing steps 01–10; step 06 on 2026-10-07); the `tf/learning-topics` notes cover the steps marked done or partly done.
 
 | # | Branch | Phase | 💰 | Done | Notes |
 |---|---|---|---|---|---|
@@ -127,7 +127,7 @@ app repos on 2026-10-05 (updated after completing steps 01–10); the `tf/learni
 | 03 | `03-ingress-tls-dns` | A |  | 🟡 | Deferred to the end (no domain yet). Done: one shared ALB with path routing, frontend on ClusterIP. Pending: domain + Route53 zone, ACM cert, ExternalDNS, cert-manager |
 | 04 | `04-autoscaling` | A |  | ✅ | HPA, VPA (recommend-only), Karpenter 1.14 / v1 / AL2023; Cluster Autoscaler skipped for Karpenter. To run on dev: load + spot-interruption tests (tf topic 05) |
 | 05 | `05-storage-statefulsets` | A |  | ✅ | EBS CSI + gp3/gp3-retain, EFS, snapshots, StatefulSet, S3 for Loki/Tempo. To run on dev: the topic's exercises (tf topic 06) |
-| 06 | `06-helm-authoring` | A |  | ☐ |  |
+| 06 | `06-helm-authoring` | A |  | ✅ | `charts/microservice` + `charts/common` library; order-service on Helm in every env, frontend/user-service stay on Kustomize; lint, unit tests, render in validate/Jenkins; published to ECR from main. No Ingress in the chart (one shared ALB Ingress). To run on dev: install from ECR + `helm rollback`, ArgoCD Synced (tf topic 10) |
 | 07 | `07-prometheus-grafana` | B: Observability | 💰 | ✅ | tf topic 07 |
 | 08 | `08-alerting-slo` | B |  | ✅ | Built, unit-tested, with scripts/alert-drill.sh. To do: real Slack/PagerDuty keys in Secrets Manager (tf topic 07) |
 | 09 | `09-elk-logging` | B | 💰💰 | ✅ | Done with Loki instead of ELK (decision 2026-10-05): JSON logs, correlation, masking, edge/api/server (tf topic 08) |

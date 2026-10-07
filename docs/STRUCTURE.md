@@ -32,7 +32,8 @@ Each cluster (local lab, dev, staging, prod) has an **entry folder**,
 
 ```
 gitops/
-├── apps/                    the 3 services (frontend, order-service, user-service)
+├── apps/                    the 3 services: frontend and user-service with Kustomize,
+│   │                          order-service with our own Helm chart (charts/, docs/HELM.md)
 │   ├── base/                  shared YAML for all environments
 │   ├── components/  ★         shared settings used by all envs: tracing
 │   │                            (otel-instrumentation) and request payload
@@ -48,6 +49,8 @@ gitops/
 │   └── select-env/            picks the right layers for each environment
 │
 ├── observability/  ★        alerts, SLOs, dashboards, alerting secrets
+├── charts/  ★               our own Helm charts: microservice (any of the services) and
+│                            common (a library of shared helpers); see HELM.md
 ├── bootstrap/               ArgoCD entry points, one per environment
 ├── platform/                cluster-wide settings for the cloud clusters: RBAC,
 │                            the AWS secret store, disk types (storage/), and
