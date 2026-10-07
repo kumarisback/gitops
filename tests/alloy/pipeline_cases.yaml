@@ -126,3 +126,35 @@ cases:
         log_type: null
       - line: '10.0.0.2 - - [01/Oct/2026:08:35:13 +0000] "GET /favicon.ico HTTP/1.1" 404 153'
         log_type: null
+
+  - name: HTTP Basic credentials in a header dump are masked
+    container: user-service
+    lines:
+      - '{"level":"DEBUG","logger":"org.apache.http.headers","message":"http-outgoing-0 >> Authorization: Basic dXNlcjpwYXNzd29yZA=="}'
+    expect:
+      - line: '{"level":"DEBUG","logger":"org.apache.http.headers","message":"http-outgoing-0 >> Authorization: Basic <redacted>"}'
+        log_type: server
+
+  - name: numeric secret values are masked, in plain and escaped JSON
+    container: order-service
+    lines:
+      - '{"level":"INFO","logger":"access.order-service.http","message":"http_request","cvv":123,"amount":20,"http.request.body.content":"{\"card_number\":4111111111111111,\"qty\":2}"}'
+    expect:
+      - line: '{"level":"INFO","logger":"access.order-service.http","message":"http_request","cvv":"<redacted>","amount":20,"http.request.body.content":"{\"card_number\":\"<redacted>\",\"qty\":2}"}'
+        log_type: api
+
+  - name: cookies in a header dump are masked
+    container: user-service
+    lines:
+      - '{"level":"DEBUG","logger":"x","message":"request headers: Cookie: JSESSIONID=abc123; theme=dark"}'
+    expect:
+      - line: '{"level":"DEBUG","logger":"x","message":"request headers: Cookie: <redacted>"}'
+        log_type: server
+
+  - name: AWS access key IDs and private keys are masked
+    container: user-service
+    lines:
+      - '{"level":"WARN","logger":"x","message":"using AKIAIOSFODNN7EXAMPLE, key -----BEGIN RSA PRIVATE KEY-----\nMIIEow\n-----END RSA PRIVATE KEY----- loaded"}'
+    expect:
+      - line: '{"level":"WARN","logger":"x","message":"using <redacted-aws-key>, key <redacted-private-key> loaded"}'
+        log_type: server

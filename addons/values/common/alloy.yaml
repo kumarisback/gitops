@@ -52,7 +52,9 @@ alloy:
         // Mask credentials in every container's logs before they leave the
         // cluster: each capture group is replaced, the rest of the line is
         // kept. Query-string values stop at "&" or a backslash (JSON loggers
-        // like Traefik write "&" as \u0026). Cases are tested in
+        // like Traefik write "&" as \u0026). Also masked: Basic credentials
+        // and cookies in header dumps, numeric values of secret-like keys,
+        // AWS access key IDs and private keys. Cases are tested in
         // tests/alloy/pipeline_cases.yaml.
         //
         // The services already mask request payloads (RequestLoggingFilter);
@@ -79,6 +81,34 @@ alloy:
         stage.replace {
           expression = "mongodb(?:\\+srv)?://([^:/\\s@]+:[^@/\\s]+)@"
           replace    = "<redacted>"
+        }
+        // Header dumps: Basic credentials and cookies.
+        stage.replace {
+          expression = "(?i)\\bauthorization:\\s*basic\\s+([a-z0-9+/]+=*)"
+          replace    = "<redacted>"
+        }
+        stage.replace {
+          expression = "(?i)\\b(?:set-)?cookie:\\s*([^\"\\\\]+)"
+          replace    = "<redacted>"
+        }
+        // Numeric values of secret-like keys (a card number, a CVV):
+        // escaped JSON first, then plain, so the line stays valid JSON.
+        stage.replace {
+          expression = "(?i)\\\\\"[a-z0-9_.-]*(?:password|passwd|pwd|secret|token|authorization|cookie|api[_-]?key|credit[_-]?card|card[_-]?number|cvv)[a-z0-9_.-]*\\\\\"\\s*:\\s*(-?[0-9][0-9.eE+-]*)"
+          replace    = "\\\"<redacted>\\\""
+        }
+        stage.replace {
+          expression = "(?i)(?:^|[^\\\\])\"[a-z0-9_.-]*(?:password|passwd|pwd|secret|token|authorization|cookie|api[_-]?key|credit[_-]?card|card[_-]?number|cvv)[a-z0-9_.-]*\"\\s*:\\s*(-?[0-9][0-9.eE+-]*)"
+          replace    = "\"<redacted>\""
+        }
+        // Well-known credential formats anywhere in a line.
+        stage.replace {
+          expression = "\\b((?:AKIA|ASIA)[0-9A-Z]{16})\\b"
+          replace    = "<redacted-aws-key>"
+        }
+        stage.replace {
+          expression = "(?s)(-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----)"
+          replace    = "<redacted-private-key>"
         }
 
         // Only the Spring services write one JSON object per line
