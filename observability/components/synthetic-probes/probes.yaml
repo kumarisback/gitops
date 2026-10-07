@@ -1,0 +1,87 @@
+# One Probe per check, each through a module of the blackbox exporter
+# (addons/values/common/blackbox-exporter.yaml). Prometheus scrapes
+# blackbox-exporter:9115/probe?module=<module>&target=<URL> every 30s and
+# gets probe_success, probe_duration_seconds, probe_http_status_code, ...
+#
+# These go straight to each Service, so they test the service and what it
+# depends on, not the way in (ALB or Traefik, DNS, TLS). The lab adds the
+# same checks through Traefik (observability/local/edge-probes.yaml); the
+# cloud's way in is checked from outside by the CloudWatch Synthetics
+# canary (tf repo), and by public-URL Probes once the domain exists.
+#
+# NAMESPACE is replaced from the overlay's observability-env ConfigMap
+# (data.app_namespace); see kustomization.yaml.
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: synthetic-frontend
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/component: service-probe
+    release: kube-prometheus-stack
+spec:
+  jobName: synthetic
+  interval: 30s
+  scrapeTimeout: 10s
+  module: http_2xx
+  prober:
+    url: blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - http://frontend.NAMESPACE.svc.cluster.local/
+      labels:
+        namespace: NAMESPACE
+        service: frontend
+        check: home
+        via: service
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: synthetic-order-service
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/component: service-probe
+    release: kube-prometheus-stack
+spec:
+  jobName: synthetic
+  interval: 30s
+  scrapeTimeout: 10s
+  module: http_2xx_online
+  prober:
+    url: blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - http://order-service.NAMESPACE.svc.cluster.local/api/orders/status
+      labels:
+        namespace: NAMESPACE
+        service: order-service
+        check: status
+        via: service
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: synthetic-user-service
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/component: service-probe
+    release: kube-prometheus-stack
+spec:
+  jobName: synthetic
+  interval: 30s
+  scrapeTimeout: 10s
+  module: http_signin_rejected
+  prober:
+    url: blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - http://user-service.NAMESPACE.svc.cluster.local/api/auth/signin
+      labels:
+        namespace: NAMESPACE
+        service: user-service
+        check: signin
+        via: service

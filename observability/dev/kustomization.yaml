@@ -7,12 +7,15 @@ resources:
 components:
   - ../components/cloud-secrets
   - ../components/browser-otlp-alb
+  - ../components/synthetic-probes
 
-# Picks microservices/dev/... in AWS Secrets Manager (not deployed).
+# env picks microservices/dev/... in AWS Secrets Manager; app_namespace is
+# where the synthetic probes find the services (not deployed).
 configMapGenerator:
   - name: observability-env
     literals:
       - env=dev
+      - app_namespace=development
     options:
       disableNameSuffixHash: true
       annotations:

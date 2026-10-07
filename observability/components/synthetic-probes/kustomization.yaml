@@ -1,0 +1,37 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Synthetic checks of each service (probes.yaml). The including overlay
+# generates a local-config ConfigMap observability-env with
+# data.app_namespace, the namespace its services run in, e.g.
+#
+#   configMapGenerator:
+#     - name: observability-env
+#       literals: [env=dev, app_namespace=development]
+#
+# It replaces NAMESPACE in each target's host
+# (http://<service>.NAMESPACE.svc.cluster.local/..., segment 1 split on ".")
+# and in its namespace label, so alerts carry the services' namespace.
+# Only in this component's Probes: an overlay's own Probes keep their hosts.
+resources:
+  - probes.yaml
+
+replacements:
+  - source:
+      kind: ConfigMap
+      name: observability-env
+      fieldPath: data.app_namespace
+    targets:
+      - select:
+          kind: Probe
+          labelSelector: app.kubernetes.io/component=service-probe
+        fieldPaths:
+          - spec.targets.staticConfig.static.0
+        options:
+          delimiter: .
+          index: 1
+      - select:
+          kind: Probe
+          labelSelector: app.kubernetes.io/component=service-probe
+        fieldPaths:
+          - spec.targets.staticConfig.labels.namespace

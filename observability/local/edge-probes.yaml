@@ -1,0 +1,79 @@
+# The lab's checks through its way in: Traefik routes these exactly as it
+# routes a browser on localhost (app-ingress: /api/orders, /api, /). Each
+# repeats a check in ../components/synthetic-probes, so when an edge probe
+# fails and its service probe passes, the problem is the routing (Traefik,
+# the Ingress), not the service.
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: synthetic-edge-frontend
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/component: edge-probe
+    release: kube-prometheus-stack
+spec:
+  jobName: synthetic
+  interval: 30s
+  scrapeTimeout: 10s
+  module: http_2xx
+  prober:
+    url: blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - http://traefik.traefik.svc.cluster.local/
+      labels:
+        namespace: development
+        service: frontend
+        check: home
+        via: ingress
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: synthetic-edge-order-service
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/component: edge-probe
+    release: kube-prometheus-stack
+spec:
+  jobName: synthetic
+  interval: 30s
+  scrapeTimeout: 10s
+  module: http_2xx_online
+  prober:
+    url: blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - http://traefik.traefik.svc.cluster.local/api/orders/status
+      labels:
+        namespace: development
+        service: order-service
+        check: status
+        via: ingress
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: synthetic-edge-user-service
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/component: edge-probe
+    release: kube-prometheus-stack
+spec:
+  jobName: synthetic
+  interval: 30s
+  scrapeTimeout: 10s
+  module: http_signin_rejected
+  prober:
+    url: blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - http://traefik.traefik.svc.cluster.local/api/auth/signin
+      labels:
+        namespace: development
+        service: user-service
+        check: signin
+        via: ingress

@@ -4,3 +4,19 @@ kind: Kustomization
 resources:
   - ../base
   - browser-otlp-ingress.yaml
+  # The synthetic checks through Traefik (the components' go to each Service).
+  - edge-probes.yaml
+
+components:
+  - ../components/synthetic-probes
+
+# The lab's services run in development (not deployed).
+configMapGenerator:
+  - name: observability-env
+    literals:
+      - env=local
+      - app_namespace=development
+    options:
+      disableNameSuffixHash: true
+      annotations:
+        config.kubernetes.io/local-config: "true"
