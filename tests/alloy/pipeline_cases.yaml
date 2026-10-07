@@ -69,9 +69,9 @@ cases:
   - name: a payload secret the service didn't mask is masked here, inside the escaped JSON
     container: user-service
     lines:
-      - '{"level":"INFO","logger":"access.user-service.http","message":"http_request","http.request.method":"POST","url.path":"/api/auth/signup","http.response.status_code":400,"http.request.body":"{\"username\":\"alice\",\"newPassword\":\"hunter2\",\"password\":\"<redacted>\"}"}'
+      - '{"level":"INFO","logger":"access.user-service.http","message":"http_request","http.request.method":"POST","url.path":"/api/auth/signup","http.response.status_code":400,"http.request.body.content":"{\"username\":\"alice\",\"newPassword\":\"hunter2\",\"password\":\"<redacted>\"}"}'
     expect:
-      - line: '{"level":"INFO","logger":"access.user-service.http","message":"http_request","http.request.method":"POST","url.path":"/api/auth/signup","http.response.status_code":400,"http.request.body":"{\"username\":\"alice\",\"newPassword\":\"<redacted>\",\"password\":\"<redacted>\"}"}'
+      - line: '{"level":"INFO","logger":"access.user-service.http","message":"http_request","http.request.method":"POST","url.path":"/api/auth/signup","http.response.status_code":400,"http.request.body.content":"{\"username\":\"alice\",\"newPassword\":\"<redacted>\",\"password\":\"<redacted>\"}"}'
         log_type: api
         tenant: apps
 

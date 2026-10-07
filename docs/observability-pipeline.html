@@ -517,7 +517,7 @@
   "http.response.status_code": 200,
   "duration_ms": 87,
   "http.request.body.size": 44,
-  "http.request.body": "{\"username\":\"alice\",\"password\":\"&lt;redacted&gt;\"}"</span>
+  "http.request.body.content": "{\"username\":\"alice\",\"password\":\"&lt;redacted&gt;\"}"</span>
 }</code></pre>
       </div>
       <div class="sample">
@@ -671,7 +671,7 @@
         <div class="code-wrap"><pre><code id="q1">{namespace="development", log_type="api"}
   | json
   | http_response_status_code >= 400
-  | line_format "{{.http_request_method}} {{.http_route}} {{.http_response_status_code}} {{.duration_ms}}ms {{.http_request_body}}"</code></pre><button class="copy" type="button" data-target="q1" id="copy-q1">Copy</button></div>
+  | line_format "{{.http_request_method}} {{.http_route}} {{.http_response_status_code}} {{.duration_ms}}ms {{.http_request_body_content}}"</code></pre><button class="copy" type="button" data-target="q1" id="copy-q1">Copy</button></div>
         <p>Failed requests with their payload. Drop the status filter for every request. <code>| json</code> turns fields into filters, with dots replaced by underscores.</p>
       </div>
       <div class="q">

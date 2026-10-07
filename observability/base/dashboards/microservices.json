@@ -225,7 +225,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{namespace=\"$namespace\", log_type=\"api\"} | json | line_format \"{{.container}}  {{.http_request_method}} {{or .http_route .url_path}} → {{.http_response_status_code}} in {{.duration_ms}}ms{{if .http_request_body}}  payload={{.http_request_body}}{{end}}  trace_id={{.trace_id}}\""
+          "expr": "{namespace=\"$namespace\", log_type=\"api\"} | json | line_format \"{{.container}}  {{.http_request_method}} {{or .http_route .url_path}} → {{.http_response_status_code}} in {{.duration_ms}}ms{{if .http_request_body_content}}  payload={{.http_request_body_content}}{{end}}  trace_id={{.trace_id}}\""
         }
       ],
       "id": 12

@@ -314,7 +314,7 @@ API log fields use the OpenTelemetry names, the same as on the trace spans:
 | `http.response.status_code` | `201` |
 | `duration_ms` | `12` |
 | `http.request.body.size` | `58` |
-| `http.request.body` | `{"username":"alice","password":"<redacted>"}`, only where enabled (below) |
+| `http.request.body.content` | `{"username":"alice","password":"<redacted>"}`, only where enabled (below) |
 | `error.type` | `java.lang.IllegalStateException`, only when an exception escaped |
 
 **Request payloads** are set per environment in `apps/<env>/kustomization.yaml`
