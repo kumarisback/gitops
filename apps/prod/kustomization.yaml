@@ -6,6 +6,9 @@ resources:
   - app-secrets.yaml
 namespace: production
 
+# order-service is deployed from charts/microservice; its tag is in
+# order-service.values.yaml (docs/HELM.md).
+#
 # Every service runs the image Jenkins built from one app-repo commit: the
 # tag is that commit's full SHA (app Jenkinsfiles), and ECR tags are
 # immutable (tf shared-services), so a tag always means the same image.
@@ -15,8 +18,6 @@ namespace: production
 # staging and prod by copying a tag that has run in the environment before.
 images:
   - name: 602367507570.dkr.ecr.us-east-1.amazonaws.com/frontend
-    newTag: "6d9dfdcb454b4596b14a6cc09e19d9fa5ead7e35"
-  - name: 602367507570.dkr.ecr.us-east-1.amazonaws.com/order-service
     newTag: "6d9dfdcb454b4596b14a6cc09e19d9fa5ead7e35"
   - name: 602367507570.dkr.ecr.us-east-1.amazonaws.com/user-service
     newTag: "6d9dfdcb454b4596b14a6cc09e19d9fa5ead7e35"

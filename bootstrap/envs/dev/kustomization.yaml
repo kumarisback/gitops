@@ -12,6 +12,7 @@ resources:
   - ../../projects/aws-lb-controller-dev.yaml
   - ../../projects/external-secrets-operator-dev.yaml
   - ../../projects/dev.yaml
+  - ../../projects/order-service-dev.yaml
   # Cluster add-ons: metrics-server, logs (Loki/Alloy), metrics
   # (kube-prometheus-stack) and traces (Tempo/OTel Collector).
   - ../../../addons/applications

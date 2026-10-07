@@ -51,10 +51,20 @@ pipeline {
         withEnv(["TARGET_ENV=${params.ENVIRONMENT}", "SERVICE=${params.SERVICE_NAME}", "NEW_TAG=${params.NEW_TAG}"]) {
           sh '''
             set -eu
-            image="602367507570.dkr.ecr.us-east-1.amazonaws.com/${SERVICE}"
-            cd "apps/${TARGET_ENV}"
             echo "Updating ${SERVICE} to tag ${NEW_TAG} in ${TARGET_ENV}..."
-            kustomize edit set image "${image}=${image}:${NEW_TAG}"
+            if [ "${SERVICE}" = order-service ]; then
+              # Deployed from charts/microservice: the tag is image.tag in its
+              # values file. Edited as text, so the file's comments stay.
+              ruby -e 'file, tag = ARGV
+                text = File.read(file)
+                done = text.sub!(/^(image:\n(?:[ \t].*\n)*?  tag: ).*$/) { "#{$1}\"#{tag}\"" }
+                abort("no image.tag in #{file}") unless done
+                File.write(file, text)' "apps/${TARGET_ENV}/order-service.values.yaml" "${NEW_TAG}"
+            else
+              image="602367507570.dkr.ecr.us-east-1.amazonaws.com/${SERVICE}"
+              cd "apps/${TARGET_ENV}"
+              kustomize edit set image "${image}=${image}:${NEW_TAG}"
+            fi
           '''
         }
       }
@@ -84,7 +94,7 @@ pipeline {
               git config user.name "Jenkins CI"
               git config user.email "jenkins@company.com"
               git checkout -b "${branch}"
-              git add "apps/${TARGET_ENV}/kustomization.yaml"
+              git add "apps/${TARGET_ENV}/kustomization.yaml" "apps/${TARGET_ENV}/order-service.values.yaml"
               git commit -m "ci: update ${SERVICE} image tag to ${NEW_TAG} in ${TARGET_ENV}"
               git push origin "${branch}"
 

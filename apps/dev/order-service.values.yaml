@@ -1,0 +1,13 @@
+# order-service in dev, deployed with charts/microservice (docs/HELM.md)
+# instead of Kustomize. Only what differs from the chart's defaults
+# (charts/microservice/values.yaml).
+image:
+  # The full commit SHA Jenkins tagged the image with; the gitops Jenkins job
+  # bumps it by pull request, like the other services' tags in
+  # kustomization.yaml.
+  tag: "6d9dfdcb454b4596b14a6cc09e19d9fa5ead7e35"
+openTelemetry:
+  environment: dev
+# Request payloads in the API log: shared dev: see every payload while testing.
+requestLogging:
+  requestBody: ALWAYS

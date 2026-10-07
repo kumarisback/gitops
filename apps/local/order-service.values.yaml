@@ -1,0 +1,20 @@
+# order-service in the kind lab, deployed with charts/microservice
+# (docs/HELM.md) instead of Kustomize. Only what differs from the chart's
+# defaults (charts/microservice/values.yaml).
+image:
+  # Built and loaded into kind by start-lab-podman.sh, never pulled.
+  tag: latest
+  pullPolicy: IfNotPresent
+# One replica in the lab.
+autoscaling:
+  minReplicas: 1
+  maxReplicas: 1
+openTelemetry:
+  environment: local
+# The lab logs every request payload (apps/components/request-logging).
+requestLogging:
+  requestBody: ALWAYS
+extraEnv:
+  # As for user-service in kustomization.yaml.
+  - name: MANAGEMENT_ENDPOINT_HEALTH_VALIDATE_GROUP_MEMBERSHIP
+    value: "false"

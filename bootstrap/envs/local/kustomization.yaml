@@ -6,6 +6,7 @@ kind: Kustomization
 # OTel Collector) with the lab-sized values from addons/values/local.
 resources:
   - local-apps.yaml
+  - order-service.yaml
   - ../../../addons/applications
 
 # Selects addons/values/local/ for every add-on (see addons/select-env).

@@ -13,6 +13,7 @@ kind: Kustomization
 resources:
   - ../../projects/platform.yaml
   - ../../projects/staging.yaml
+  - ../../projects/order-service-staging.yaml
   # Cluster add-ons: metrics-server, logs (Loki/Alloy), metrics
   # (kube-prometheus-stack) and traces (Tempo/OTel Collector).
   - ../../../addons/applications

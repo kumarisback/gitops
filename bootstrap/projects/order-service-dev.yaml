@@ -1,0 +1,41 @@
+# order-service in dev, deployed with this repo's own Helm chart
+# (charts/microservice, docs/HELM.md) and apps/dev/order-service.values.yaml.
+# frontend and user-service stay on Kustomize (apps/dev), so the two ways
+# can be compared side by side. ArgoCD renders the chart itself (helm
+# template, including its file://../common dependency); there's no Helm
+# release in the cluster.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: order-service
+  namespace: argocd
+  # Git-sourced: follows the root app's revision.
+  labels:
+    app.kubernetes.io/part-of: gitops-config
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/kumarisback/gitops.git
+    targetRevision: HEAD
+    path: charts/microservice
+    helm:
+      releaseName: order-service
+      valueFiles:
+        - ../../apps/dev/order-service.values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: development
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    # The namespace and the app-secrets Secret come from the dev app set;
+    # retry until they exist.
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

@@ -11,6 +11,9 @@ resources:
 
 namespace: development
 
+# order-service is deployed from charts/microservice with
+# order-service.values.yaml (bootstrap/envs/local/order-service.yaml).
+
 # OpenTelemetry: shared agent settings come from ../components/otel-instrumentation.
 # The agent sends every span (parentbased_always_on); which traces are kept
 # is decided after the fact by the collector's tail sampler
@@ -57,16 +60,6 @@ patches:
         value: 1
   - target:
       kind: HorizontalPodAutoscaler
-      name: order-hpa
-    patch: |-
-      - op: replace
-        path: /spec/minReplicas
-        value: 1
-      - op: replace
-        path: /spec/maxReplicas
-        value: 1
-  - target:
-      kind: HorizontalPodAutoscaler
       name: user-service-hpa
     patch: |-
       - op: replace
@@ -91,15 +84,6 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: IfNotPresent
-  - target:
-      kind: Deployment
-      name: order-service
-    patch: |-
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: MANAGEMENT_ENDPOINT_HEALTH_VALIDATE_GROUP_MEMBERSHIP
-          value: "false"
   - target:
       kind: Deployment
       name: user-service
