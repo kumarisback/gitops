@@ -3,6 +3,10 @@ kind: Application
 metadata:
   name: dev-env
   namespace: argocd
+  # Git-sourced: follows the root app's revision (see bootstrap/root-app-local.yaml
+  # and the tf repo's root app).
+  labels:
+    app.kubernetes.io/part-of: gitops-config
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:

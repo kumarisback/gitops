@@ -18,9 +18,13 @@ spec:
       # Keep the child apps (and the add-ons' values files) on the same
       # revision as this one.
       patches:
+        # Every child Application deploys the same revision as this root:
+        # the Git-sourced ones (part-of=gitops-config) through their source,
+        # the Helm add-ons (part-of=cluster-addons) through their values
+        # source. start-lab.sh replaces HEAD with LAB_REVISION.
         - target:
             kind: Application
-            name: local-apps|observability-config
+            labelSelector: app.kubernetes.io/part-of=gitops-config
           patch: |-
             - op: replace
               path: /spec/source/targetRevision

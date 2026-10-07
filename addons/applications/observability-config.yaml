@@ -8,6 +8,8 @@ metadata:
   namespace: argocd
   labels:
     app.kubernetes.io/name: observability-config
+    # Git-sourced: follows the root app's revision.
+    app.kubernetes.io/part-of: gitops-config
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
