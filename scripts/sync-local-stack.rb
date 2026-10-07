@@ -39,7 +39,17 @@ def sync_helm_app(release, failures)
       files.unshift(inline)
     end
     value_args = files.map { |f| "-f #{f}" }.join(' ')
-    ok = run(%(helm upgrade --install #{release['name']} #{release['chart']} --repo #{release['repo']} --version #{release['version']} -n #{release['namespace']} --create-namespace #{value_args} --wait --timeout 5m))
+    # A chart from this repo (charts/microservice) is installed from its
+    # directory, after building its file:// dependencies from Chart.lock.
+    # --take-ownership (Helm 3.17+) adopts objects kubectl applied before:
+    # a lab created when the service was still deployed with Kustomize.
+    source = if release['local']
+               run(%(helm dependency build #{release['chart']})) or (failures << release['name'] and return)
+               "#{release['chart']} --take-ownership"
+             else
+               "#{release['chart']} --repo #{release['repo']} --version #{release['version']}"
+             end
+    ok = run(%(helm upgrade --install #{release['name']} #{source} -n #{release['namespace']} --create-namespace #{value_args} --wait --timeout 5m))
     failures << release['name'] unless ok
   end
 end

@@ -23,6 +23,8 @@ ARG ALERTMANAGER_VERSION=0.27.0
 ARG ALLOY_VERSION=1.18.1
 ARG OTELCOL_VERSION=0.160.0
 ARG LOKI_VERSION=3.0.0
+# helm unittest, for charts/*/tests.
+ARG HELM_UNITTEST_VERSION=1.2.1
 
 ARG KUBECTL_SHA256_amd64=5de4e9f2266738fd112b721265a0c1cd7f4e5208b670f811861f699474a100a3
 ARG KUBECTL_SHA256_arm64=d595d1a26b7444e0beb122e25750ee4524e74414bbde070b672b423139295ce6
@@ -73,6 +75,14 @@ RUN set -eux; \
     unzip -q loki.zip && install -m 0755 "loki-linux-${arch}" /usr/local/bin/loki; \
     rm -rf /tmp/*; \
     for t in kubectl kustomize helm kubeconform promtool amtool alloy otelcol-contrib loki; do command -v "$t"; done
+
+# helm unittest, in a fixed plugin directory (Jenkins' HELM_DATA_HOME below
+# is per build). Its install hook downloads the binary and checks it against
+# the release's published SHA-256.
+ENV HELM_PLUGINS=/opt/helm/plugins
+RUN mkdir -p "${HELM_PLUGINS}" \
+ && helm plugin install https://github.com/helm-unittest/helm-unittest.git --version "v${HELM_UNITTEST_VERSION}" \
+ && helm unittest --help > /dev/null
 
 # Jenkins runs the container as its own uid with no writable home; keep
 # Helm's and kubeconform's caches under /tmp.

@@ -10,6 +10,8 @@
 #   - every kustomize overlay builds, and the output passes kubeconform
 #     (Kubernetes + CRD schemas, strict)
 #   - every Helm add-on renders with its layered values and passes kubeconform
+#   - this repo's own charts (charts/) lint with every environment's values,
+#     and their unit tests (charts/*/tests, helm-unittest) pass
 #   - Alloy, OpenTelemetry Collector, Loki and Alertmanager accept the
 #     config they will actually be given (alloy validate, otelcol validate,
 #     loki -verify-config, amtool check-config)
@@ -41,6 +43,7 @@ missing=()
 for tool in kubectl helm kubeconform promtool amtool alloy otelcol-contrib loki ruby; do
   command -v "${tool}" > /dev/null 2>&1 || missing+=("${tool}")
 done
+helm unittest --help > /dev/null 2>&1 || missing+=("helm-unittest plugin")
 if [ "${#missing[@]}" -gt 0 ]; then
   echo "❌ Missing tools: ${missing[*]} (ci/Dockerfile installs all of them)"
   exit 2
@@ -108,7 +111,13 @@ render_release() {  # JSON DEST
   repo=$(ruby -rjson -e 'puts JSON.parse(ARGV[0])["repo"]' "${json}")
   version=$(ruby -rjson -e 'puts JSON.parse(ARGV[0])["version"]' "${json}")
   ns=$(ruby -rjson -e 'puts JSON.parse(ARGV[0])["namespace"]' "${json}")
-  dir=$(pull_chart "${chart}" "${repo}" "${version}") || return 1
+  if [ "$(ruby -rjson -e 'puts JSON.parse(ARGV[0])["local"] == true' "${json}")" = true ]; then
+    # A chart from this repo: its file:// dependencies come from Chart.lock.
+    dir="${chart}"
+    helm dependency build "${dir}" > /dev/null || return 1
+  else
+    dir=$(pull_chart "${chart}" "${repo}" "${version}") || return 1
+  fi
   # Inline values (Applications that still embed them) go first, then the
   # value files in order, the same precedence ArgoCD uses.
   local inline="${dest%.yaml}.inline-values.yaml"
@@ -158,6 +167,26 @@ for env in "${ENVS[@]}"; do
       kube-prometheus-stack) check "${env}/${name}: amtool check-config" am_check "${dest}" "${cfg}.yaml" ;;
     esac
   done < "${OUT}/releases-${env}.jsonl"
+done
+
+# This repo's own charts (charts/): lint, and the unit tests in
+# charts/<chart>/tests (helm-unittest). The services' rendered releases are
+# schema-checked with the add-ons above.
+echo "Charts"
+for chart in charts/*/; do
+  name=$(basename "${chart}")
+  check "${name}: helm dependency build" helm dependency build "${chart}"
+  if [ "$(sed -n 's/^type: *//p' "${chart}Chart.yaml")" = library ]; then
+    check "${name}: helm lint" helm lint "${chart}"
+  else
+    # An application chart needs real values to render (an image tag, an
+    # environment): lint it with every values file that deploys it.
+    for values in apps/*/*.values.yaml; do
+      env=$(basename "$(dirname "${values}")")
+      check "${name}: helm lint (${env}/$(basename "${values}"))" helm lint "${chart}" -f "${values}"
+    done
+  fi
+  [ -d "${chart}tests" ] && check "${name}: helm unittest" helm unittest "${chart}"
 done
 
 # The lab's ingress controller is installed by start-lab.sh, not ArgoCD:
