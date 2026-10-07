@@ -1,0 +1,121 @@
+# Defaults are what order-service needs; each environment's values file
+# (apps/<env>/<service>.values.yaml) sets the rest. Checked against
+# values.schema.json on every install and render.
+
+# Resource names default to the release name (helm install order-service ...).
+nameOverride: ""
+
+image:
+  repository: 602367507570.dkr.ecr.us-east-1.amazonaws.com/order-service
+  # Required: the full commit SHA Jenkins tagged the image with (immutable in ECR).
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# The port Spring listens on, and its server.servlet.context-path: the
+# actuator (probes, metrics) is served under it.
+containerPort: 8080
+contextPath: /api/orders
+
+service:
+  port: 80
+  annotations:
+    # The ALB health-checks targets at "/" unless told otherwise, which this
+    # service answers with 404 (it lives under its context path).
+    alb.ingress.kubernetes.io/healthcheck-path: /api/orders/actuator/health/readiness
+
+serviceAccount:
+  create: true
+  # The services never call the Kubernetes API, so they get no token.
+  automountToken: false
+
+# Used only when autoscaling is off; with the HPA on, the chart sets no
+# replicas at all, so ArgoCD and the HPA don't fight over the count.
+replicaCount: 1
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Recommendations only (updateMode "Off"), see addons/values/common/vertical-pod-autoscaler.yaml.
+verticalPodAutoscaler:
+  enabled: true
+
+serviceMonitor:
+  enabled: true
+  interval: 15s
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+
+# The Dockerfile runs the app as uid/gid 1000.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+# Paths under contextPath. Liveness and startup check only the app itself,
+# so a database outage can't restart-loop healthy pods; readiness includes
+# MongoDB and takes the pod out of the Service instead.
+probes:
+  startup:
+    path: /actuator/health/liveness
+    periodSeconds: 5
+    failureThreshold: 24
+  readiness:
+    path: /actuator/health/readiness
+    periodSeconds: 5
+    failureThreshold: 3
+  liveness:
+    path: /actuator/health/liveness
+    periodSeconds: 10
+    failureThreshold: 3
+
+# preStop sleep gives the load balancer time to stop sending traffic before
+# Spring starts its graceful shutdown (server.shutdown=graceful, 20s).
+preStopSleepSeconds: 5
+terminationGracePeriodSeconds: 30
+
+# Spread replicas across availability zones (soft: never blocks scheduling).
+topologySpread:
+  enabled: true
+
+# MongoDB connection string, from the app-secrets Secret every environment
+# provides (ExternalSecret in the cloud, start-lab.sh in the lab).
+mongodbUriSecret:
+  name: app-secrets
+  key: MONGO_URI
+
+# The OpenTelemetry Java agent (in the image) and the log "environment"
+# field. Same settings as apps/components/otel-instrumentation.
+openTelemetry:
+  enabled: true
+  endpoint: http://otel-collector-opentelemetry-collector.monitoring:4318
+  # Required: local, dev, staging or production.
+  environment: ""
+  sampler: parentbased_always_on
+
+# Request payloads in the API log: NEVER, ERRORS or ALWAYS
+# (apps/components/request-logging explains the levels).
+requestLogging:
+  requestBody: NEVER
+
+# Extra environment variables, in Kubernetes' env format.
+extraEnv: []
+
+podLabels: {}
+podAnnotations: {}

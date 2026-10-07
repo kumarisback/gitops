@@ -1,0 +1,8 @@
+apiVersion: v2
+name: common
+description: >-
+  Shared template helpers for this repo's application charts: resource names
+  and the standard app.kubernetes.io labels. A library chart renders nothing
+  by itself; charts that depend on it call its templates.
+type: library
+version: 0.1.0

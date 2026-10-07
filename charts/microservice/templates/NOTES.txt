@@ -1,0 +1,5 @@
+{{ include "microservice.name" . }} {{ .Values.image.tag }} in namespace {{ .Release.Namespace }} ({{ .Values.openTelemetry.environment }}).
+
+  kubectl get deploy,pods,hpa -n {{ .Release.Namespace }} -l app={{ include "microservice.name" . }}
+  kubectl port-forward svc/{{ include "microservice.name" . }} 8080:{{ .Values.service.port }} -n {{ .Release.Namespace }}
+  curl http://localhost:8080{{ include "microservice.path" (dict "root" . "path" "/actuator/health") }}

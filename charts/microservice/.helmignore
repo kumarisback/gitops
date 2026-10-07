@@ -1,0 +1,2 @@
+# Unit tests (helm-unittest) aren't part of the packaged chart.
+tests/

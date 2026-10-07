@@ -1,0 +1,24 @@
+suite: service
+templates:
+  - templates/service.yaml
+release:
+  name: order-service
+set:
+  image.tag: 6d9dfdcb454b4596b14a6cc09e19d9fa5ead7e35
+  openTelemetry.environment: dev
+tests:
+  - it: exposes port 80 to the container's http port, labelled for its ServiceMonitor
+    asserts:
+      - equal:
+          path: spec.ports[0]
+          value:
+            name: http
+            port: 80
+            targetPort: http
+            protocol: TCP
+      - equal:
+          path: metadata.labels.app
+          value: order-service
+      - equal:
+          path: metadata.annotations["alb.ingress.kubernetes.io/healthcheck-path"]
+          value: /api/orders/actuator/health/readiness

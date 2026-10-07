@@ -1,0 +1,61 @@
+suite: optional objects
+templates:
+  - templates/hpa.yaml
+  - templates/poddisruptionbudget.yaml
+  - templates/verticalpodautoscaler.yaml
+  - templates/servicemonitor.yaml
+  - templates/serviceaccount.yaml
+release:
+  name: order-service
+set:
+  image.tag: 6d9dfdcb454b4596b14a6cc09e19d9fa5ead7e35
+  openTelemetry.environment: dev
+tests:
+  - it: renders every object by default
+    asserts:
+      - hasDocuments:
+          count: 1
+
+  - it: scales between the configured bounds on CPU
+    template: templates/hpa.yaml
+    asserts:
+      - equal:
+          path: spec.minReplicas
+          value: 2
+      - equal:
+          path: spec.maxReplicas
+          value: 10
+      - equal:
+          path: spec.metrics[0].resource.target.averageUtilization
+          value: 70
+
+  - it: scrapes metrics under the context path
+    template: templates/servicemonitor.yaml
+    asserts:
+      - equal:
+          path: spec.endpoints[0].path
+          value: /api/orders/actuator/prometheus
+      - equal:
+          path: spec.selector.matchLabels.app
+          value: order-service
+
+  - it: lets ArgoCD apply the VPA before its CRD exists, in recommendation mode
+    template: templates/verticalpodautoscaler.yaml
+    asserts:
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-options"]
+          value: SkipDryRunOnMissingResource=true
+      - equal:
+          path: spec.updatePolicy.updateMode
+          value: "Off"
+
+  - it: can switch each one off
+    set:
+      autoscaling.enabled: false
+      podDisruptionBudget.enabled: false
+      verticalPodAutoscaler.enabled: false
+      serviceMonitor.enabled: false
+      serviceAccount.create: false
+    asserts:
+      - hasDocuments:
+          count: 0

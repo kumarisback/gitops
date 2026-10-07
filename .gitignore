@@ -1,2 +1,5 @@
 apps/local/app-secrets.env
 .validate/
+# Chart dependencies, rebuilt from Chart.lock by `helm dependency build`
+# (ArgoCD, validate.sh and the lab sync all run it).
+charts/*/charts/
