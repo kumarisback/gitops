@@ -21,11 +21,21 @@ process is up":
 |---|---|---|---|
 | `frontend` / `home` | `GET /` | 2xx | nginx serves the app |
 | `order-service` / `status` | `GET /api/orders/status` | 2xx and the body has `"status":"ONLINE"` | order-service answers its API, not only its health check |
-| `user-service` / `signin` | `POST /api/auth/signin` as a user that doesn't exist | exactly **401** | user-service, its security chain and MongoDB all answered: if MongoDB is down, sign-in returns 500 and the check fails |
+| `user-service` / `signin` | `POST /api/auth/signin` with a random password | exactly **401** | user-service, its security chain and MongoDB all answered: if MongoDB is down, sign-in returns 500 and the check fails |
 
-The sign-in check uses made-up credentials, so it needs no secret and
-never signs in. It depends on user-service returning 401 for wrong
-credentials and 500 only for its own faults (app repo, `GlobalExceptionHandler`).
+The sign-in check never signs in. Its password is random, made when the
+exporter's pod starts and kept only in memory: anyone can sign up, so a
+password in Git would let anyone register `synthetic-probe` with it and
+fail the check (and page on-call) at will. A 200 therefore means sign-in
+accepted a password nobody knows. The check depends on user-service
+returning 401 for wrong credentials and 500 only for its own faults (app
+repo, `GlobalExceptionHandler`).
+
+The exporter fetches whatever URL `/probe` is given, so it is locked down
+like a proxy: a NetworkPolicy lets only Prometheus call it and lets it
+reach only DNS and the namespaces it probes (not the node's metadata
+service). It takes effect once the cluster enforces NetworkPolicy
+(roadmap step 19); public-URL probes will need an egress rule added.
 
 ## Where it checks from
 
@@ -64,7 +74,8 @@ working with them.
 
 ```
 addons/applications/blackbox-exporter.yaml     the exporter (prometheus-blackbox-exporter chart)
-addons/values/common/blackbox-exporter.yaml    how to probe: the three modules
+addons/values/common/blackbox-exporter.yaml    how to probe: the three modules, the random
+                                               sign-in password, the NetworkPolicy
 addons/values/cloud/blackbox-exporter.yaml     two replicas, spread over nodes
 observability/components/synthetic-probes/     what to probe: one Probe per service
 observability/local/edge-probes.yaml           the same checks through Traefik (lab)

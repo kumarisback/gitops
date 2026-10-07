@@ -29,8 +29,13 @@ config:
     # Sign-in with a user that doesn't exist must be refused with 401. A
     # 401 means user-service answered, its security chain ran and MongoDB
     # was asked for the user: if MongoDB can't be reached, sign-in returns
-    # 500 and the probe fails. Not a real credential: the probe never
-    # signs in, so no secret is needed.
+    # 500 and the probe fails.
+    #
+    # The password is random, made when the pod starts (extraInitContainers
+    # below), and never written anywhere else. Anyone can sign up, so a
+    # password in Git would let anyone register synthetic-probe with it and
+    # page on-call at will. With a random one, a 200 means sign-in accepted
+    # a password nobody knows: authentication itself is broken.
     http_signin_rejected:
       prober: http
       timeout: 5s
@@ -40,8 +45,88 @@ config:
         headers:
           Content-Type: application/json
           User-Agent: blackbox-exporter (synthetic probe)
-        body: '{"username":"synthetic-probe","password":"synthetic-probe-not-a-password"}'
+        body_file: /etc/blackbox-probe/signin.json
         valid_status_codes: [401]
+
+# Writes the sign-in body with a random password into a memory-backed
+# volume the exporter reads (body_file above). The kernel's random UUIDs
+# (122 random bits each) need nothing but cat; the chart's own image runs it.
+extraInitContainers: |
+  - name: signin-body
+    image: {{ include "prometheus-blackbox-exporter.image" . }}
+    command:
+      - /bin/sh
+      - -c
+      - >-
+        printf '{"username":"synthetic-probe","password":"%s-%s"}'
+        "$(cat /proc/sys/kernel/random/uuid)" "$(cat /proc/sys/kernel/random/uuid)"
+        > /etc/blackbox-probe/signin.json
+    securityContext:
+      {{- toYaml .Values.securityContext | nindent 4 }}
+    resources:
+      requests:
+        cpu: 10m
+        memory: 8Mi
+      limits:
+        memory: 8Mi
+    volumeMounts:
+      - name: probe-body
+        mountPath: /etc/blackbox-probe
+extraVolumes:
+  - name: probe-body
+    emptyDir:
+      medium: Memory
+      sizeLimit: 1Mi
+extraVolumeMounts:
+  - name: probe-body
+    mountPath: /etc/blackbox-probe
+    readOnly: true
+
+# /probe fetches whatever URL it's given, so anything that can reach the
+# exporter can make it send requests (server-side request forgery). Only
+# Prometheus may call it, and it may only reach DNS and the namespaces it
+# probes: not the node's metadata service, not the VPC, not the internet.
+# Probes of public URLs (the domain, roadmap step 03) need an egress rule
+# for them. Enforced once the cluster's network plugin enforces
+# NetworkPolicy (roadmap step 19); until then it documents the intent.
+extraManifests:
+  - apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: blackbox-exporter
+    spec:
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus-blackbox-exporter
+          app.kubernetes.io/instance: blackbox-exporter
+      policyTypes: [Ingress, Egress]
+      ingress:
+        - from:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: prometheus
+          ports:
+            - port: 9115
+              protocol: TCP
+      egress:
+        - to:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: kube-system
+              podSelector:
+                matchLabels:
+                  k8s-app: kube-dns
+          ports:
+            - port: 53
+              protocol: UDP
+            - port: 53
+              protocol: TCP
+        - to:
+            - namespaceSelector:
+                matchExpressions:
+                  - key: kubernetes.io/metadata.name
+                    operator: In
+                    values: [development, staging, production, traefik]
 
 # Its own metrics (probe counts, config reloads), not the probe results.
 serviceMonitor:

@@ -193,8 +193,10 @@ the same thing get the same result.
 - only `via="ingress"` failing: the routing. `kubectl get ingress app-ingress -n development -o yaml`,
   Traefik's logs (`kubectl logs -n traefik deploy/traefik`).
 - `check="signin"` with status 500: user-service couldn't check the
-  credentials, usually MongoDB. With 200: someone created the
-  `synthetic-probe` user with the probe's password; delete that user.
+  credentials, usually MongoDB. With **200**: sign-in accepted a random
+  password (the probe makes a new one each time its pod starts), so
+  authentication itself is broken. Treat it as a security incident: roll
+  back the last user-service release.
 - `check="status"` with status 200: order-service answered without
   `"status":"ONLINE"`.
 
