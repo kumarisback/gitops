@@ -128,10 +128,12 @@ observability/
 │   ├── slo-rules.yaml           SLOs: 99.5% of requests OK, 99% under 500ms
 │   ├── service-alerts.yaml      "a service is down"
 │   ├── pipeline-alerts.yaml     "logs or traces stopped flowing"
-│   └── dashboards/              Microservices and SLO dashboards (JSON)
+│   ├── synthetic-alerts.yaml    "a user-facing check is failing" (SYNTHETIC-MONITORING.md)
+│   └── dashboards/              Is everything OK?, Microservices and SLO dashboards (JSON)
 ├── components/
 │   ├── cloud-secrets/           Slack, PagerDuty and Grafana secrets from AWS Secrets Manager
-│   └── browser-otlp-alb/        cloud route for browser traces (/otlp)
+│   ├── browser-otlp-alb/        cloud route for browser traces (/otlp)
+│   └── synthetic-probes/        what the blackbox exporter checks, every 30s
 └── local|dev|staging|prod/      picks what each environment needs
 ```
 
