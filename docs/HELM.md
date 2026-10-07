@@ -90,7 +90,7 @@ helm rollback order-service 1 -n development
 ```bash
 helm dependency build charts/microservice
 helm lint charts/microservice -f apps/dev/order-service.values.yaml
-helm unittest charts/microservice               # plugin: helm-unittest v1.2.1
+helm unittest charts/microservice               # plugin: helm-unittest v1.0.3
 helm template order-service charts/microservice -n development -f apps/local/order-service.values.yaml
 ```
 

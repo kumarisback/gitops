@@ -23,8 +23,9 @@ ARG ALERTMANAGER_VERSION=0.27.0
 ARG ALLOY_VERSION=1.18.1
 ARG OTELCOL_VERSION=0.160.0
 ARG LOKI_VERSION=3.0.0
-# helm unittest, for charts/*/tests.
-ARG HELM_UNITTEST_VERSION=1.2.1
+# helm unittest, for charts/*/tests. 1.0.3 is the last release Helm 3 can
+# load: from 1.1.0 its plugin.yaml has platformHooks, which Helm 3 rejects.
+ARG HELM_UNITTEST_VERSION=1.0.3
 
 ARG KUBECTL_SHA256_amd64=5de4e9f2266738fd112b721265a0c1cd7f4e5208b670f811861f699474a100a3
 ARG KUBECTL_SHA256_arm64=d595d1a26b7444e0beb122e25750ee4524e74414bbde070b672b423139295ce6
@@ -44,10 +45,16 @@ ARG OTELCOL_SHA256_amd64=7bb60c584c241c86261c2b8697cd3725dd8c56691f5ad5d98454eaa
 ARG OTELCOL_SHA256_arm64=bff414e6a287309dfd0c51350c1e13c96c4ab807127b4320bd684f605e781326
 ARG LOKI_SHA256_amd64=6f6cb5cfb1ea9c00794b3928a7af0e448930b2854938f3a18012c707158c4f7a
 ARG LOKI_SHA256_arm64=2f7b406fea48eccd7a6e08187d7dedb77cff38f4f04e271982a7185d3a68225c
+ARG HELM_UNITTEST_SHA256_amd64=9761f23d9509c98770c026e019e743b524b57010f4bc29175f78d2582ace0633
+ARG HELM_UNITTEST_SHA256_arm64=1e645d96b36582cd8b9fbd53240110267f14d80aa01137341251c60438bbe6b0
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends bash ca-certificates curl git jq ruby unzip \
  && rm -rf /var/lib/apt/lists/*
+
+# Helm plugins live under HELM_DATA_HOME by default, which is /tmp below;
+# keep helm unittest in a fixed directory instead.
+ENV HELM_PLUGINS=/opt/helm/plugins
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN set -eux; \
@@ -73,16 +80,12 @@ RUN set -eux; \
     tar -xzf otelcol.tgz -C /usr/local/bin otelcol-contrib; \
     fetch "https://github.com/grafana/loki/releases/download/v${LOKI_VERSION}/loki-linux-${arch}.zip" loki.zip "$(sha LOKI)"; \
     unzip -q loki.zip && install -m 0755 "loki-linux-${arch}" /usr/local/bin/loki; \
+    fetch "https://github.com/helm-unittest/helm-unittest/releases/download/v${HELM_UNITTEST_VERSION}/helm-unittest-linux-${arch}-${HELM_UNITTEST_VERSION}.tgz" helm-unittest.tgz "$(sha HELM_UNITTEST)"; \
+    mkdir -p "${HELM_PLUGINS}/helm-unittest"; \
+    tar -xzf helm-unittest.tgz -C "${HELM_PLUGINS}/helm-unittest" plugin.yaml untt; \
     rm -rf /tmp/*; \
-    for t in kubectl kustomize helm kubeconform promtool amtool alloy otelcol-contrib loki; do command -v "$t"; done
-
-# helm unittest, in a fixed plugin directory (Jenkins' HELM_DATA_HOME below
-# is per build). Its install hook downloads the binary and checks it against
-# the release's published SHA-256.
-ENV HELM_PLUGINS=/opt/helm/plugins
-RUN mkdir -p "${HELM_PLUGINS}" \
- && helm plugin install https://github.com/helm-unittest/helm-unittest.git --version "v${HELM_UNITTEST_VERSION}" \
- && helm unittest --help > /dev/null
+    for t in kubectl kustomize helm kubeconform promtool amtool alloy otelcol-contrib loki; do command -v "$t"; done; \
+    helm unittest --help > /dev/null
 
 # Jenkins runs the container as its own uid with no writable home; keep
 # Helm's and kubeconform's caches under /tmp.
