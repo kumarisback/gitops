@@ -109,6 +109,11 @@ alertmanager:
       - source_matchers: ['alertname="ServiceUnavailable"']
         target_matchers: ['alertname=~"ServiceDown|ServiceMetricsMissing|SLO.+"']
         equal: [job]
+      # An unreachable blackbox exporter is also TargetDown for the
+      # synthetic job; SyntheticProberDown says what that means.
+      - source_matchers: ['alertname="SyntheticProberDown"']
+        target_matchers: ['alertname="TargetDown"', 'job="synthetic"']
+        equal: [namespace]
     receivers:
       - name: "null"
       - name: heartbeat

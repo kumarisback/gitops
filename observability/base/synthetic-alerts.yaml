@@ -1,0 +1,83 @@
+# Synthetic (outside-in) checks: the blackbox exporter calls each endpoint
+# the way a client would, every 30s, as configured by the Probe objects in
+# observability/components/synthetic-probes (and the lab's edge-probes).
+# Unlike the SLO alerts they don't need real traffic: with no users at 3am,
+# a broken sign-in still fires EndpointDown.
+#
+# Probe series carry job="synthetic" and the labels service, check and via
+# (service: straight to the Service; ingress: through the lab's Traefik).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: synthetic-alerts
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: synthetic
+      rules:
+        - alert: EndpointDown
+          expr: probe_success{job="synthetic"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.service }} {{ $labels.check }} check is failing (via {{ $labels.via }})"
+            description: "The synthetic probe of {{ $labels.instance }} has failed for 2 minutes: no answer, a wrong status code, a body without the expected content, or a TLS error. A user doing the same thing gets the same result."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#endpointdown
+        # A failing probe takes its whole timeout, so failures are left to
+        # EndpointDown.
+        - alert: EndpointSlow
+          expr: |
+            avg_over_time(probe_duration_seconds{job="synthetic"}[5m]) > 1
+            unless on (instance)
+            probe_success{job="synthetic"} == 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.service }} {{ $labels.check }} check takes {{ $value | humanizeDuration }} (via {{ $labels.via }})"
+            description: "The synthetic probe of {{ $labels.instance }} has averaged over 1s for 15 minutes. It still succeeds, but users are waiting."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#endpointslow
+        # Only for https:// targets: none until the domain and its
+        # certificate exist (roadmap step 03). The same alert name twice:
+        # while the critical one fires, Alertmanager holds back the warning.
+        - alert: TLSCertificateExpiringSoon
+          expr: (probe_ssl_earliest_cert_expiry{job="synthetic"} - time()) / 86400 < 21
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The TLS certificate of {{ $labels.instance }} expires in {{ $value | printf \"%.0f\" }} days"
+            description: "The earliest-expiring certificate the endpoint presents expires in under 21 days. ACM renews its certificates on its own; a renewal that hasn't happened by now is stuck (usually DNS validation)."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#tlscertificateexpiringsoon
+        - alert: TLSCertificateExpiringSoon
+          expr: (probe_ssl_earliest_cert_expiry{job="synthetic"} - time()) / 86400 < 7
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: "The TLS certificate of {{ $labels.instance }} expires in {{ $value | printf \"%.0f\" }} days"
+            description: "Under 7 days left. When it expires, every client refuses the connection."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#tlscertificateexpiringsoon
+        # up is about reaching the exporter, not the endpoint: a probe that
+        # fails still scrapes fine (probe_success 0). With up 0 there is no
+        # probe_success at all, so EndpointDown can't fire.
+        - alert: SyntheticProberDown
+          expr: up{job="synthetic"} == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The {{ $labels.service }} {{ $labels.check }} probe isn't running"
+            description: "Prometheus can't reach the blackbox exporter to probe {{ $labels.instance }}, so EndpointDown can't fire for it: nobody is checking that endpoint from outside."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#syntheticproberdown
+        - alert: SyntheticProbesMissing
+          expr: absent_over_time(up{job="synthetic"}[10m])
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "No synthetic probes are configured"
+            description: "Prometheus has had no synthetic probe targets for 15 minutes: the Probe objects are missing, or Prometheus doesn't select them."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#syntheticprobesmissing

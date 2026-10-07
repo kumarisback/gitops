@@ -5,8 +5,9 @@ One section per alert defined in `observability/base`. Every alert's
 means, how to confirm it, and what to do.
 
 Grafana is at `kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n monitoring`
-(local lab) or the environment's Grafana URL. The two dashboards referenced
-below are **Microservices** and **Service Level Objectives**.
+(local lab) or the environment's Grafana URL. The dashboards referenced
+below are **Is everything OK?** (start there), **Microservices** and
+**Service Level Objectives**.
 
 Severity decides where an alert goes (see Alertmanager in
 `addons/values/cloud/kube-prometheus-stack.yaml`):
@@ -157,6 +158,99 @@ limit), roll back a slow release, or fix the slow dependency the trace shows.
 **Meaning:** a steady share of slow requests over a day or more.
 
 **Check / Act:** as for the fast alert, over 1-3 days; open a ticket.
+
+---
+
+## Synthetic checks
+
+The blackbox exporter makes the same requests a user would, every 30
+seconds, whether or not anyone is using the app (`docs/SYNTHETIC-MONITORING.md`).
+Each probe has the labels `service`, `check` and `via`: `via="service"`
+goes straight to the Service, `via="ingress"` through the lab's Traefik.
+The **Is everything OK?** dashboard shows every check.
+
+Reproduce a check by hand from inside the cluster:
+
+```bash
+kubectl port-forward svc/blackbox-exporter 9115 -n monitoring
+curl -s 'localhost:9115/probe?module=http_signin_rejected&target=http://user-service.<namespace>.svc.cluster.local/api/auth/signin&debug=true'
+```
+
+`debug=true` prints each step of the probe: DNS, connect, the status code,
+the body match, and the reason it failed.
+
+### EndpointDown
+
+**Meaning:** a check has failed for 2 minutes: no answer, a wrong status
+code, a body without the expected content, or a TLS error. Users doing
+the same thing get the same result.
+
+**Check:** which `check` and `via`:
+
+- `via="service"` failing too: the service itself. If `ServiceUnavailable`
+  fires for it, start there. Otherwise look at the probe's debug output
+  and the service's logs (`ServiceDown` above has the queries).
+- only `via="ingress"` failing: the routing. `kubectl get ingress app-ingress -n development -o yaml`,
+  Traefik's logs (`kubectl logs -n traefik deploy/traefik`).
+- `check="signin"` with status 500: user-service couldn't check the
+  credentials, usually MongoDB. With 200: someone created the
+  `synthetic-probe` user with the probe's password; delete that user.
+- `check="status"` with status 200: order-service answered without
+  `"status":"ONLINE"`.
+
+**Act:** roll back a bad release (`git revert` the image-tag commit). For
+routing, revert the Ingress or Traefik change.
+
+### EndpointSlow
+
+**Meaning:** a check still succeeds but has averaged over 1s for 15
+minutes.
+
+**Check:** the debug output splits the time into DNS, connect and the
+response (`probe_http_duration_seconds` by `phase` in Grafana). A slow
+response: the service's latency panels on **Microservices** and a slow
+trace in Tempo. Slow DNS or connect: CoreDNS or the node.
+
+**Act:** as for `SLOLatencyBudgetBurnFast`.
+
+### TLSCertificateExpiringSoon
+
+**Meaning:** an `https://` endpoint's certificate expires in under 21 days
+(`warning`) or 7 days (`critical`). None are probed until the domain
+exists (roadmap step 03).
+
+**Check:** `kubectl port-forward` as above, then
+`curl -s 'localhost:9115/probe?module=http_2xx&target=<url>&debug=true' | grep -i -E 'expiry|issuer'`.
+For an ACM certificate: `aws acm describe-certificate --certificate-arn <arn>`,
+`RenewalSummary`.
+
+**Act:** ACM renews on its own when its DNS validation record still
+exists; restore the CNAME it names. For a cert-manager certificate:
+`kubectl describe certificate -A` and the issuer's events.
+
+### SyntheticProberDown
+
+**Meaning:** Prometheus can't reach the blackbox exporter for a probe, so
+that endpoint is unwatched (`EndpointDown` can't fire). Alertmanager
+holds back the `TargetDown` alert that says the same.
+
+**Check:** `kubectl get pods,endpoints -n monitoring -l app.kubernetes.io/instance=blackbox-exporter`;
+the ArgoCD app `blackbox-exporter`.
+
+**Act:** get the exporter running. A config error after a change shows in
+its logs; `./scripts/validate.sh` runs `blackbox_exporter --config.check`.
+
+### SyntheticProbesMissing
+
+**Meaning:** Prometheus has no synthetic probe targets at all.
+
+**Check:** `kubectl get probes -n monitoring`. None: the ArgoCD app
+`observability-config` (they're in `observability/components/synthetic-probes`).
+Present: Prometheus selects Probes by the label
+`release: kube-prometheus-stack`; check it's on them, and the
+Prometheus Operator's logs for rejected Probes.
+
+**Act:** restore the Probes or their label.
 
 ---
 

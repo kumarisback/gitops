@@ -1,0 +1,124 @@
+# Unit tests for observability/base/synthetic-alerts.yaml (see slo_test.yaml
+# for how validate.sh provides the rule file).
+rule_files:
+  - ../../.validate/rules/observability/synthetic-alerts.yaml
+
+evaluation_interval: 30s
+
+tests:
+  # Sign-in starts failing at 6m (e.g. MongoDB unreachable, so 500 instead
+  # of 401): pending at 7m, firing after 2m.
+  - interval: 1m
+    input_series:
+      - series: 'probe_success{job="synthetic",instance="http://user-service.development.svc.cluster.local/api/auth/signin",namespace="development",service="user-service",check="signin",via="service"}'
+        values: '1x5 0x10'
+    promql_expr_test:
+      - expr: ALERTS{alertname="EndpointDown", alertstate="firing"}
+        eval_time: 7m
+        exp_samples: []
+      - expr: ALERTS{alertname="EndpointDown", alertstate="firing"}
+        eval_time: 9m
+        exp_samples:
+          - labels: 'ALERTS{alertname="EndpointDown",alertstate="firing",check="signin",instance="http://user-service.development.svc.cluster.local/api/auth/signin",job="synthetic",namespace="development",service="user-service",severity="critical",via="service"}'
+            value: 1
+
+  # One failed probe among successes is noise, not an outage.
+  - interval: 1m
+    input_series:
+      - series: 'probe_success{job="synthetic",instance="http://frontend.development.svc.cluster.local/",namespace="development",service="frontend",check="home",via="service"}'
+        values: '1 1 0 1 1 1 1 1 1 1'
+    promql_expr_test:
+      - expr: ALERTS{alertname="EndpointDown"}
+        eval_time: 9m
+        exp_samples: []
+
+  # Through Traefik the check fails while the direct one passes: only the
+  # ingress probe fires, which points at the routing, not the service.
+  - interval: 1m
+    input_series:
+      - series: 'probe_success{job="synthetic",instance="http://order-service.development.svc.cluster.local/api/orders/status",namespace="development",service="order-service",check="status",via="service"}'
+        values: '1x10'
+      - series: 'probe_success{job="synthetic",instance="http://traefik.traefik.svc.cluster.local/api/orders/status",namespace="development",service="order-service",check="status",via="ingress"}'
+        values: '0x10'
+    promql_expr_test:
+      - expr: ALERTS{alertname="EndpointDown", alertstate="firing"}
+        eval_time: 5m
+        exp_samples:
+          - labels: 'ALERTS{alertname="EndpointDown",alertstate="firing",check="status",instance="http://traefik.traefik.svc.cluster.local/api/orders/status",job="synthetic",namespace="development",service="order-service",severity="critical",via="ingress"}'
+            value: 1
+
+  # Succeeding but taking 1.5s: EndpointSlow after 5m of average + 10m.
+  - interval: 1m
+    input_series:
+      - series: 'probe_success{job="synthetic",instance="http://frontend.development.svc.cluster.local/",namespace="development",service="frontend",check="home",via="service"}'
+        values: '1x30'
+      - series: 'probe_duration_seconds{job="synthetic",instance="http://frontend.development.svc.cluster.local/",namespace="development",service="frontend",check="home",via="service"}'
+        values: '1.5x30'
+    promql_expr_test:
+      - expr: ALERTS{alertname="EndpointSlow", alertstate="firing"}
+        eval_time: 16m
+        exp_samples:
+          - labels: 'ALERTS{alertname="EndpointSlow",alertstate="firing",check="home",instance="http://frontend.development.svc.cluster.local/",job="synthetic",namespace="development",service="frontend",severity="warning",via="service"}'
+            value: 1
+
+  # Failing probes take the full 5s timeout: EndpointDown, not EndpointSlow
+  # (and the exporter itself is fine: up is 1).
+  - interval: 1m
+    input_series:
+      - series: 'up{job="synthetic",instance="http://frontend.development.svc.cluster.local/",namespace="development",service="frontend",check="home",via="service"}'
+        values: '1x30'
+      - series: 'probe_success{job="synthetic",instance="http://frontend.development.svc.cluster.local/",namespace="development",service="frontend",check="home",via="service"}'
+        values: '0x30'
+      - series: 'probe_duration_seconds{job="synthetic",instance="http://frontend.development.svc.cluster.local/",namespace="development",service="frontend",check="home",via="service"}'
+        values: '5x30'
+    promql_expr_test:
+      - expr: ALERTS{alertstate="firing"}
+        eval_time: 20m
+        exp_samples:
+          - labels: 'ALERTS{alertname="EndpointDown",alertstate="firing",check="home",instance="http://frontend.development.svc.cluster.local/",job="synthetic",namespace="development",service="frontend",severity="critical",via="service"}'
+            value: 1
+
+  # A certificate with 20 days left: the warning only. With 5 days left
+  # both fire, and Alertmanager's critical-inhibits-warning rule keeps the
+  # page.
+  - interval: 1m
+    input_series:
+      - series: 'probe_ssl_earliest_cert_expiry{job="synthetic",instance="https://app.example.com/",namespace="production",service="frontend",check="home",via="public"}'
+        values: '1728000x30'
+      - series: 'probe_ssl_earliest_cert_expiry{job="synthetic",instance="https://api.example.com/",namespace="production",service="order-service",check="status",via="public"}'
+        values: '432000x30'
+    promql_expr_test:
+      - expr: ALERTS{alertname="TLSCertificateExpiringSoon", alertstate="firing"}
+        eval_time: 20m
+        exp_samples:
+          - labels: 'ALERTS{alertname="TLSCertificateExpiringSoon",alertstate="firing",check="home",instance="https://app.example.com/",job="synthetic",namespace="production",service="frontend",severity="warning",via="public"}'
+            value: 1
+          - labels: 'ALERTS{alertname="TLSCertificateExpiringSoon",alertstate="firing",check="status",instance="https://api.example.com/",job="synthetic",namespace="production",service="order-service",severity="warning",via="public"}'
+            value: 1
+          - labels: 'ALERTS{alertname="TLSCertificateExpiringSoon",alertstate="firing",check="status",instance="https://api.example.com/",job="synthetic",namespace="production",service="order-service",severity="critical",via="public"}'
+            value: 1
+
+  # The exporter can't be reached: no probe_success to alert on, so
+  # SyntheticProberDown says the endpoint is unwatched.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="synthetic",instance="http://user-service.development.svc.cluster.local/api/auth/signin",namespace="development",service="user-service",check="signin",via="service"}'
+        values: '1x3 0x10'
+    promql_expr_test:
+      - expr: ALERTS{alertstate="firing"}
+        eval_time: 10m
+        exp_samples:
+          - labels: 'ALERTS{alertname="SyntheticProberDown",alertstate="firing",check="signin",instance="http://user-service.development.svc.cluster.local/api/auth/signin",job="synthetic",namespace="development",service="user-service",severity="warning",via="service"}'
+            value: 1
+
+  # No Probe targets at all.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="prometheus"}'
+        values: '1x20'
+    promql_expr_test:
+      - expr: ALERTS{alertname="SyntheticProbesMissing", alertstate="firing"}
+        eval_time: 6m
+        exp_samples:
+          - labels: 'ALERTS{alertname="SyntheticProbesMissing",alertstate="firing",job="synthetic",severity="warning"}'
+            value: 1
