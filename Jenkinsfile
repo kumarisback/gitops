@@ -79,6 +79,33 @@ pipeline {
       }
     }
 
+    // A merged chart change is published to ECR as an OCI artifact
+    // (oci://<registry>/charts/microservice:<version>). Only from main, so
+    // only reviewed charts are published; scripts/publish-chart.sh fails if
+    // the chart changed without a version bump.
+    //
+    // It runs on the Jenkins host, not in the ci/Dockerfile container: the
+    // instance role is reachable only from the host (IMDS hop limit 1, tf
+    // modules/jenkins). The host fetches an ECR login token (push/pull only,
+    // 12 hours) and pipes it into the container's Helm, so no container ever
+    // holds the role's credentials, and the token never touches disk, an
+    // environment variable or a command line.
+    stage('Publish Chart') {
+      agent any
+      when {
+        expression { return params.UPDATE_IMAGE != true && (env.BRANCH_NAME == 'main' || env.GIT_BRANCH in ['main', 'origin/main']) }
+      }
+      steps {
+        sh '''
+          set -eu
+          docker build -q -t gitops-ci:publish ci > /dev/null
+          aws ecr get-login-password --region us-east-1 |
+            docker run --rm -i --user "$(id -u):$(id -g)" -v "$PWD:/repo" -w /repo \
+              -e ECR_TOKEN_ON_STDIN=1 gitops-ci:publish ./scripts/publish-chart.sh charts/microservice
+        '''
+      }
+    }
+
     // main is protected: an image change lands through a reviewed pull
     // request (validated by this same pipeline), never a direct push.
     stage('Open Pull Request') {
