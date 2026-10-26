@@ -8,7 +8,8 @@
 #
 # Checks, for every environment (local, dev, staging, prod):
 #   - every kustomize overlay builds, and the output passes kubeconform
-#     (Kubernetes + CRD schemas, strict)
+#     (Kubernetes schemas, strict; custom resources against schemas made from
+#     the CRDs the charts here install, falling back to a community catalog)
 #   - every Helm add-on renders with its layered values and passes kubeconform
 #   - this repo's own charts (charts/) lint with every environment's values,
 #     and their unit tests (charts/*/tests, helm-unittest) pass
@@ -68,28 +69,21 @@ check() {
 }
 
 kubeconform_file() {
-  # CRD definitions themselves come from upstream charts and have no schema
-  # to check against; the custom resources using them are still validated.
+  # CRD definitions themselves are skipped; the custom resources using them
+  # are checked against, in order: Kubernetes' own schemas, schemas made from
+  # the CRDs the charts here install (step 2, so the exact version we
+  # deploy), then the community catalog for anything else.
   kubeconform -strict -summary -kubernetes-version "${KUBE_VERSION}" \
     -skip CustomResourceDefinition -cache "${CACHE}/kubeconform" \
-    -schema-location default -schema-location "${CRD_SCHEMAS}" "$1"
+    -schema-location default \
+    -schema-location "${OUT}/schemas/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json" \
+    -schema-location "${CRD_SCHEMAS}" "$1"
 }
 
 render_kustomize() {  # SRC DEST
   kubectl kustomize --load-restrictor LoadRestrictionsNone "$1" > "$2"
 }
 
-# --- 1. kustomize overlays -------------------------------------------------
-echo "Kustomize overlays"
-KUSTOMIZE_DIRS=(platform platform/karpenter/dev)
-for env in "${ENVS[@]}"; do KUSTOMIZE_DIRS+=("apps/${env}" "observability/${env}" "bootstrap/envs/${env}"); done
-for dir in "${KUSTOMIZE_DIRS[@]}"; do
-  dest="${OUT}/kustomize/$(echo "${dir}" | tr '/' '_').yaml"
-  check "build ${dir}" render_kustomize "${dir}" "${dest}"
-  [ -s "${dest}" ] && check "schema ${dir}" kubeconform_file "${dest}"
-done
-
-# --- 2. Helm add-ons -------------------------------------------------------
 pull_chart() {  # CHART REPO VERSION -> prints the chart directory
   local dir="${CACHE}/charts/$1-$3"
   if [ ! -d "${dir}" ]; then
@@ -120,15 +114,36 @@ render_release() {  # JSON DEST
     dir=$(pull_chart "${chart}" "${repo}" "${version}") || return 1
   fi
   # Inline values (Applications that still embed them) go first, then the
-  # value files in order, the same precedence ArgoCD uses.
+  # value files in order, the same precedence ArgoCD uses. CRDs are included
+  # (ArgoCD installs them too) so step 2 can turn them into schemas.
   local inline="${dest%.yaml}.inline-values.yaml"
   ruby -rjson -e 'print JSON.parse(ARGV[0])["inline_values"].to_s' "${json}" > "${inline}"
   local args=(-f "${inline}")
   while IFS= read -r f; do args+=(-f "${f}"); done < <(ruby -rjson -e 'JSON.parse(ARGV[0])["value_files"].each { |f| puts f }' "${json}")
-  helm template "${name}" "${dir}" -n "${ns}" --kube-version "${KUBE_VERSION}" \
+  helm template "${name}" "${dir}" -n "${ns}" --kube-version "${KUBE_VERSION}" --include-crds \
     --api-versions monitoring.coreos.com/v1 --api-versions monitoring.coreos.com/v1/ServiceMonitor \
     --api-versions monitoring.coreos.com/v1/PrometheusRule --api-versions policy/v1 \
     "${args[@]}" > "${dest}"
+}
+
+# The lab's ingress controller is installed by start-lab.sh, not ArgoCD:
+# render it with the same chart version (its values schema is strict).
+render_traefik() {  # DEST
+  local version dir
+  version=$(sed -n 's/^TRAEFIK_CHART_VERSION="\(.*\)"$/\1/p' scripts/start-lab.sh)
+  dir=$(pull_chart traefik https://traefik.github.io/charts "${version}") || return 1
+  helm template traefik "${dir}" -n traefik --kube-version "${KUBE_VERSION}" \
+    -f local-setup/traefik-values.yaml > "$1"
+}
+
+crd_schemas() {
+  local f n total=0
+  for f in "${OUT}"/kustomize/*.yaml "${OUT}"/helm/*.yaml; do
+    [ -s "${f}" ] || continue
+    n=$(ruby scripts/lib/manifest_tool.rb crd-schemas "${f}" "${OUT}/schemas") || return 1
+    total=$((total + n))
+  done
+  echo "${total} CRD versions"
 }
 
 extract() {  # ARGS... DEST: run manifest_tool with stdout to DEST
@@ -149,16 +164,45 @@ loki_check()   { extract configmap "$1" config.yaml '^loki$' "$2" && loki -verif
 am_check()     { extract secret "$1" alertmanager.yaml '^alertmanager-' "$2" && amtool check-config "$2"; }
 blackbox_check() { extract configmap "$1" blackbox.yaml "$2" && blackbox_exporter --config.check --config.file="$2"; }
 
+# --- 1. Render everything --------------------------------------------------
+# All of it first, so the CRDs the charts install are known (step 2) before
+# any custom resource is checked against them (step 3).
+echo "Render"
+KUSTOMIZE_DIRS=(platform platform/karpenter/dev)
+for env in "${ENVS[@]}"; do KUSTOMIZE_DIRS+=("apps/${env}" "observability/${env}" "streaming/${env}" "bootstrap/envs/${env}"); done
+for dir in "${KUSTOMIZE_DIRS[@]}"; do
+  check "build ${dir}" render_kustomize "${dir}" "${OUT}/kustomize/$(echo "${dir}" | tr '/' '_').yaml"
+done
+RESOLVED_ENVS=()
 for env in "${ENVS[@]}"; do
-  echo "Helm add-ons (${env})"
   if ! ruby scripts/lib/addon_releases.rb "bootstrap/envs/${env}" > "${OUT}/releases-${env}.jsonl" 2> "${OUT}/logs/releases-${env}.log"; then
-    printf '  ✗ resolve releases\n'; sed 's/^/      /' "${OUT}/logs/releases-${env}.log"; FAILED+=("resolve releases ${env}"); continue
+    printf '  ✗ resolve releases (%s)\n' "${env}"; sed 's/^/      /' "${OUT}/logs/releases-${env}.log"; FAILED+=("resolve releases ${env}"); continue
   fi
+  RESOLVED_ENVS+=("${env}")
+  while IFS= read -r rel; do
+    name=$(ruby -rjson -e 'puts JSON.parse(ARGV[0])["name"]' "${rel}")
+    check "${env}/${name}: helm template" render_release "${rel}" "${OUT}/helm/${env}-${name}.yaml"
+  done < "${OUT}/releases-${env}.jsonl"
+done
+check "local/traefik: helm template" render_traefik "${OUT}/helm/local-traefik.yaml"
+
+# --- 2. Schemas for the CRDs we install ------------------------------------
+echo "CRD schemas"
+check "schemas from the rendered CRDs" crd_schemas
+
+# --- 3. Kubernetes schemas and component configs ---------------------------
+echo "Kustomize overlays"
+for dir in "${KUSTOMIZE_DIRS[@]}"; do
+  dest="${OUT}/kustomize/$(echo "${dir}" | tr '/' '_').yaml"
+  [ -s "${dest}" ] && check "schema ${dir}" kubeconform_file "${dest}"
+done
+
+for env in "${RESOLVED_ENVS[@]}"; do
+  echo "Helm add-ons (${env})"
   while IFS= read -r rel; do
     name=$(ruby -rjson -e 'puts JSON.parse(ARGV[0])["name"]' "${rel}")
     chart=$(ruby -rjson -e 'puts JSON.parse(ARGV[0])["chart"]' "${rel}")
     dest="${OUT}/helm/${env}-${name}.yaml"
-    check "${env}/${name}: helm template" render_release "${rel}" "${dest}"
     [ -s "${dest}" ] || continue
     check "${env}/${name}: schema" kubeconform_file "${dest}"
     cfg="${OUT}/configs/${env}-${name}"
@@ -171,6 +215,13 @@ for env in "${ENVS[@]}"; do
     esac
   done < "${OUT}/releases-${env}.jsonl"
 done
+
+echo "Lab ingress controller"
+[ -s "${OUT}/helm/local-traefik.yaml" ] && check "local/traefik: schema" kubeconform_file "${OUT}/helm/local-traefik.yaml"
+
+# Manifests applied by hand when a runbook needs them (not by ArgoCD).
+echo "Operator tools"
+for f in streaming/tools/*.yaml; do check "schema ${f}" kubeconform_file "${f}"; done
 
 # This repo's own charts (charts/): lint, and the unit tests in
 # charts/<chart>/tests (helm-unittest). The services' rendered releases are
@@ -192,19 +243,7 @@ for chart in charts/*/; do
   [ -d "${chart}tests" ] && check "${name}: helm unittest" helm unittest "${chart}"
 done
 
-# The lab's ingress controller is installed by start-lab.sh, not ArgoCD:
-# render it with the same chart version (its values schema is strict).
-echo "Lab ingress controller"
-traefik_check() {
-  local version dir
-  version=$(sed -n 's/^TRAEFIK_CHART_VERSION="\(.*\)"$/\1/p' scripts/start-lab.sh)
-  dir=$(pull_chart traefik https://traefik.github.io/charts "${version}") || return 1
-  helm template traefik "${dir}" -n traefik --kube-version "${KUBE_VERSION}" \
-    -f local-setup/traefik-values.yaml > "${OUT}/helm/local-traefik.yaml" && kubeconform_file "${OUT}/helm/local-traefik.yaml"
-}
-check "local/traefik: helm template + schema" traefik_check
-
-# --- 3. Prometheus rules and Grafana dashboards ----------------------------
+# --- 4. Prometheus rules and Grafana dashboards ----------------------------
 echo "Prometheus rules"
 for f in "${OUT}"/kustomize/*.yaml "${OUT}"/helm/*.yaml; do
   [ -s "${f}" ] && ruby scripts/lib/manifest_tool.rb rules "${f}" "${OUT}/rules" > /dev/null
@@ -214,9 +253,12 @@ if [ -e "${rule_files[0]}" ]; then
   check "promtool check rules (${#rule_files[@]} PrometheusRules)" promtool check rules "${rule_files[@]}"
 fi
 # The unit tests load this repo's rules from .validate/rules/observability/
-# <PrometheusRule name>.yaml (see tests/prometheus/*.yaml).
+# <PrometheusRule name>.yaml (see tests/prometheus/*.yaml), from the lab's
+# observability and streaming renders.
 mkdir -p "${OUT}/rules/observability"
-ruby scripts/lib/manifest_tool.rb rules-by-name "${OUT}/kustomize/observability_local.yaml" "${OUT}/rules/observability"
+for f in "${OUT}/kustomize/observability_local.yaml" "${OUT}/kustomize/streaming_local.yaml"; do
+  [ -s "${f}" ] && ruby scripts/lib/manifest_tool.rb rules-by-name "${f}" "${OUT}/rules/observability"
+done
 tests=(tests/prometheus/*.yaml)
 if [ -e "${tests[0]}" ]; then
   check "promtool test rules (${#tests[@]} files)" promtool test rules "${tests[@]}"
@@ -230,13 +272,13 @@ for f in "${OUT}"/kustomize/*.yaml; do
   fi
 done
 
-# --- 4. log pipeline -------------------------------------------------------
+# --- 5. log pipeline -------------------------------------------------------
 # alloy validate only checks syntax; this runs the real loki.process stages
 # on sample lines (tests/alloy/pipeline_cases.yaml) and checks the output.
 echo "Log pipeline"
 check "alloy pipeline cases" ruby tests/alloy/pipeline_test.rb
 
-# --- 5. lab scripts --------------------------------------------------------
+# --- 6. lab scripts --------------------------------------------------------
 echo "Scripts"
 for f in scripts/*.sh; do check "bash -n ${f}" bash -n "${f}"; done
 for f in scripts/*.rb scripts/lib/*.rb; do check "ruby -c ${f}" ruby -c "${f}"; done

@@ -7,9 +7,38 @@
 #   manifest_tool.rb rules-by-name FILE OUTDIR        same, named <rule>.yaml (for tests)
 #   manifest_tool.rb dashboards FILE                  check every grafana_dashboard JSON
 #   manifest_tool.rb env       FILE                   KEY=VALUE for each literal container env var
+#   manifest_tool.rb crd-schemas FILE OUTDIR          a kubeconform JSON schema per CRD version,
+#                                                     OUTDIR/<group>/<kind>_<version>.json
 require 'base64'
+require 'fileutils'
 require 'json'
 require 'yaml'
+
+# A CRD version's openAPIV3Schema as a kubeconform schema, the way
+# kubeconform's openapi2jsonschema does it: every object with properties
+# rejects unknown fields (strict), except the root (apiVersion, kind,
+# metadata) and objects marked x-kubernetes-preserve-unknown-fields;
+# int-or-string becomes either type.
+def crd_json_schema(node, root = true)
+  case node
+  when Hash
+    if node['x-kubernetes-int-or-string'] || node['format'] == 'int-or-string'
+      return { 'oneOf' => [{ 'type' => 'string' }, { 'type' => 'integer' }] }
+    end
+    out = node.each_with_object({}) do |(k, v), h|
+      # Property names are data, not schema keywords.
+      h[k] = k == 'properties' && v.is_a?(Hash) ? v.transform_values { |p| crd_json_schema(p, false) } : crd_json_schema(v, false)
+    end
+    if out.key?('properties') && !root && !out.key?('additionalProperties') && !node['x-kubernetes-preserve-unknown-fields']
+      out['additionalProperties'] = false
+    end
+    out
+  when Array
+    node.map { |v| crd_json_schema(v, false) }
+  else
+    node
+  end
+end
 
 def docs(file)
   YAML.load_stream(File.read(file)).compact.select { |d| d.is_a?(Hash) }
@@ -63,6 +92,20 @@ when 'dashboards'
       rescue JSON::ParserError => e
         abort "#{d.dig('metadata', 'name')}/#{k}: #{e.message[0, 200]}"
       end
+      count += 1
+    end
+  end
+  puts count
+when 'crd-schemas'
+  outdir = rest[0]
+  count = 0
+  docs(file).select { |d| d['kind'] == 'CustomResourceDefinition' }.each do |d|
+    group = d.dig('spec', 'group')
+    kind = d.dig('spec', 'names', 'kind').downcase
+    (d.dig('spec', 'versions') || []).each do |v|
+      schema = v.dig('schema', 'openAPIV3Schema') or next
+      FileUtils.mkdir_p(File.join(outdir, group))
+      File.write(File.join(outdir, group, "#{kind}_#{v['name']}.json"), JSON.generate(crd_json_schema(schema)))
       count += 1
     end
   end
