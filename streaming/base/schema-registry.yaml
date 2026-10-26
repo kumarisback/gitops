@@ -1,0 +1,273 @@
+# Apicurio Registry (roadmap step 13): where the event schemas live. A
+# producer registers the schema of what it writes, and the registry refuses
+# a new version that would break the readers (global rule COMPATIBILITY=
+# BACKWARD, set by the Job below). Each record carries its schema's ID, so a
+# consumer always knows exactly how it was written.
+#
+# It keeps its data in Kafka itself (storage kind kafkasql), so there is no
+# database to run: the three topics below are its journal. Clients use its
+# Confluent-compatible API: http://schema-registry.kafka.svc:8080/apis/ccompat/v7
+#
+# No authentication on the API: it is reachable only inside the cluster,
+# and the NetworkPolicies of roadmap step 19 narrow it to the services.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: kafkasql-journal
+  labels:
+    strimzi.io/cluster: events
+spec:
+  # Order matters: one partition. Apicurio refuses to start unless nothing
+  # in it is ever deleted (retention -1, cleanup.policy delete).
+  partitions: 1
+  replicas: 3
+  config:
+    cleanup.policy: delete
+    retention.ms: -1
+    retention.bytes: -1
+    min.insync.replicas: 2
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: kafkasql-snapshots
+  labels:
+    strimzi.io/cluster: events
+spec:
+  partitions: 1
+  replicas: 3
+  config:
+    cleanup.policy: delete
+    retention.ms: -1
+    retention.bytes: -1
+    min.insync.replicas: 2
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: registry-events
+  labels:
+    strimzi.io/cluster: events
+spec:
+  partitions: 1
+  replicas: 3
+  config:
+    retention.ms: 604800000      # change notifications: 7 days is plenty
+    min.insync.replicas: 2
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  name: schema-registry
+  labels:
+    strimzi.io/cluster: events
+spec:
+  authentication:
+    type: tls
+  authorization:
+    type: simple
+    acls:
+      - resource: { type: topic, name: kafkasql-journal, patternType: literal }
+        operations: [Read, Write, Describe, DescribeConfigs]
+      - resource: { type: topic, name: kafkasql-snapshots, patternType: literal }
+        operations: [Read, Write, Describe, DescribeConfigs]
+      - resource: { type: topic, name: registry-events, patternType: literal }
+        operations: [Read, Write, Describe, DescribeConfigs]
+      # Each replica reads the whole journal in its own consumer group.
+      - resource: { type: group, name: apicurio-, patternType: prefix }
+        operations: [Read]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: schema-registry
+  labels:
+    app.kubernetes.io/name: schema-registry
+spec:
+  selector:
+    app.kubernetes.io/name: schema-registry
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: schema-registry
+  labels:
+    app.kubernetes.io/name: schema-registry
+spec:
+  # Every replica reads the full journal; any of them can answer.
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: schema-registry
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: schema-registry
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: schema-registry
+      containers:
+        - name: registry
+          image: quay.io/apicurio/apicurio-registry:3.3.3
+          ports:
+            - name: http
+              containerPort: 8080
+            # Health and Prometheus metrics (/health/*, /metrics) live on
+            # Quarkus' separate management port, not the API port.
+            - name: management
+              containerPort: 9000
+          env:
+            - name: APICURIO_STORAGE_KIND
+              value: kafkasql
+            - name: APICURIO_KAFKASQL_BOOTSTRAP_SERVERS
+              value: events-kafka-bootstrap:9093
+            # The topics above are declared in Git; don't create them.
+            - name: APICURIO_KAFKASQL_TOPIC_AUTO_CREATE
+              value: "false"
+            - name: APICURIO_KAFKASQL_SECURITY_PROTOCOL
+              value: SSL
+            - name: APICURIO_KAFKASQL_SECURITY_SSL_KEYSTORE_TYPE
+              value: PKCS12
+            - name: APICURIO_KAFKASQL_SECURITY_SSL_KEYSTORE_LOCATION
+              value: /etc/kafka-user/user.p12
+            - name: APICURIO_KAFKASQL_SECURITY_SSL_KEYSTORE_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: schema-registry, key: user.password}
+            - name: APICURIO_KAFKASQL_SECURITY_SSL_TRUSTSTORE_TYPE
+              value: PKCS12
+            - name: APICURIO_KAFKASQL_SECURITY_SSL_TRUSTSTORE_LOCATION
+              value: /etc/cluster-ca/ca.p12
+            - name: APICURIO_KAFKASQL_SECURITY_SSL_TRUSTSTORE_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: events-cluster-ca-cert, key: ca.password}
+            # Schemas are never deleted through the API: a reader may still
+            # need an old version to decode an old record.
+            - name: APICURIO_REST_DELETION_ARTIFACT_ENABLED
+              value: "false"
+            - name: APICURIO_REST_DELETION_ARTIFACT_VERSION_ENABLED
+              value: "false"
+          readinessProbe:
+            httpGet: {path: /health/ready, port: management}
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: {path: /health/live, port: management}
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            failureThreshold: 6
+          startupProbe:
+            httpGet: {path: /health/live, port: management}
+            periodSeconds: 5
+            failureThreshold: 36
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests: {cpu: 100m, memory: 512Mi}
+            limits: {memory: 512Mi}
+          volumeMounts:
+            - {name: kafka-user, mountPath: /etc/kafka-user, readOnly: true}
+            - {name: cluster-ca, mountPath: /etc/cluster-ca, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        # Its KafkaUser's certificate and the cluster CA: same namespace as
+        # Kafka, so no KafkaAccess needed.
+        - name: kafka-user
+          secret:
+            secretName: schema-registry
+        - name: cluster-ca
+          secret:
+            secretName: events-cluster-ca-cert
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: schema-registry
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: schema-registry
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: schema-registry
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: schema-registry
+  podMetricsEndpoints:
+    - port: management
+      path: /metrics
+---
+# The registry-wide rules, after every sync (idempotent: update, or create
+# if missing). BACKWARD: a new version must be able to read data written
+# with the previous one, so consumers can upgrade before producers. FULL
+# validity: no syntactically invalid schema gets in.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: schema-registry-rules
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: rules
+          image: curlimages/curl:8.23.0
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              api=http://schema-registry:8080/apis/registry/v3
+              until curl -fsS -o /dev/null "${api}/system/info"; do sleep 5; done
+              for rule in COMPATIBILITY=BACKWARD VALIDITY=FULL; do
+                type=${rule%%=*}; config=${rule#*=}
+                body="{\"ruleType\":\"${type}\",\"config\":\"${config}\"}"
+                code=$(curl -s -o /dev/null -w '%{http_code}' -X PUT -H 'Content-Type: application/json' -d "${body}" "${api}/admin/rules/${type}")
+                if [ "${code}" = 404 ]; then
+                  curl -fsS -X POST -H 'Content-Type: application/json' -d "${body}" "${api}/admin/rules"
+                elif [ "${code}" != 200 ]; then
+                  echo "PUT ${type} answered ${code}" >&2; exit 1
+                fi
+                echo "${type} = ${config}"
+              done
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {memory: 32Mi}

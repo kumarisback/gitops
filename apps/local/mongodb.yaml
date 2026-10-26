@@ -3,6 +3,11 @@
 # survives restarts) behind a headless Service. No authentication: it is
 # reachable only inside the KinD cluster. dev/staging/prod use their real
 # database through apps/<env>/app-secrets.yaml.
+#
+# It runs as a replica set of one (rs0): order-service writes an order and
+# its outbox event in one transaction (roadmap step 13), and MongoDB offers
+# transactions only on replica sets (Atlas is one too). The Job at the end
+# initiates the set on first start; MONGO_URI names it (replicaSet=rs0).
 apiVersion: v1
 kind: Service
 metadata:
@@ -37,7 +42,7 @@ spec:
         - name: mongodb
           image: mongo:7.0
           # Keep the WiredTiger cache inside the container's memory limit.
-          args: ["--wiredTigerCacheSizeGB", "0.25"]
+          args: ["--replSet", "rs0", "--bind_ip_all", "--wiredTigerCacheSizeGB", "0.25"]
           ports:
             - name: mongodb
               containerPort: 27017
@@ -74,3 +79,42 @@ spec:
         resources:
           requests:
             storage: 2Gi
+---
+# Makes mongodb-0 the primary of replica set rs0, once. Safe to run again:
+# it does nothing when the set already exists.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mongodb-replica-set-init
+spec:
+  backoffLimit: 10
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      containers:
+        - name: init
+          image: mongo:7.0
+          command:
+            - mongosh
+            - --quiet
+            - --host
+            - mongodb-0.mongodb
+            - --eval
+            - |
+              try {
+                rs.status();
+                print("replica set rs0 already initiated");
+              } catch (e) {
+                if (e.codeName !== "NotYetInitialized") { throw e; }
+                rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongodb-0.mongodb.development.svc.cluster.local:27017"}]});
+                print("replica set rs0 initiated");
+              }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 256Mi}

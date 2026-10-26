@@ -1,0 +1,44 @@
+# Kafka UI (kafbat, the maintained fork of provectus kafka-ui): topics,
+# messages (Avro decoded through the schema registry), consumer groups and
+# lag, schemas. Read-only, and reachable only through port-forward:
+#   kubectl port-forward svc/kafka-ui 8080:80 -n kafka   # http://localhost:8080
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kafka-ui
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: cluster-addons
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - chart: kafka-ui
+      repoURL: https://kafbat.github.io/helm-charts
+      targetRevision: 1.6.5
+      helm:
+        ignoreMissingValueFiles: true
+        valueFiles:
+          - $values/addons/values/common/kafka-ui.yaml
+          - $values/addons/values/TIER/kafka-ui.yaml
+          - $values/addons/values/ENV/kafka-ui.yaml
+    - repoURL: https://github.com/kumarisback/gitops.git
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kafka
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    # Its KafkaUser Secret comes from streaming-config; retry until it exists.
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      - CreateNamespace=true

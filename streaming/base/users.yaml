@@ -74,3 +74,27 @@ metadata:
 spec:
   authentication:
     type: tls
+---
+# The Kafka web UI (addons/streaming/kafka-ui.yaml): may look at everything,
+# change nothing. The UI is read-only too; these ACLs make sure of it.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  name: kafka-ui
+  labels:
+    strimzi.io/cluster: events
+spec:
+  authentication:
+    type: tls
+  authorization:
+    type: simple
+    acls:
+      - resource: { type: topic, name: "*", patternType: literal }
+        operations: [Read, Describe, DescribeConfigs]
+      # Describe only: Read on a group is the right to commit its offsets,
+      # i.e. to move a service's position. The UI reads messages without a
+      # group (assigned partitions), so it never needs that.
+      - resource: { type: group, name: "*", patternType: literal }
+        operations: [Describe]
+      - resource: { type: cluster }
+        operations: [Describe, DescribeConfigs]

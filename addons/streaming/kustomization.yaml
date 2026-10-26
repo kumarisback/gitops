@@ -16,3 +16,4 @@ resources:
   - strimzi-kafka-operator.yaml
   - strimzi-access-operator.yaml
   - streaming-config.yaml
+  - kafka-ui.yaml

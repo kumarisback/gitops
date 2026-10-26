@@ -1,0 +1,54 @@
+fullnameOverride: kafka-ui
+
+# Connects as KafkaUser kafka-ui (streaming/base/users.yaml: read-only
+# ACLs) over TLS, with its certificate and the cluster CA mounted from the
+# Secrets Strimzi keeps in this namespace.
+yamlApplicationConfig:
+  kafka:
+    clusters:
+      - name: events
+        bootstrapServers: events-kafka-bootstrap.kafka.svc:9093
+        readOnly: true
+        schemaRegistry: http://schema-registry.kafka.svc:8080/apis/ccompat/v7
+        properties:
+          security.protocol: SSL
+          ssl.keystore.type: PKCS12
+          ssl.keystore.location: /etc/kafka-user/user.p12
+          ssl.keystore.password: ${KAFKA_USER_PASSWORD}
+          ssl.truststore.type: PKCS12
+          ssl.truststore.location: /etc/cluster-ca/ca.p12
+          ssl.truststore.password: ${KAFKA_CA_PASSWORD}
+  # No login: reachable only through kubectl port-forward, which already
+  # needs Kubernetes access to the kafka namespace.
+  auth:
+    type: disabled
+  management:
+    health:
+      ldap:
+        enabled: false
+
+env:
+  - name: KAFKA_USER_PASSWORD
+    valueFrom:
+      secretKeyRef: {name: kafka-ui, key: user.password}
+  - name: KAFKA_CA_PASSWORD
+    valueFrom:
+      secretKeyRef: {name: events-cluster-ca-cert, key: ca.password}
+
+volumes:
+  - name: kafka-user
+    secret:
+      secretName: kafka-ui
+  - name: cluster-ca
+    secret:
+      secretName: events-cluster-ca-cert
+volumeMounts:
+  - {name: kafka-user, mountPath: /etc/kafka-user, readOnly: true}
+  - {name: cluster-ca, mountPath: /etc/cluster-ca, readOnly: true}
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    memory: 768Mi

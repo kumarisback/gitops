@@ -45,3 +45,10 @@ patches:
       - op: replace
         path: /spec/config/min.insync.replicas
         value: 1
+  - target:
+      kind: Deployment
+      name: schema-registry
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
