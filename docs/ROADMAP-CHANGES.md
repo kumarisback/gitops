@@ -126,9 +126,22 @@ to it.
 | Step | What changes | Status |
 |---|---|---|
 | 12 Kafka on Kubernetes | Strimzi runs a Kafka cluster declared in Git (`streaming/`): one node in the lab, three controllers and three brokers across zones in dev (staging and prod can opt in). Topics `orders`, `users` and a dead-letter twin for each; one TLS identity per service with only the rights it needs, delivered to each service by the Strimzi Access Operator. order-service has a new `POST /api/orders` that publishes `OrderCreated`; sign-up publishes `UserRegistered`; the new **notification-service** consumes both, retries failures and parks what it can't handle in the dead-letter topic. Strimzi's dashboards, 8 tested alerts with runbooks, an admin pod for the runbooks. Guide: `docs/KAFKA.md`; notes: tf topic 12. | ✅ |
-| 13 Kafka ecosystem | A schema registry so a producer can't silently break consumers; Kafka Connect archiving every event to S3; change data capture (a database change becomes an event); a Kafka web UI reachable only through port-forward; the outbox pattern in order-service so "saved but not published" can't happen. | ☐ |
+| 13 Kafka ecosystem | Events are now **Avro** with their schemas in a **schema registry** (Apicurio), which refuses a change that would break consumers; notification-service reads each event in the schema it was written with. order-service saves each order and its event in **one MongoDB transaction** (the outbox) and publishes from there, so an order can no longer exist without its event; the lab's MongoDB becomes a replica set for this. In dev, **Kafka Connect** copies every event to an S3 archive kept a year (tf `enable_events_archive`, on in `dev.tfvars`; a few cents a month). A read-only **Kafka UI** (port-forward only), a pod with the Avro console tools for reading and replaying events, 4 more tested alerts with runbooks. Change data capture moved to step 23 (it needs PostgreSQL). Guide: `docs/KAFKA.md`; notes: tf topic 13. | ✅ |
 | 14 Amazon MSK | An optional managed Kafka (MSK Serverless) in Terraform, the services pointed at it by configuration only, and a written comparison of self-hosted Strimzi against MSK. | ☐ |
 | 15 KEDA | notification-service scales on its Kafka backlog instead of CPU, down to zero when idle; a second, Prometheus-based scaler shows the pattern generalises. | ☐ |
+
+**Fixed along the way in step 13:**
+
+- **A damaged event was retried as if the registry were down.** notification-service
+  retried any input/output error, and a cut-off record is one; it now retries only when the
+  registry can't be reached, and parks a damaged record at once.
+- **The dead-letter replay in the runbook would have corrupted events.** It used tools that
+  treat values as text; events are binary since this step. The runbook now uses the Avro
+  console tools.
+- **The outbox's retry delay never reached its 5-minute ceiling** (it stopped at about 4
+  minutes); now it does, as documented.
+- **The repo's manifest checker rejected a valid Kafka Connect resource** because it read
+  one kind of schema rule too strictly; it is fixed, and still catches real typos.
 
 **Fixed along the way in step 12** (security problems found while adding the order
 endpoint, already in the code before this branch):
@@ -168,7 +181,7 @@ endpoint, already in the code before this branch):
 
 | Step | What changes | Status |
 |---|---|---|
-| 23 RDS | A production-grade PostgreSQL (optional in Terraform): Multi-AZ, a read replica, TLS required, connection pooling, Performance Insights, password rotation, tighter security groups, and alerts. | ☐ |
+| 23 RDS | A production-grade PostgreSQL (optional in Terraform): Multi-AZ, a read replica, TLS required, connection pooling, Performance Insights, password rotation, tighter security groups, and alerts. Plus change data capture, moved here from step 13: Debezium turns the database's changes into Kafka events. | ☐ |
 | 24 Database migrations | Versioned schema migrations run automatically before a release, a worked zero-downtime rename (expand and contract), and a check that blocks dangerous migrations. | ☐ |
 | 25 Backup and disaster recovery | Versioned Terraform state, AWS Backup for databases and volumes, Velero for whole namespaces, and a recovery runbook with measured restore times. | ☐ |
 | 26 DynamoDB and caching | A DynamoDB table with least-privilege access, a Redis cache in front of order lookups with protection against a cache stampede, and cache metrics and alerts. | ☐ |

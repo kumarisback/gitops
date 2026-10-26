@@ -118,7 +118,7 @@ without notes. If you can't do (c), don't move on.
 ## Progress tracker
 
 ✅ done · 🟡 partly done · ☐ not started. Last reviewed against the `tf`, `gitops` and
-app repos on 2026-10-05 (updated after completing steps 01–10; steps 06 and 11 on 2026-10-07, step 12 on 2026-10-26); the `tf/learning-topics` notes cover the steps marked done or partly done.
+app repos on 2026-10-05 (updated after completing steps 01–10; steps 06 and 11 on 2026-10-07, steps 12–13 on 2026-10-26); the `tf/learning-topics` notes cover the steps marked done or partly done.
 
 | # | Branch | Phase | 💰 | Done | Notes |
 |---|---|---|---|---|---|
@@ -134,7 +134,7 @@ app repos on 2026-10-05 (updated after completing steps 01–10; steps 06 and 11
 | 10 | `10-tracing-otel` | B | 💰 | ✅ | The 2s-delay exercise is optional practice (tf topic 09) |
 | 11 | `11-synthetic-blackbox` | B |  | 🟡 | Done: blackbox exporter, Probes per service (lab also through Traefik), alerts with unit tests and runbooks, "Is everything OK?" dashboard; tf: Synthetics canary + Container Insights (both off by default). Waits for the domain (step 03): public-URL and TLS probes, DNS checks. To run on dev: enable the canary, the SG/DNS verify tests (tf topic 11) |
 | 12 | `12-kafka-strimzi` | C: Streaming | 💰💰 | ✅ | Strimzi 1.3 / Kafka 4.3 (KRaft), cluster in `streaming/` (lab 1 node; dev 3+3 across zones; staging/prod opt-in), TLS client auth + ACLs via KafkaAccess, notification-service consumer with retries + DLQ, 8 alerts. Also fixed: forgeable sign-in tokens (RS256 + JWKS now). To run on dev: broker-kill and lag exercises (tf topic 12) |
-| 13 | `13-kafka-ecosystem` | C | 💰💰 | ☐ |  |
+| 13 | `13-kafka-ecosystem` | C | 💰💰 | ✅ | Apicurio schema registry (Avro, `BACKWARD`), transactional outbox in order-service (lab MongoDB as a replica set), Kafka Connect + Aiven S3 sink archiving `orders`/`users` (dev; tf `enable_events_archive`), read-only Kafka UI, Avro console pod, 4 more alerts. CDC (Debezium) moved to step 23. To run on dev: archive and outbox exercises (tf topic 13) |
 | 14 | `14-msk-managed` | C | 💰💰 | ☐ |  |
 | 15 | `15-keda-autoscaling` | C |  | ☐ |  |
 | 16 | `16-kong-gateway` | D: Gateway/Mesh |  | ☐ |  |
@@ -144,7 +144,7 @@ app repos on 2026-10-05 (updated after completing steps 01–10; steps 06 and 11
 | 20 | `20-argo-rollouts` | E: Delivery |  | ☐ |  |
 | 21 | `21-argo-workflows-events` | E |  | ☐ |  |
 | 22 | `22-feature-flags` | E |  | ☐ |  |
-| 23 | `23-rds-production` | F: Data | 💰 | ☐ | RDS module exists in tf but `enable_rds = false` |
+| 23 | `23-rds-production` | F: Data | 💰 | ☐ | RDS module exists in tf but `enable_rds = false`; also takes step 13's CDC (Debezium) |
 | 24 | `24-db-migrations` | F |  | ☐ |  |
 | 25 | `25-backup-dr` | F |  | ☐ |  |
 | 26 | `26-dynamodb-caching` | F |  | ☐ |  |

@@ -1,0 +1,89 @@
+# A temporary pod with the Avro console tools, kafka-avro-console-consumer
+# and kafka-avro-console-producer, from Confluent's schema-registry image
+# (7.8.9, the version the services' serializers come from). The consumer
+# prints the services' events as JSON, looking each schema up in the
+# registry; the producer writes JSON back as Avro under a given schema ID.
+# Kafka's own console tools treat values as text and would mangle these
+# binary ones. Connected as kafka-admin, like kafka-admin.yaml. Not deployed
+# by ArgoCD; start it when a runbook needs it and delete it afterwards:
+#
+#   kubectl apply -f streaming/tools/avro-console.yaml
+#   kubectl exec -it -n kafka avro-console -- bash
+#   # e.g.: kafka-avro-console-consumer $CONSUME --topic orders-dlq --from-beginning --timeout-ms 10000
+#   kubectl delete -f streaming/tools/avro-console.yaml
+#
+# $CONSUME and $PRODUCE inside the pod hold the connection, the registry
+# URL and string keys. Keys and values are separated by a tab.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: avro-console
+  namespace: kafka
+  labels:
+    app.kubernetes.io/name: avro-console
+spec:
+  restartPolicy: Never
+  securityContext:
+    # The image's user (appuser) by number: runAsNonRoot can't check a name.
+    runAsUser: 1000
+    runAsGroup: 1000
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: avro-console
+      image: confluentinc/cp-schema-registry:7.8.9
+      command:
+        - /bin/bash
+        - -c
+        - |
+          umask 077
+          cat > /tmp/client.properties <<PROPS
+          security.protocol=SSL
+          ssl.keystore.type=PKCS12
+          ssl.keystore.location=/etc/kafka-admin/user.p12
+          ssl.keystore.password=${USER_PASSWORD}
+          ssl.truststore.type=PKCS12
+          ssl.truststore.location=/etc/cluster-ca/ca.p12
+          ssl.truststore.password=${CA_PASSWORD}
+          PROPS
+          cat > /tmp/.bashrc <<'RC'
+          common="--bootstrap-server events-kafka-bootstrap:9093 --property schema.registry.url=http://schema-registry:8080/apis/ccompat/v7"
+          export CONSUME="$common --consumer.config /tmp/client.properties --property print.key=true --property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer"
+          export PRODUCE="$common --producer.config /tmp/client.properties --property parse.key=true --property key.serializer=org.apache.kafka.common.serialization.StringSerializer"
+          RC
+          exec sleep 3600
+      env:
+        - name: HOME
+          value: /tmp
+        # The tools' scripts create a log directory; the root filesystem is
+        # read-only.
+        - name: LOG_DIR
+          value: /tmp/logs
+        - name: USER_PASSWORD
+          valueFrom:
+            secretKeyRef: {name: kafka-admin, key: user.password}
+        - name: CA_PASSWORD
+          valueFrom:
+            secretKeyRef: {name: events-cluster-ca-cert, key: ca.password}
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        - {name: admin, mountPath: /etc/kafka-admin, readOnly: true}
+        - {name: cluster-ca, mountPath: /etc/cluster-ca, readOnly: true}
+        - {name: tmp, mountPath: /tmp}
+      resources:
+        requests: {cpu: 100m, memory: 512Mi}
+        limits: {memory: 512Mi}
+  volumes:
+    - name: admin
+      secret:
+        secretName: kafka-admin
+    - name: cluster-ca
+      secret:
+        secretName: events-cluster-ca-cert
+    - name: tmp
+      emptyDir: {}

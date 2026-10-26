@@ -272,7 +272,12 @@ bin/kafka-consumer-groups.sh $ADMIN --describe --group notification-service
 kubectl delete -f streaming/tools/kafka-admin.yaml
 ```
 
-The state Strimzi sees: `kubectl get kafka,kafkanodepool,kafkatopic,kafkauser -n kafka`
+The services' events are Avro (binary), which Kafka's console tools would
+print as garbage. To read or replay them, use the Avro console pod
+(`streaming/tools/avro-console.yaml`) the same way: its
+`kafka-avro-console-consumer $CONSUME ...` prints them as JSON.
+
+The state Strimzi sees: `kubectl get kafka,kafkanodepool,kafkatopic,kafkauser,kafkaconnect,kafkaconnector -n kafka`
 (each has a `Ready` condition and a message when it isn't).
 
 ### KafkaOfflinePartitions
@@ -381,24 +386,116 @@ or fix what makes each record slow.
 them (malformed, or still failing after its retries). Each is a
 notification nobody got.
 
-**Check:** read them with their headers in the admin pod:
+**Check:** why they were parked is in their headers; read those in the
+admin pod (the values print as garbage, they're Avro):
 
 ```bash
 bin/kafka-console-consumer.sh $ADMIN --topic orders-dlq --from-beginning \
-  --property print.headers=true --property print.key=true --timeout-ms 10000
+  --property print.headers=true --property print.value=false --timeout-ms 10000
 ```
 
 `kafka_dlt-exception-fqcn` and `kafka_dlt-exception-message` say why;
-notification-service logs `event_dead_lettered` with the same offset.
+notification-service logs `event_dead_lettered` with the same offset. The
+records themselves, as JSON, in the Avro console pod:
+`kafka-avro-console-consumer $CONSUME --topic orders-dlq --from-beginning --timeout-ms 10000`.
 
-**Act:** a malformed record (`PermanentEventException`) is the producer's
-bug: fix the producer. A transient failure (a provider outage) can be
-replayed once it's over, by producing the records back to their topic:
-`bin/kafka-console-consumer.sh ... --topic orders-dlq` piped to
-`bin/kafka-console-producer.sh $ADMIN --topic orders --property parse.key=true`
-(print the key, as above, with `--property key.separator=$'\t'` on both sides).
+**Act:** a malformed record (`PermanentEventException`: not Avro, or a
+schema the registry doesn't know) is the producer's bug: fix the producer;
+the record can't be replayed as it is. A transient failure (a provider
+outage) can be replayed once it's over, in the Avro console pod:
+
+```bash
+# 1. The schema ID each record was written with (the number ending each line).
+kafka-avro-console-consumer $CONSUME --topic orders-dlq --from-beginning \
+  --timeout-ms 10000 --property print.schema.ids=true
+# 2. Save them as JSON, key first. The group remembers where it got to, so
+#    the next replay starts after these.
+kafka-avro-console-consumer $CONSUME --topic orders-dlq --group replay-orders-dlq \
+  --from-beginning --timeout-ms 10000 > /tmp/orders-dlq.txt
+# 3. Write them back to their topic as Avro under that schema ID (records
+#    with different IDs: split the file and run this once per ID).
+kafka-avro-console-producer $PRODUCE --topic orders --property value.schema.id=<id> \
+  < /tmp/orders-dlq.txt
+```
+
 Replayed events keep their eventId, so a notification already sent isn't
 sent twice by the same replica.
+
+### KafkaConnectConnectorFailed
+
+**Meaning:** a connector on a Kafka Connect cluster has failed for 15
+minutes, despite Strimzi restarting it. In dev that is `events-archive`
+(`streaming/components/events-archive`): events stop reaching the S3
+archive. They wait in Kafka, which deletes them after 7 days; past that
+they are missing from the archive for good.
+
+**Check:** the connector's status and error:
+
+```bash
+kubectl get kafkaconnector events-archive -n kafka -o jsonpath='{.status.connectorStatus}'
+kubectl logs -n kafka -l strimzi.io/cluster=events-connect --tail=200
+```
+
+Usual causes for the archive: AWS refuses the upload (`AccessDenied`: the
+IRSA role or its trust doesn't match the ServiceAccount
+`events-connect-connect`; `NoSuchBucket`: the bucket in
+`streaming/dev/kustomization.yaml` doesn't match tf's
+`events_archive_bucket_name`), or a configuration error after an edit to
+`archive-connector.yaml`.
+
+**Act:** fix the cause; Strimzi's next automatic restart picks it up, or
+restart now: `kubectl annotate kafkaconnector events-archive -n kafka strimzi.io/restart=true`.
+The connector continues from its last committed offsets, so nothing still
+in Kafka is skipped.
+
+### KafkaConnectTaskFailed
+
+**Meaning:** one task of a connector has failed for 15 minutes; the
+partitions it was given aren't copied. Same consequences as
+`KafkaConnectConnectorFailed`, for part of the data.
+
+**Check:** the failed task's trace:
+`kubectl get kafkaconnector <connector> -n kafka -o jsonpath='{.status.connectorStatus.tasks}'`.
+A task failing alone often means one record or one partition it can't
+handle, or a transient S3 error the retries didn't outlast.
+
+**Act:** fix the cause and restart the task:
+`kubectl annotate kafkaconnector <connector> -n kafka strimzi.io/restart-task=<id>`.
+
+### OutboxPublishingStalled
+
+**Meaning:** order-service has an event in its outbox (the `outbox`
+collection in MongoDB, written in the same transaction as the order) that
+it hasn't managed to publish for more than 5 minutes. Orders are still
+being taken; their notifications are late, not lost.
+
+**Check:** order-service's logs, `order_event_publish_failed` with the
+error, and its `order_events_total{outcome="failed"}`. Usual causes: Kafka
+is unreachable or refusing writes (the Kafka alerts above), the schema
+registry is down (`kubectl get pods -n kafka -l app.kubernetes.io/name=schema-registry`),
+or the registry refused a new schema version as incompatible (the error
+is a 409 from the registry: a producer change that broke `BACKWARD`
+compatibility).
+
+**Act:** fix the cause; the relay retries with backoff (up to 5 minutes
+between attempts), oldest events first. An incompatible schema is a code
+change to revert or redo with defaults for new fields (docs/KAFKA.md,
+"Changing an event").
+
+### OutboxBacklogGrowing
+
+**Meaning:** more than 1000 events are waiting in order-service's outbox for
+10 minutes. Either publishing has stopped (see `OutboxPublishingStalled`) or
+orders arrive faster than the relay publishes them.
+
+**Check:** `OutboxPublishingStalled` first. If events are being published,
+just not fast enough: `rate(order_events_total{outcome="published"}[5m])`
+against the order rate.
+
+**Act:** if publishing is stalled, as above. If it is too slow: more
+order-service replicas each run the relay (the lease keeps them from
+publishing the same event twice), or raise `app.events.outbox.batch-size`
+(100 events per poll, every 500 ms).
 
 ---
 

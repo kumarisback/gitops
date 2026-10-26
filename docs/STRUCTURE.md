@@ -54,8 +54,9 @@ gitops/
 │
 ├── observability/  ★        alerts, SLOs, dashboards, alerting secrets
 ├── streaming/  ★            the Kafka cluster "events": topics, users and ACLs, metrics,
-│                            alerts (base + one overlay per environment), and tools/
-│                            for the runbooks' admin pod; see KAFKA.md
+│                            alerts, the schema registry (base + one overlay per
+│                            environment), components/ (the S3 events archive, dev),
+│                            and tools/ for the runbooks' admin and Avro pods; see KAFKA.md
 ├── charts/  ★               our own Helm charts: microservice (any of the services) and
 │                            common (a library of shared helpers); see HELM.md
 ├── bootstrap/               ArgoCD entry points, one per environment
