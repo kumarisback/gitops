@@ -128,3 +128,60 @@ tests:
       openTelemetry.environment: prd
     asserts:
       - failedTemplate: {}
+
+  - it: leaves out MongoDB for a service without a database
+    set:
+      mongodbUriSecret: null
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SPRING_DATA_MONGODB_URI
+          any: true
+
+  - it: connects to Kafka from the KafkaAccess Secret when kafka is enabled
+    set:
+      kafka.enabled: true
+      kafka.accessSecret: order-service-kafka
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: APP_EVENTS_ENABLED
+            value: "true"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SPRING_KAFKA_SSL_BUNDLE
+            value: kafka
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SPRING_SSL_BUNDLE_PEM_KAFKA_KEYSTORE_PRIVATEKEY
+            valueFrom:
+              secretKeyRef:
+                name: order-service-kafka
+                key: ssl.keystore.key
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+            valueFrom:
+              secretKeyRef:
+                name: order-service-kafka
+                key: bootstrap.servers
+
+  - it: has no Kafka settings by default
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SPRING_KAFKA_SSL_BUNDLE
+          any: true
+
+  - it: refuses kafka.enabled without the Secret's name
+    set:
+      kafka.enabled: true
+    asserts:
+      - failedTemplate:
+          errorMessage: "kafka.accessSecret is required when kafka.enabled"

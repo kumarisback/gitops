@@ -93,12 +93,21 @@
       "properties": { "enabled": { "type": "boolean" } }
     },
     "mongodbUriSecret": {
-      "type": "object",
+      "type": ["object", "null"],
       "additionalProperties": false,
       "required": ["name", "key"],
       "properties": {
         "name": { "type": "string", "minLength": 1 },
         "key": { "type": "string", "minLength": 1 }
+      }
+    },
+    "kafka": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "accessSecret": { "type": "string", "pattern": "^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$" }
       }
     },
     "openTelemetry": {

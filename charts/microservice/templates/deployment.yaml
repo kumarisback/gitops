@@ -46,11 +46,13 @@ spec:
             - name: http
               containerPort: {{ .Values.containerPort }}
           env:
+            {{- with .Values.mongodbUriSecret }}
             - name: SPRING_DATA_MONGODB_URI
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.mongodbUriSecret.name }}
-                  key: {{ .Values.mongodbUriSecret.key }}
+                  name: {{ .name }}
+                  key: {{ .key }}
+            {{- end }}
             - name: APP_HTTP_LOGGING_REQUEST_BODY
               value: {{ .Values.requestLogging.requestBody | quote }}
             - name: DEPLOYMENT_ENVIRONMENT
@@ -74,6 +76,9 @@ spec:
               value: {{ .Values.openTelemetry.sampler | quote }}
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: "deployment.environment={{ .Values.openTelemetry.environment }},k8s.namespace.name={{ .Release.Namespace }}"
+            {{- end }}
+            {{- if .Values.kafka.enabled }}
+            {{- include "microservice.kafkaEnv" . | nindent 12 }}
             {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}

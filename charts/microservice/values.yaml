@@ -95,10 +95,18 @@ topologySpread:
   enabled: true
 
 # MongoDB connection string, from the app-secrets Secret every environment
-# provides (ExternalSecret in the cloud, start-lab.sh in the lab).
+# provides (ExternalSecret in the cloud, start-lab.sh in the lab). null for a
+# service without a database.
 mongodbUriSecret:
   name: app-secrets
   key: MONGO_URI
+# Kafka (roadmap step 12): the connection from the Secret a KafkaAccess
+# resource creates for this service (apps/components/kafka-clients), and
+# app.events.enabled=true. Off where the environment runs no Kafka.
+kafka:
+  enabled: false
+  # The KafkaAccess Secret's name, e.g. order-service-kafka.
+  accessSecret: ""
 
 # The OpenTelemetry Java agent (in the image) and the log "environment"
 # field. Same settings as apps/components/otel-instrumentation.
