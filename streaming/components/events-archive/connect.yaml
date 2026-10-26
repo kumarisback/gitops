@@ -1,0 +1,58 @@
+# The Kafka Connect cluster that runs the archive connector. Strimzi runs
+# its pods (events-connect-connect-*) under the ServiceAccount
+# events-connect-connect, the name the IRSA role trusts (tf 01-infra
+# streaming.tf). Connectors are KafkaConnector resources
+# (use-connector-resources): Strimzi undoes anything set through Connect's
+# REST API by hand.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaConnect
+metadata:
+  name: events-connect
+  annotations:
+    strimzi.io/use-connector-resources: "true"
+spec:
+  # The overlay sets spec.image: Strimzi's Kafka image for this version
+  # plus the S3 sink plugin (app repo kafka-connect/). Keep the two equal.
+  version: 4.3.1
+  replicas: 1
+  bootstrapServers: events-kafka-bootstrap:9093
+  # Connect's own bookkeeping: the workers' group, and the topics holding
+  # connector configs, source offsets and statuses (access.yaml).
+  groupId: events-connect
+  configStorageTopic: events-connect-configs
+  offsetStorageTopic: events-connect-offsets
+  statusStorageTopic: events-connect-status
+  tls:
+    trustedCertificates:
+      - secretName: events-cluster-ca-cert
+        certificate: ca.crt
+  authentication:
+    type: tls
+    certificateAndKey:
+      secretName: events-connect
+      certificate: user.crt
+      key: user.key
+  config:
+    # Records are copied as the bytes they are: nothing parses keys,
+    # values (Avro) or headers on the way to S3.
+    key.converter: org.apache.kafka.connect.converters.ByteArrayConverter
+    value.converter: org.apache.kafka.connect.converters.ByteArrayConverter
+    header.converter: org.apache.kafka.connect.converters.ByteArrayConverter
+    # How often a sink task writes its files and commits its offsets: at
+    # most one file per partition every 5 minutes.
+    offset.flush.interval.ms: 300000
+  resources:
+    requests:
+      cpu: 250m
+      memory: 1Gi
+    limits:
+      memory: 1Gi
+  jvmOptions:
+    -Xms: 512m
+    -Xmx: 512m
+  metricsConfig:
+    type: jmxPrometheusExporter
+    valueFrom:
+      configMapKeyRef:
+        name: events-connect-metrics
+        key: metrics-config.yml

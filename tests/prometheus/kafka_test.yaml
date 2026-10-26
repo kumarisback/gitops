@@ -126,3 +126,64 @@ tests:
         exp_samples:
           - labels: 'ALERTS{alertname="KafkaMetricsMissing",alertstate="firing",severity="warning"}'
             value: 1
+
+  # Task 1 fails at 2m, is restarted at 8m (its failed series ends: stale)
+  # and fails again at 10m: no alert until it has stayed failed for 15
+  # minutes. Task 0 keeps running.
+  - interval: 1m
+    input_series:
+      - series: 'kafka_connect_connector_task_status{namespace="kafka",strimzi_io_cluster="events-connect",kubernetes_pod_name="events-connect-connect-0",connector="events-archive",task="1",status="failed"}'
+        values: '_ _ 1 1 1 1 1 1 stale _ 1+0x20'
+      - series: 'kafka_connect_connector_task_status{namespace="kafka",strimzi_io_cluster="events-connect",kubernetes_pod_name="events-connect-connect-0",connector="events-archive",task="0",status="running"}'
+        values: '1x30'
+    promql_expr_test:
+      - expr: ALERTS{alertname="KafkaConnectTaskFailed", alertstate="firing"}
+        eval_time: 20m
+        exp_samples: []
+      - expr: ALERTS{alertname="KafkaConnectTaskFailed", alertstate="firing"}
+        eval_time: 26m
+        exp_samples:
+          - labels: 'ALERTS{alertname="KafkaConnectTaskFailed",alertstate="firing",connector="events-archive",namespace="kafka",severity="warning",strimzi_io_cluster="events-connect",task="1"}'
+            value: 1
+
+  - interval: 1m
+    input_series:
+      - series: 'kafka_connect_connector_status{namespace="kafka",strimzi_io_cluster="events-connect",kubernetes_pod_name="events-connect-connect-0",connector="events-archive",status="running"}'
+        values: '1 1 _x20'
+      - series: 'kafka_connect_connector_status{namespace="kafka",strimzi_io_cluster="events-connect",kubernetes_pod_name="events-connect-connect-0",connector="events-archive",status="failed"}'
+        values: '_ _ 1x20'
+    promql_expr_test:
+      - expr: ALERTS{alertname="KafkaConnectConnectorFailed", alertstate="firing"}
+        eval_time: 18m
+        exp_samples:
+          - labels: 'ALERTS{alertname="KafkaConnectConnectorFailed",alertstate="firing",connector="events-archive",namespace="kafka",severity="warning",strimzi_io_cluster="events-connect"}'
+            value: 1
+
+  # The relay can't publish from 2m: the oldest event ages; warning once
+  # it's been over 5 minutes for 5 minutes.
+  - interval: 1m
+    input_series:
+      - series: 'outbox_oldest_pending_age_seconds{namespace="development",job="order-service",pod="order-service-a"}'
+        values: '0 0 60+60x15'
+      - series: 'outbox_oldest_pending_age_seconds{namespace="development",job="order-service",pod="order-service-b"}'
+        values: '0x17'
+    promql_expr_test:
+      - expr: ALERTS{alertname="OutboxPublishingStalled", alertstate="firing"}
+        eval_time: 9m
+        exp_samples: []
+      - expr: ALERTS{alertname="OutboxPublishingStalled", alertstate="firing"}
+        eval_time: 13m
+        exp_samples:
+          - labels: 'ALERTS{alertname="OutboxPublishingStalled",alertstate="firing",job="order-service",namespace="development",severity="warning"}'
+            value: 1
+
+  - interval: 1m
+    input_series:
+      - series: 'outbox_pending{namespace="development",job="order-service",pod="order-service-a"}'
+        values: '0 500 1500x15'
+    promql_expr_test:
+      - expr: ALERTS{alertname="OutboxBacklogGrowing", alertstate="firing"}
+        eval_time: 13m
+        exp_samples:
+          - labels: 'ALERTS{alertname="OutboxBacklogGrowing",alertstate="firing",job="order-service",namespace="development",severity="warning"}'
+            value: 1

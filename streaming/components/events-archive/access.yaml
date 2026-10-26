@@ -1,0 +1,70 @@
+# Kafka Connect's identity: its own group and bookkeeping topics, and read
+# access to what the archive copies. A sink connector reads as consumer
+# group connect-<connector name>.
+#
+# No Create: the topics below are the only way Connect's topics come to
+# exist. Connect tries to create them at start, is refused, and uses them.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  name: events-connect
+  labels:
+    strimzi.io/cluster: events
+spec:
+  authentication:
+    type: tls
+  authorization:
+    type: simple
+    acls:
+      - resource: { type: group, name: events-connect, patternType: literal }
+        operations: [Read]
+      # DescribeConfigs: Connect checks its topics are compacted.
+      - resource: { type: topic, name: events-connect-, patternType: prefix }
+        operations: [Read, Write, Describe, DescribeConfigs]
+      - resource: { type: group, name: connect-events-archive, patternType: literal }
+        operations: [Read]
+      - resource: { type: topic, name: orders, patternType: literal }
+        operations: [Read, Describe]
+      - resource: { type: topic, name: users, patternType: literal }
+        operations: [Read, Describe]
+---
+# Connect's bookkeeping, compacted: only the latest value per key counts,
+# and nothing expires. The configs topic must have exactly one partition.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: events-connect-configs
+  labels:
+    strimzi.io/cluster: events
+spec:
+  partitions: 1
+  replicas: 3
+  config:
+    cleanup.policy: compact
+    min.insync.replicas: 2
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: events-connect-offsets
+  labels:
+    strimzi.io/cluster: events
+spec:
+  partitions: 3
+  replicas: 3
+  config:
+    cleanup.policy: compact
+    min.insync.replicas: 2
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: events-connect-status
+  labels:
+    strimzi.io/cluster: events
+spec:
+  partitions: 3
+  replicas: 3
+  config:
+    cleanup.policy: compact
+    min.insync.replicas: 2

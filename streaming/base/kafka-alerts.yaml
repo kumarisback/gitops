@@ -103,3 +103,51 @@ spec:
             summary: "{{ $value | printf \"%.0f\" }} records parked in {{ $labels.topic }} in 10 minutes"
             description: "A consumer couldn't handle them, even after retries. Their headers say why (kafka_dlt-exception-message)."
             runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kafkadeadletterrecords
+    # Kafka Connect (the events archive, streaming/components/events-archive;
+    # metric names from its connect-metrics.yaml). Strimzi restarts a failed
+    # connector or task with growing pauses (autoRestart); failed for 15
+    # minutes means the restarts aren't helping. A connector that is merely
+    # slow shows up as KafkaConsumerLagHigh for group connect-<connector>.
+    - name: kafka-connect
+      rules:
+        - alert: KafkaConnectConnectorFailed
+          expr: max by (namespace, strimzi_io_cluster, connector) (kafka_connect_connector_status{status="failed"}) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Connector {{ $labels.connector }} on {{ $labels.strimzi_io_cluster }} has failed"
+            description: "None of its tasks are running. Its records wait in Kafka, which deletes them after the topic's retention (7 days)."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kafkaconnectconnectorfailed
+        - alert: KafkaConnectTaskFailed
+          expr: max by (namespace, strimzi_io_cluster, connector, task) (kafka_connect_connector_task_status{status="failed"}) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Task {{ $labels.task }} of connector {{ $labels.connector }} has failed"
+            description: "The partitions assigned to it aren't being copied. Their records wait in Kafka, which deletes them after the topic's retention (7 days)."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kafkaconnecttaskfailed
+    # order-service's transactional outbox (roadmap step 13): events are
+    # stored with the order and published by OutboxRelay. Nothing is lost
+    # while the relay can't publish; they are late.
+    - name: outbox
+      rules:
+        - alert: OutboxPublishingStalled
+          expr: max by (namespace, job) (outbox_oldest_pending_age_seconds) > 300
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.job }} hasn't published its oldest event for {{ $value | humanizeDuration }}"
+            description: "Events wait in the outbox: Kafka or the schema registry is unreachable from {{ $labels.job }}, or the registry rejected a new schema version. Notifications are late, not lost."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#outboxpublishingstalled
+        - alert: OutboxBacklogGrowing
+          expr: max by (namespace, job) (outbox_pending) > 1000
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $value }} events waiting in {{ $labels.job }}'s outbox"
+            description: "Orders are created faster than their events are published, or publishing has stopped (see OutboxPublishingStalled)."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#outboxbackloggrowing

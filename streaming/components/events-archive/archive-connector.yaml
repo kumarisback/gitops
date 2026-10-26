@@ -1,0 +1,37 @@
+# Copies every record of orders and users into the archive bucket, as
+# gzipped JSON lines, one object per partition and flush:
+#
+#   <topic>/<yyyy>/<MM>/<dd>/<topic>-<partition>-<first offset>.jsonl.gz
+#
+# The date is when the file was written (UTC). Each line is one record:
+# key, value, offset, timestamp and headers, the bytes base64-encoded.
+# Values stay Avro, readable with the schema registry, so a record can be
+# replayed into Kafka exactly as it was.
+#
+# Offsets are committed after the upload, so after a crash records are
+# read again and may appear in two files; the offsets tell them apart.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaConnector
+metadata:
+  name: events-archive
+  labels:
+    strimzi.io/cluster: events-connect
+spec:
+  class: io.aiven.kafka.connect.s3.AivenKafkaConnectS3SinkConnector
+  tasksMax: 2
+  # Strimzi restarts a failed connector or task, with growing pauses in
+  # between (KafkaConnectTaskFailed when that doesn't help).
+  autoRestart:
+    enabled: true
+  config:
+    # Read as consumer group connect-events-archive.
+    topics: orders,users
+    # The overlay sets aws.s3.bucket.name (tf output
+    # events_archive_bucket_name). No AWS keys: the SDK's default chain
+    # takes the IRSA role from the pod's ServiceAccount.
+    aws.s3.region: us-east-1
+    format.output.type: jsonl
+    format.output.fields: key,value,offset,timestamp,headers
+    format.output.fields.value.encoding: base64
+    file.compression.type: gzip
+    file.name.template: "{{topic}}/{{timestamp:unit=yyyy}}/{{timestamp:unit=MM}}/{{timestamp:unit=dd}}/{{topic}}-{{partition:padding=true}}-{{start_offset:padding=true}}.jsonl.gz"

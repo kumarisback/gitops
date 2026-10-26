@@ -19,22 +19,33 @@ require 'yaml'
 # rejects unknown fields (strict), except the root (apiVersion, kind,
 # metadata) and objects marked x-kubernetes-preserve-unknown-fields;
 # int-or-string becomes either type.
-def crd_json_schema(node, root = true)
+LOGICAL_KEYWORDS = %w[oneOf anyOf allOf not].freeze
+
+# In a CRD, oneOf/anyOf/allOf/not only constrain fields declared next to
+# them (Kubernetes structural schemas); their own "properties" list some of
+# those fields. So nothing inside them may forbid other properties.
+def crd_json_schema(node, root = true, in_logical = false)
   case node
   when Hash
     if node['x-kubernetes-int-or-string'] || node['format'] == 'int-or-string'
       return { 'oneOf' => [{ 'type' => 'string' }, { 'type' => 'integer' }] }
     end
     out = node.each_with_object({}) do |(k, v), h|
+      logical = in_logical || LOGICAL_KEYWORDS.include?(k)
       # Property names are data, not schema keywords.
-      h[k] = k == 'properties' && v.is_a?(Hash) ? v.transform_values { |p| crd_json_schema(p, false) } : crd_json_schema(v, false)
+      h[k] = if k == 'properties' && v.is_a?(Hash)
+               v.transform_values { |p| crd_json_schema(p, false, logical) }
+             else
+               crd_json_schema(v, false, logical)
+             end
     end
-    if out.key?('properties') && !root && !out.key?('additionalProperties') && !node['x-kubernetes-preserve-unknown-fields']
+    if out.key?('properties') && !root && !in_logical && !out.key?('additionalProperties') &&
+       !node['x-kubernetes-preserve-unknown-fields']
       out['additionalProperties'] = false
     end
     out
   when Array
-    node.map { |v| crd_json_schema(v, false) }
+    node.map { |v| crd_json_schema(v, false, in_logical) }
   else
     node
   end

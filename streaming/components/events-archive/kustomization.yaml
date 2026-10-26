@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# The events archive (roadmap step 13, docs/KAFKA.md): a Kafka Connect
+# cluster whose S3 sink copies every record of orders and users into S3.
+# The topics keep a week; the archive keeps a year.
+#
+# An overlay including it sets what only it knows (see streaming/dev): the
+# Connect image, the IAM role and the bucket. The bucket and role come from
+# tf 01-infra with enable_events_archive = true; an environment needs both
+# or neither.
+resources:
+  - access.yaml
+  - connect-metrics.yaml
+  - connect.yaml
+  - archive-connector.yaml
