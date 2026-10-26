@@ -4,8 +4,8 @@ metadata:
   name: compute-quota
 spec:
   hard:
-    requests.cpu: "7"
-    requests.memory: 14Gi
-    limits.cpu: "14"
-    limits.memory: 28Gi
-    pods: "40"
+    requests.cpu: "9"
+    requests.memory: 18Gi
+    limits.cpu: "18"
+    limits.memory: 36Gi
+    pods: "50"

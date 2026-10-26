@@ -11,3 +11,9 @@ openTelemetry:
 # Request payloads in the API log: shared dev: see every payload while testing.
 requestLogging:
   requestBody: ALWAYS
+# Publishes OrderCreated events to Kafka (roadmap step 12) with the
+# connection from the order-service-kafka KafkaAccess Secret
+# (apps/components/kafka-clients).
+kafka:
+  enabled: true
+  accessSecret: order-service-kafka

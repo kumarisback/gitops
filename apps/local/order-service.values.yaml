@@ -18,3 +18,9 @@ extraEnv:
   # As for user-service in kustomization.yaml.
   - name: MANAGEMENT_ENDPOINT_HEALTH_VALIDATE_GROUP_MEMBERSHIP
     value: "false"
+# Publishes OrderCreated events to Kafka (roadmap step 12) with the
+# connection from the order-service-kafka KafkaAccess Secret
+# (apps/components/kafka-clients).
+kafka:
+  enabled: true
+  accessSecret: order-service-kafka

@@ -86,7 +86,7 @@ if [ "${SKIP_IMAGE_LOAD:-0}" = "1" ]; then
   echo "⏭️  Skipping image load (SKIP_IMAGE_LOAD=1)."
 else
   echo "📦 Loading local application images into KinD..."
-  for service in frontend order-service user-service; do
+  for service in frontend order-service user-service notification-service; do
     image="${ECR_REGISTRY}/${service}:latest"
     if docker image inspect "${image}" > /dev/null 2>&1; then
       if kind load docker-image "${image}" --name "${CLUSTER_NAME}" > /dev/null; then

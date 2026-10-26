@@ -1,0 +1,51 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# The services' Kafka connections (roadmap step 12), for the environments
+# that run Kafka (addons/streaming): a KafkaAccess per service, and
+# user-service's settings (it is still deployed with Kustomize; the chart
+# does the same for order-service and notification-service with
+# kafka.enabled, charts/microservice "microservice.kafkaEnv").
+resources:
+  - kafka-access.yaml
+
+patches:
+  - target:
+      kind: Deployment
+      name: user-service
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: APP_EVENTS_ENABLED
+          value: "true"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: SPRING_KAFKA_SSL_BUNDLE
+          value: kafka
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+          valueFrom: {secretKeyRef: {name: user-service-kafka, key: bootstrap.servers}}
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: SPRING_KAFKA_SECURITY_PROTOCOL
+          valueFrom: {secretKeyRef: {name: user-service-kafka, key: security.protocol}}
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: SPRING_SSL_BUNDLE_PEM_KAFKA_KEYSTORE_CERTIFICATE
+          valueFrom: {secretKeyRef: {name: user-service-kafka, key: ssl.keystore.crt}}
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: SPRING_SSL_BUNDLE_PEM_KAFKA_KEYSTORE_PRIVATEKEY
+          valueFrom: {secretKeyRef: {name: user-service-kafka, key: ssl.keystore.key}}
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: SPRING_SSL_BUNDLE_PEM_KAFKA_TRUSTSTORE_CERTIFICATE
+          valueFrom: {secretKeyRef: {name: user-service-kafka, key: ssl.truststore.crt}}

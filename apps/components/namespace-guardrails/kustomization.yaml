@@ -12,11 +12,13 @@ kind: Component
 # pods and the ReplicaSet gets "exceeded quota" errors that only show up as
 # events. Raise it together with maxReplicas or the containers' requests.
 #
-#                  requests          limits
-#   frontend   10 x 100m / 256Mi   250m / 512Mi
-#   user       10 x 250m / 512Mi   500m / 1Gi
-#   order      10 x 250m / 512Mi   500m / 1Gi
-#   total          6 CPU / 12.5Gi    12.5 CPU / 25Gi
+#                      requests          limits
+#   frontend       10 x 100m / 256Mi   250m / 512Mi
+#   user           10 x 250m / 512Mi   500m / 1Gi
+#   order          10 x 250m / 512Mi   500m / 1Gi
+#   notification    6 x 250m / 512Mi   500m / 1Gi   (6: the orders topic's
+#                                                    partitions, see its values)
+#   total             7.5 CPU / 15.5Gi   15.5 CPU / 31Gi, 36 pods
 #   + 25% surge of one service, then rounded up for headroom
 resources:
   - resourcequota.yaml

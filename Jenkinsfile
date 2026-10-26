@@ -17,7 +17,7 @@ pipeline {
   parameters {
     booleanParam(name: 'UPDATE_IMAGE', defaultValue: false, description: 'Check this box to open a pull request that updates a service image tag')
     choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'prod'], description: 'Target environment to update')
-    choice(name: 'SERVICE_NAME', choices: ['frontend', 'user-service', 'order-service'], description: 'Service to update')
+    choice(name: 'SERVICE_NAME', choices: ['frontend', 'user-service', 'order-service', 'notification-service'], description: 'Service to update')
     string(name: 'NEW_TAG', defaultValue: '', description: 'New Docker image tag (e.g., v1.2.0)')
   }
 
@@ -41,8 +41,8 @@ pipeline {
           if (!(params.ENVIRONMENT in ['dev', 'staging', 'prod'])) {
             error("Invalid ENVIRONMENT: must be dev, staging or prod")
           }
-          if (!(params.SERVICE_NAME in ['frontend', 'user-service', 'order-service'])) {
-            error("Invalid SERVICE_NAME: must be frontend, user-service or order-service")
+          if (!(params.SERVICE_NAME in ['frontend', 'user-service', 'order-service', 'notification-service'])) {
+            error("Invalid SERVICE_NAME: must be frontend, user-service, order-service or notification-service")
           }
           if (!(params.NEW_TAG ==~ /[A-Za-z0-9][A-Za-z0-9._-]{0,127}/)) {
             error("Invalid NEW_TAG: use letters, digits, '.', '_' or '-', up to 128 characters")
@@ -52,14 +52,16 @@ pipeline {
           sh '''
             set -eu
             echo "Updating ${SERVICE} to tag ${NEW_TAG} in ${TARGET_ENV}..."
-            if [ "${SERVICE}" = order-service ]; then
-              # Deployed from charts/microservice: the tag is image.tag in its
-              # values file. Edited as text, so the file's comments stay.
+            values="apps/${TARGET_ENV}/${SERVICE}.values.yaml"
+            if [ -f "${values}" ]; then
+              # Deployed from charts/microservice (order-service,
+              # notification-service): the tag is image.tag in its values
+              # file. Edited as text, so the file's comments stay.
               ruby -e 'file, tag = ARGV
                 text = File.read(file)
                 done = text.sub!(/^(image:\n(?:[ \t].*\n)*?  tag: ).*$/) { "#{$1}\"#{tag}\"" }
                 abort("no image.tag in #{file}") unless done
-                File.write(file, text)' "apps/${TARGET_ENV}/order-service.values.yaml" "${NEW_TAG}"
+                File.write(file, text)' "${values}" "${NEW_TAG}"
             else
               image="602367507570.dkr.ecr.us-east-1.amazonaws.com/${SERVICE}"
               cd "apps/${TARGET_ENV}"
@@ -121,7 +123,8 @@ pipeline {
               git config user.name "Jenkins CI"
               git config user.email "jenkins@company.com"
               git checkout -b "${branch}"
-              git add "apps/${TARGET_ENV}/kustomization.yaml" "apps/${TARGET_ENV}/order-service.values.yaml"
+              git add "apps/${TARGET_ENV}/kustomization.yaml"
+              [ -f "apps/${TARGET_ENV}/${SERVICE}.values.yaml" ] && git add "apps/${TARGET_ENV}/${SERVICE}.values.yaml"
               git commit -m "ci: update ${SERVICE} image tag to ${NEW_TAG} in ${TARGET_ENV}"
               git push origin "${branch}"
 

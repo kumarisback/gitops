@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 APP_DIR="$(cd "${REPO_ROOT}/../app" && pwd)"
 ECR_REGISTRY="602367507570.dkr.ecr.us-east-1.amazonaws.com"
-SERVICES=(frontend order-service user-service)
+SERVICES=(frontend order-service user-service notification-service)
 
 if ! command -v podman > /dev/null 2>&1; then
   echo "❌ Error: podman not found on PATH."

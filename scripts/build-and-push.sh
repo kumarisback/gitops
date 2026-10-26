@@ -23,7 +23,7 @@ echo "• App source:    ${APP_DIR}"
 echo "• Target ECR:    ${ECR_REGISTRY}"
 echo "========================================================"
 
-SERVICES=("frontend" "order-service" "user-service")
+SERVICES=("frontend" "order-service" "user-service" "notification-service")
 
 # 1. Build Docker images
 for svc in "${SERVICES[@]}"; do

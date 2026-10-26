@@ -1,0 +1,21 @@
+# notification-service in the kind lab (roadmap step 12), deployed with
+# charts/microservice. It has no API of its own: the web server serves only
+# actuator (probes, metrics); its work comes from Kafka.
+image:
+  repository: 602367507570.dkr.ecr.us-east-1.amazonaws.com/notification-service
+  # Built and loaded into kind by the lab scripts, never pulled.
+  tag: latest
+  pullPolicy: IfNotPresent
+contextPath: ""
+service:
+  # Not behind the load balancer: no health-check annotation.
+  annotations: {}
+autoscaling:
+  minReplicas: 1
+  maxReplicas: 1
+mongodbUriSecret: null
+openTelemetry:
+  environment: local
+kafka:
+  enabled: true
+  accessSecret: notification-service-kafka

@@ -28,8 +28,8 @@ TIMEOUT="${DRILL_TIMEOUT_SECONDS:-600}"
 ALERTS_API="/api/v1/namespaces/monitoring/services/kube-prometheus-stack-alertmanager:9093/proxy/api/v2/alerts"
 
 case "${SERVICE}" in
-  frontend|order-service|user-service) ;;
-  *) echo "❌ Unknown service '${SERVICE}' (frontend, order-service or user-service)"; exit 2 ;;
+  frontend|order-service|user-service|notification-service) ;;
+  *) echo "❌ Unknown service '${SERVICE}' (frontend, order-service, user-service or notification-service)"; exit 2 ;;
 esac
 
 echo "🎯 Alert drill: ${SERVICE} in ${NAMESPACE} (context $(kubectl config current-context))"

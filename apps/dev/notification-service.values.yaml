@@ -1,0 +1,24 @@
+# notification-service in dev (roadmap step 12), deployed with
+# charts/microservice. It has no API of its own: the web server serves only
+# actuator (probes, metrics); its work comes from Kafka.
+image:
+  repository: 602367507570.dkr.ecr.us-east-1.amazonaws.com/notification-service
+  # The full commit SHA Jenkins tagged the image with; the gitops Jenkins job
+  # bumps it by pull request.
+  tag: "921853b8deac44cdf5080b80b1f61e7107d416fb"
+contextPath: ""
+service:
+  # Not behind the load balancer: no health-check annotation.
+  annotations: {}
+# More consumers than the orders topic has partitions (6,
+# streaming/base/topics.yaml) would sit idle: a partition is read by one
+# consumer of the group at a time. Step 15 (KEDA) scales on lag instead.
+autoscaling:
+  minReplicas: 2
+  maxReplicas: 6
+mongodbUriSecret: null
+openTelemetry:
+  environment: dev
+kafka:
+  enabled: true
+  accessSecret: notification-service-kafka

@@ -1,0 +1,53 @@
+# One KafkaAccess per service that talks to Kafka. The Strimzi Access
+# Operator (addons/streaming) answers each with a Secret of the same name
+# in this namespace: bootstrap.servers, security.protocol, and the user's
+# TLS certificate and key (ssl.keystore.crt/.key) plus the cluster CA
+# (ssl.truststore.crt), kept current as Strimzi renews them. The
+# KafkaUsers and their ACLs are in streaming/base/users.yaml.
+apiVersion: access.strimzi.io/v1alpha1
+kind: KafkaAccess
+metadata:
+  name: order-service-kafka
+spec:
+  secretName: order-service-kafka
+  kafka:
+    name: events
+    namespace: kafka
+    listener: tls
+  user:
+    kind: KafkaUser
+    apiGroup: kafka.strimzi.io
+    name: order-service
+    namespace: kafka
+---
+apiVersion: access.strimzi.io/v1alpha1
+kind: KafkaAccess
+metadata:
+  name: user-service-kafka
+spec:
+  secretName: user-service-kafka
+  kafka:
+    name: events
+    namespace: kafka
+    listener: tls
+  user:
+    kind: KafkaUser
+    apiGroup: kafka.strimzi.io
+    name: user-service
+    namespace: kafka
+---
+apiVersion: access.strimzi.io/v1alpha1
+kind: KafkaAccess
+metadata:
+  name: notification-service-kafka
+spec:
+  secretName: notification-service-kafka
+  kafka:
+    name: events
+    namespace: kafka
+    listener: tls
+  user:
+    kind: KafkaUser
+    apiGroup: kafka.strimzi.io
+    name: notification-service
+    namespace: kafka

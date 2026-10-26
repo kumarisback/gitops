@@ -13,9 +13,13 @@ resources:
   - ../../projects/external-secrets-operator-dev.yaml
   - ../../projects/dev.yaml
   - ../../projects/order-service-dev.yaml
+  - ../../projects/notification-service-dev.yaml
   # Cluster add-ons: metrics-server, logs (Loki/Alloy), metrics
   # (kube-prometheus-stack) and traces (Tempo/OTel Collector).
   - ../../../addons/applications
+  # Kafka (roadmap step 12): Strimzi, the cluster, its topics and users.
+  # Not in staging/prod yet; addons/streaming/kustomization.yaml says how.
+  - ../../../addons/streaming
   - ../../projects/karpenter-dev.yaml
   - ../../projects/karpenter-nodepools-dev.yaml
 

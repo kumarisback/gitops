@@ -5,6 +5,7 @@ resources:
   - namespace.yaml
   - ../base
   - app-secrets.yaml
+  - jwt-signing-key.yaml
 
 namespace: development
 
@@ -32,6 +33,9 @@ images:
 components:
   - ../components/otel-instrumentation
   - ../components/request-logging
+  # Kafka connections for the services (roadmap step 12; this environment
+  # runs Kafka, addons/streaming).
+  - ../components/kafka-clients
   - ../components/namespace-guardrails
 
 configMapGenerator:

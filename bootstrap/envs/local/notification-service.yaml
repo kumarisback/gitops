@@ -1,0 +1,39 @@
+# notification-service in local (roadmap step 12), deployed with this repo's
+# own Helm chart (charts/microservice) and apps/local/notification-service.values.yaml.
+# It consumes the orders and users topics; its Kafka connection comes from
+# the KafkaAccess Secret in apps/components/kafka-clients.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: notification-service
+  namespace: argocd
+  # Git-sourced: follows the root app's revision.
+  labels:
+    app.kubernetes.io/part-of: gitops-config
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/kumarisback/gitops.git
+    targetRevision: HEAD
+    path: charts/microservice
+    helm:
+      releaseName: notification-service
+      valueFiles:
+        - ../../apps/local/notification-service.values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: development
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    # The namespace and the notification-service-kafka Secret (from the
+    # Access Operator) come from the local app set; retry until they exist.
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

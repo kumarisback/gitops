@@ -22,7 +22,7 @@ spec:
           expr: |
             label_replace(
               max by (namespace, deployment) (
-                kube_deployment_status_replicas_available{deployment=~"frontend|order-service|user-service"}
+                kube_deployment_status_replicas_available{deployment=~"frontend|order-service|user-service|notification-service"}
               ) == 0,
               "job", "$1", "deployment", "(.+)"
             )
@@ -34,7 +34,7 @@ spec:
             description: "No pod of {{ $labels.deployment }} has been ready for 2 minutes, so every request to it is failing."
             runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#serviceunavailable
         - alert: ServiceDown
-          expr: up{job=~"order-service|user-service"} == 0
+          expr: up{job=~"order-service|user-service|notification-service"} == 0
           for: 2m
           labels:
             severity: critical
