@@ -115,6 +115,19 @@ kubectl create secret generic app-secrets \
   --from-env-file="${SECRETS_FILE}" \
   --dry-run=client -o yaml | kubectl apply -f - > /dev/null
 
+#    The RSA key user-service signs sign-in tokens with (RS256). Generated
+#    once into the git-ignored apps/local/jwt-signing-key.pem, so restarting
+#    the lab doesn't sign everyone out; delete that file to rotate it.
+JWT_KEY_FILE="${REPO_ROOT}/apps/local/jwt-signing-key.pem"
+if [ ! -f "${JWT_KEY_FILE}" ]; then
+  echo "🔑 Generating the lab's token-signing key (apps/local/jwt-signing-key.pem)..."
+  (umask 077 && openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "${JWT_KEY_FILE}")
+fi
+kubectl create secret generic jwt-signing-key \
+  --namespace development \
+  --from-file=private-key.pem="${JWT_KEY_FILE}" \
+  --dry-run=client -o yaml | kubectl apply -f - > /dev/null
+
 # 8. Restore the local Argo app-of-apps. start-lab-podman.sh sets
 #    SKIP_ROOT_APP=1 because it deploys with sync-local-stack.rb instead,
 #    and an auto-syncing root app would fight that script.

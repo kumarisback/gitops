@@ -4,6 +4,7 @@ resources:
   - namespace.yaml
   - ../base
   - app-secrets.yaml
+  - jwt-signing-key.yaml
 namespace: production
 
 # order-service is deployed from charts/microservice; its tag is in

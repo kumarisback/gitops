@@ -1,0 +1,20 @@
+# user-service's token-signing key (PKCS#8 PEM), from the Secrets Manager
+# secret the tf repo generates (01-infra, microservices/dev/jwt-signing-key).
+# Rotating it there signs everyone out within refreshInterval: tokens signed
+# with the old key no longer verify.
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: jwt-signing-key
+  namespace: development
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secretsmanager
+    kind: ClusterSecretStore
+  target:
+    name: jwt-signing-key
+  data:
+    - secretKey: private-key.pem
+      remoteRef:
+        key: microservices/dev/jwt-signing-key

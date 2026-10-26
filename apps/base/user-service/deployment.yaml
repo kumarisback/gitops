@@ -75,6 +75,17 @@ spec:
 # Legacy secret key kept for reference:
 #              key: DATABASE_URL
 
+        # The RSA key user-service signs sign-in tokens with (RS256; other
+        # services verify with its public half, /api/auth/jwks.json). Secret
+        # jwt-signing-key: an ExternalSecret from AWS Secrets Manager in the
+        # cloud (apps/<env>/jwt-signing-key.yaml), made by start-lab.sh in the
+        # lab. The service won't start without it.
+        - name: JWT_SIGNING_KEY
+          valueFrom:
+            secretKeyRef:
+              name: jwt-signing-key
+              key: private-key.pem
+
         ports:
         - containerPort: 8080
 

@@ -3,3 +3,4 @@ apps/local/app-secrets.env
 # Chart dependencies, rebuilt from Chart.lock by `helm dependency build`
 # (ArgoCD, validate.sh and the lab sync all run it).
 charts/*/charts/
+apps/local/jwt-signing-key.pem
