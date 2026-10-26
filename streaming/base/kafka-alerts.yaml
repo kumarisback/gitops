@@ -1,0 +1,105 @@
+# Alerts for the Kafka cluster and its consumers. They live with the cluster
+# (streaming/), so environments without Kafka don't get them. Broker volumes
+# filling up are covered by kube-prometheus-stack's KubePersistentVolume*
+# alerts; nothing Kafka-specific is needed there.
+#
+# Metric names come from the JMX rules (kafka-metrics.yaml), the Kafka
+# Exporter (kafka_consumergroup_*, kafka_topic_*) and the Cluster Operator
+# (strimzi_*); labels from the PodMonitors (podmonitors.yaml).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kafka-alerts
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: kafka-cluster
+      rules:
+        # A partition with no leader: its data can be neither read nor
+        # written.
+        - alert: KafkaOfflinePartitions
+          expr: sum by (namespace, strimzi_io_cluster) (kafka_controller_kafkacontroller_offlinepartitionscount) > 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Kafka cluster {{ $labels.strimzi_io_cluster }} has {{ $value }} partitions with no leader"
+            description: "Producers and consumers of those partitions are failing. Every replica of them is down."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kafkaofflinepartitions
+        # Fewer in-sync replicas than min.insync.replicas: producers with
+        # acks=all (all of ours) are refused, so new events are lost.
+        - alert: KafkaUnderMinIsrPartitions
+          expr: sum by (namespace, strimzi_io_cluster) (kafka_server_replicamanager_underminisrpartitioncount) > 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Kafka cluster {{ $labels.strimzi_io_cluster }} refuses writes to {{ $value }} partitions"
+            description: "Those partitions have fewer in-sync replicas than min.insync.replicas (2). Producers waiting for all replicas get NotEnoughReplicas errors; order-service and user-service log order_event_publish_failed / user_event_publish_failed."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kafkaunderminisrpartitions
+        # KRaft needs exactly one active controller. None: no leader
+        # elections, no topic changes; more than one: split brain.
+        - alert: KafkaNoActiveController
+          expr: sum by (namespace, strimzi_io_cluster) (kafka_controller_kafkacontroller_activecontrollercount) != 1
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Kafka cluster {{ $labels.strimzi_io_cluster }} has {{ $value }} active controllers, not 1"
+            description: "The controller quorum has no leader (0) or disagrees (more than 1). Partitions that lose a leader now stay offline."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kafkanoactivecontroller
+        # Some replicas are behind. Normal for a few minutes during a rolling
+        # restart; for longer, a broker is down or can't keep up.
+        - alert: KafkaUnderReplicatedPartitions
+          expr: sum by (namespace, strimzi_io_cluster) (kafka_server_replicamanager_underreplicatedpartitions) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Kafka cluster {{ $labels.strimzi_io_cluster }} has {{ $value }} under-replicated partitions"
+            description: "Fewer copies of the data than configured. One more broker loss could stop writes (KafkaUnderMinIsrPartitions) or lose data."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kafkaunderreplicatedpartitions
+        # Strimzi renews its CAs and client certificates 30 days before they
+        # expire; under 20 days left means renewal isn't happening.
+        - alert: KafkaCertificateExpiringSoon
+          expr: (max by (cluster, type, resource_namespace) (strimzi_certificate_expiration_timestamp_ms) / 1000 - time()) / 86400 < 20
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "Kafka {{ $labels.type }} certificate of {{ $labels.cluster }} expires in {{ $value | printf \"%.0f\" }} days"
+            description: "Strimzi should have renewed it 30 days before expiry. When it expires, clients can't connect."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kafkacertificateexpiringsoon
+        - alert: KafkaMetricsMissing
+          expr: absent_over_time(kafka_server_replicamanager_underreplicatedpartitions[10m])
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "No Kafka broker metrics for 15 minutes"
+            description: "The brokers are down, or Prometheus can't scrape them (PodMonitor kafka-resources-metrics). The other Kafka alerts can't fire meanwhile."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kafkametricsmissing
+    - name: kafka-consumers
+      rules:
+        # A consumer group falling behind: events wait longer and longer
+        # (users get their notifications late).
+        - alert: KafkaConsumerLagHigh
+          expr: sum by (namespace, consumergroup, topic) (kafka_consumergroup_lag) > 1000
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.consumergroup }} is {{ $value }} records behind on {{ $labels.topic }}"
+            description: "The group has been more than 1000 records behind for 10 minutes: it is slow, failing and retrying, or has too few consumers. More consumers than partitions don't help."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kafkaconsumerlaghigh
+        # Records a consumer gave up on. Each is a lost notification until
+        # someone looks.
+        - alert: KafkaDeadLetterRecords
+          expr: sum by (namespace, topic) (increase(kafka_topic_partition_current_offset{topic=~".+-dlq"}[10m])) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $value | printf \"%.0f\" }} records parked in {{ $labels.topic }} in 10 minutes"
+            description: "A consumer couldn't handle them, even after retries. Their headers say why (kafka_dlt-exception-message)."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kafkadeadletterrecords

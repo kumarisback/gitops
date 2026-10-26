@@ -83,14 +83,21 @@ failures = []
 
 disable_argocd_autosync
 
-AddonReleases.for('bootstrap/envs/local').each { |r| sync_helm_app(r, failures) }
+# Order matters: the add-on charts first (operators and their CRDs), then the
+# directory-based Applications (the services in apps/local, alerting rules
+# and dashboards in observability/local, the Kafka cluster in
+# streaming/local), then this repo's charts (order-service,
+# notification-service), whose pods need Secrets the directories create
+# (the KafkaAccess Secrets) before --wait can succeed.
+addons, repo_charts = AddonReleases.for('bootstrap/envs/local').partition { |r| !r['local'] }
+addons.each { |r| sync_helm_app(r, failures) }
 
-# Directory-based Applications: the services (apps/local) and the alerting
-# rules + dashboards (observability/local).
 AddonReleases.paths('bootstrap/envs/local').each do |app|
   puts "\n=== #{app['name']} (#{app['path']}) ==="
   failures << app['name'] unless run(%(kubectl apply -k #{File.join(REPO_ROOT, app['path'])}))
 end
+
+repo_charts.each { |r| sync_helm_app(r, failures) }
 
 if failures.empty?
   puts "\n✅ Everything synced successfully."

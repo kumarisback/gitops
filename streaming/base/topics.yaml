@@ -1,0 +1,62 @@
+# Topics, managed by Strimzi's Topic Operator: the only way a topic comes to
+# exist (auto-creation is off). Changing partitions or config here changes
+# the topic; deleting a KafkaTopic deletes the topic and its data.
+#
+# Partitions are the unit of parallelism and of ordering: a consumer group
+# reads each partition with one consumer at a time, and order is kept only
+# within a partition. So the count caps how many notification-service
+# replicas can share the work (6 here), and it can be raised later but
+# never lowered, and raising it moves which partition a key lands in.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: orders
+  labels:
+    strimzi.io/cluster: events
+spec:
+  partitions: 6
+  replicas: 3
+  config:
+    retention.ms: 604800000      # 7 days: replayable for a week
+    min.insync.replicas: 2
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: users
+  labels:
+    strimzi.io/cluster: events
+spec:
+  partitions: 3
+  replicas: 3
+  config:
+    retention.ms: 604800000
+    min.insync.replicas: 2
+---
+# Dead-letter topics: records a consumer gave up on, with the exception in
+# their headers. Kept longer, so there is time to look at them and replay.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: orders-dlq
+  labels:
+    strimzi.io/cluster: events
+spec:
+  partitions: 1
+  replicas: 3
+  config:
+    retention.ms: 2592000000     # 30 days
+    min.insync.replicas: 2
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: users-dlq
+  labels:
+    strimzi.io/cluster: events
+spec:
+  partitions: 1
+  replicas: 3
+  config:
+    retention.ms: 2592000000
+    min.insync.replicas: 2

@@ -1,0 +1,128 @@
+# Unit tests for streaming/base/kafka-alerts.yaml (validate.sh extracts the
+# rule file from the lab's streaming render; see slo_test.yaml).
+rule_files:
+  - ../../.validate/rules/observability/kafka-alerts.yaml
+
+evaluation_interval: 30s
+
+tests:
+  # A partition loses every replica at 3m: critical after 1m more.
+  - interval: 1m
+    input_series:
+      - series: 'kafka_controller_kafkacontroller_offlinepartitionscount{namespace="kafka",strimzi_io_cluster="events",kubernetes_pod_name="events-controller-3"}'
+        values: '0 0 0 2 2 2 2 2'
+    promql_expr_test:
+      - expr: ALERTS{alertname="KafkaOfflinePartitions", alertstate="firing"}
+        eval_time: 5m
+        exp_samples:
+          - labels: 'ALERTS{alertname="KafkaOfflinePartitions",alertstate="firing",namespace="kafka",severity="critical",strimzi_io_cluster="events"}'
+            value: 1
+
+  # Under min ISR on two brokers: summed per cluster, one critical alert.
+  - interval: 1m
+    input_series:
+      - series: 'kafka_server_replicamanager_underminisrpartitioncount{namespace="kafka",strimzi_io_cluster="events",kubernetes_pod_name="events-broker-0"}'
+        values: '0 1 1 1 1 1'
+      - series: 'kafka_server_replicamanager_underminisrpartitioncount{namespace="kafka",strimzi_io_cluster="events",kubernetes_pod_name="events-broker-1"}'
+        values: '0 2 2 2 2 2'
+    promql_expr_test:
+      - expr: ALERTS{alertname="KafkaUnderMinIsrPartitions", alertstate="firing"}
+        eval_time: 4m
+        exp_samples:
+          - labels: 'ALERTS{alertname="KafkaUnderMinIsrPartitions",alertstate="firing",namespace="kafka",severity="critical",strimzi_io_cluster="events"}'
+            value: 1
+
+  # Three controllers, one active, until the quorum loses its leader at 3m.
+  - interval: 1m
+    input_series:
+      - series: 'kafka_controller_kafkacontroller_activecontrollercount{namespace="kafka",strimzi_io_cluster="events",kubernetes_pod_name="events-controller-3"}'
+        values: '1 1 1 0 0 0 0 0'
+      - series: 'kafka_controller_kafkacontroller_activecontrollercount{namespace="kafka",strimzi_io_cluster="events",kubernetes_pod_name="events-controller-4"}'
+        values: '0 0 0 0 0 0 0 0'
+      - series: 'kafka_controller_kafkacontroller_activecontrollercount{namespace="kafka",strimzi_io_cluster="events",kubernetes_pod_name="events-controller-5"}'
+        values: '0 0 0 0 0 0 0 0'
+    promql_expr_test:
+      - expr: ALERTS{alertname="KafkaNoActiveController", alertstate="firing"}
+        eval_time: 2m
+        exp_samples: []
+      - expr: ALERTS{alertname="KafkaNoActiveController", alertstate="firing"}
+        eval_time: 6m
+        exp_samples:
+          - labels: 'ALERTS{alertname="KafkaNoActiveController",alertstate="firing",namespace="kafka",severity="critical",strimzi_io_cluster="events"}'
+            value: 1
+
+  # Under-replication for 5 minutes (a rolling restart) is not worth a
+  # message; for 15 it is.
+  - interval: 1m
+    input_series:
+      - series: 'kafka_server_replicamanager_underreplicatedpartitions{namespace="kafka",strimzi_io_cluster="events",kubernetes_pod_name="events-broker-0"}'
+        values: '0 4 4 4 4 4 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'
+      - series: 'kafka_server_replicamanager_underreplicatedpartitions{namespace="kafka",strimzi_io_cluster="events",kubernetes_pod_name="events-broker-1"}'
+        values: '0x5 0 0 0 0 0 0 0 0 0 0 3 3 3 3 3 3 3 3 3 3 3 3 3'
+    promql_expr_test:
+      - expr: ALERTS{alertname="KafkaUnderReplicatedPartitions", alertstate="firing"}
+        eval_time: 7m
+        exp_samples: []
+      - expr: ALERTS{alertname="KafkaUnderReplicatedPartitions", alertstate="firing"}
+        eval_time: 27m
+        exp_samples:
+          - labels: 'ALERTS{alertname="KafkaUnderReplicatedPartitions",alertstate="firing",namespace="kafka",severity="warning",strimzi_io_cluster="events"}'
+            value: 1
+
+  # notification-service falls 1500 records behind on orders over two
+  # partitions; users is fine.
+  - interval: 1m
+    input_series:
+      - series: 'kafka_consumergroup_lag{namespace="kafka",consumergroup="notification-service",topic="orders",partition="0"}'
+        values: '0 900x15'
+      - series: 'kafka_consumergroup_lag{namespace="kafka",consumergroup="notification-service",topic="orders",partition="1"}'
+        values: '0 600x15'
+      - series: 'kafka_consumergroup_lag{namespace="kafka",consumergroup="notification-service",topic="users",partition="0"}'
+        values: '0x15'
+    promql_expr_test:
+      - expr: ALERTS{alertname="KafkaConsumerLagHigh", alertstate="firing"}
+        eval_time: 13m
+        exp_samples:
+          - labels: 'ALERTS{alertname="KafkaConsumerLagHigh",alertstate="firing",consumergroup="notification-service",namespace="kafka",severity="warning",topic="orders"}'
+            value: 1
+
+  # Three records land in orders-dlq; busy normal topics don't count.
+  - interval: 1m
+    input_series:
+      - series: 'kafka_topic_partition_current_offset{namespace="kafka",topic="orders-dlq",partition="0"}'
+        values: '0 0 0 3 3 3'
+      - series: 'kafka_topic_partition_current_offset{namespace="kafka",topic="orders",partition="0"}'
+        values: '0+100x5'
+    promql_expr_test:
+      - expr: ALERTS{alertname="KafkaDeadLetterRecords", alertstate="firing"}
+        eval_time: 5m
+        exp_samples:
+          - labels: 'ALERTS{alertname="KafkaDeadLetterRecords",alertstate="firing",namespace="kafka",severity="warning",topic="orders-dlq"}'
+            value: 1
+
+  # The clients CA is 10 days from expiry (renewal didn't happen); the
+  # cluster CA's 25 days is inside the normal renewal window.
+  - interval: 1m
+    input_series:
+      - series: 'strimzi_certificate_expiration_timestamp_ms{cluster="events",type="client-ca",resource_namespace="kafka"}'
+        values: '864000000x100'
+      - series: 'strimzi_certificate_expiration_timestamp_ms{cluster="events",type="cluster-ca",resource_namespace="kafka"}'
+        values: '2160000000x100'
+    promql_expr_test:
+      - expr: ALERTS{alertname="KafkaCertificateExpiringSoon", alertstate="firing"}
+        eval_time: 90m
+        exp_samples:
+          - labels: 'ALERTS{alertname="KafkaCertificateExpiringSoon",alertstate="firing",cluster="events",resource_namespace="kafka",severity="warning",type="client-ca"}'
+            value: 1
+
+  # No broker metrics at all.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="prometheus"}'
+        values: '1x20'
+    promql_expr_test:
+      - expr: ALERTS{alertname="KafkaMetricsMissing", alertstate="firing"}
+        eval_time: 6m
+        exp_samples:
+          - labels: 'ALERTS{alertname="KafkaMetricsMissing",alertstate="firing",severity="warning"}'
+            value: 1

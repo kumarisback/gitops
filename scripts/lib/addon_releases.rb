@@ -13,10 +13,11 @@ module AddonReleases
   REPO_ROOT = File.expand_path('../..', __dir__)
 
   # kube-prometheus-stack installs the Prometheus Operator CRDs that the
-  # other charts' ServiceMonitors need, so it goes first. Charts from this
-  # repo (the services) come after every add-on, whose CRDs they use (VPA,
-  # ServiceMonitor).
-  FIRST = %w[kube-prometheus-stack].freeze
+  # other charts' ServiceMonitors need, so it goes first; the Strimzi
+  # operator next, as the Access Operator reads its Kafka and KafkaUser
+  # CRDs. Charts from this repo (the services) come after every add-on,
+  # whose CRDs they use (VPA, ServiceMonitor).
+  FIRST = %w[kube-prometheus-stack strimzi-kafka-operator].freeze
 
   # A source pointing at a directory of this repo that holds a Chart.yaml
   # (charts/microservice): ArgoCD renders it as a Helm chart.

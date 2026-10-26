@@ -1,0 +1,76 @@
+# One Kafka identity per service, managed by Strimzi's User Operator: it
+# issues each a TLS client certificate (Secret <user> in this namespace,
+# renewed before it expires) and sets its ACLs. With authorization: simple
+# on the cluster, anything not allowed here is denied.
+#
+# The services don't read these Secrets directly: a KafkaAccess resource
+# next to each service (apps/components/kafka-clients) copies what it needs
+# (bootstrap address, certificate, key, cluster CA) into its own namespace.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  name: order-service
+  labels:
+    strimzi.io/cluster: events
+spec:
+  authentication:
+    type: tls
+  authorization:
+    type: simple
+    acls:
+      - resource: { type: topic, name: orders, patternType: literal }
+        operations: [Write, Describe]
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  name: user-service
+  labels:
+    strimzi.io/cluster: events
+spec:
+  authentication:
+    type: tls
+  authorization:
+    type: simple
+    acls:
+      - resource: { type: topic, name: users, patternType: literal }
+        operations: [Write, Describe]
+---
+# Reads both event topics as consumer group notification-service, and
+# parks records it gives up on in their dead-letter topics.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  name: notification-service
+  labels:
+    strimzi.io/cluster: events
+spec:
+  authentication:
+    type: tls
+  authorization:
+    type: simple
+    acls:
+      - resource: { type: topic, name: orders, patternType: literal }
+        operations: [Read, Describe]
+      - resource: { type: topic, name: users, patternType: literal }
+        operations: [Read, Describe]
+      - resource: { type: group, name: notification-service, patternType: literal }
+        operations: [Read]
+      - resource: { type: topic, name: orders-dlq, patternType: literal }
+        operations: [Write, Describe]
+      - resource: { type: topic, name: users-dlq, patternType: literal }
+        operations: [Write, Describe]
+---
+# For people, not services: a super user (spec.kafka.authorization.superUsers
+# in kafka.yaml) for the runbooks' admin commands, used only from the
+# temporary pod in streaming/tools/kafka-admin.yaml. Its Secret stays in
+# this namespace, where only cluster admins can read it.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  name: kafka-admin
+  labels:
+    strimzi.io/cluster: events
+spec:
+  authentication:
+    type: tls

@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Production's Kafka volumes outlive their PVCs (gp3-retain, platform/storage):
+# deleting the cluster or its claims by mistake doesn't destroy the log.
+resources:
+  - ../base
+
+patches:
+  - target:
+      kind: KafkaNodePool
+    patch: |-
+      - op: replace
+        path: /spec/storage/volumes/0/class
+        value: gp3-retain

@@ -1,0 +1,38 @@
+# The Kafka cluster, topics, users, metrics and alerts from streaming/<env>.
+# Not a Helm chart, so not labelled cluster-addons; addons/select-env fills
+# in ENV in the path.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: streaming-config
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: streaming-config
+    # Git-sourced: follows the root app's revision.
+    app.kubernetes.io/part-of: gitops-config
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/kumarisback/gitops.git
+    targetRevision: HEAD
+    path: streaming/ENV
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kafka
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    # The Strimzi CRDs come from strimzi-kafka-operator; retry until they
+    # exist instead of failing the first sync.
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      - CreateNamespace=true
+      - SkipDryRunOnMissingResource=true

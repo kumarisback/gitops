@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Event streaming (roadmap step 12): the Strimzi operators and the Kafka
+# cluster with its topics and users. Separate from addons/applications so
+# an environment opts in with one line in bootstrap/envs/<env>: the lab and
+# dev run it; staging and prod don't yet (three brokers and three
+# controllers cost real money). To turn it on there, add
+#
+#   - ../../../addons/streaming
+#
+# to that environment's bootstrap kustomization, add the
+# ../components/kafka-clients component to apps/<env>, and set kafka.enabled
+# in the chart-deployed services' values.
+resources:
+  - strimzi-kafka-operator.yaml
+  - strimzi-access-operator.yaml
+  - streaming-config.yaml

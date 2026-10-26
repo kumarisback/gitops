@@ -1,0 +1,39 @@
+# The Strimzi Access Operator: for each KafkaAccess resource (next to a
+# service, apps/components/kafka-clients) it writes a Secret in that
+# service's namespace with everything needed to connect: bootstrap address,
+# the user's TLS certificate and key, and the cluster CA. Without it those
+# would have to be copied across namespaces by hand.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: strimzi-access-operator
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: cluster-addons
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - chart: strimzi-access-operator
+      repoURL: oci://quay.io/strimzi-helm/strimzi-access-operator
+      # 0.3.0 works with Strimzi 1.x (the v1 API).
+      targetRevision: 0.3.0
+      helm:
+        ignoreMissingValueFiles: true
+        valueFiles:
+          - $values/addons/values/common/strimzi-access-operator.yaml
+          - $values/addons/values/TIER/strimzi-access-operator.yaml
+          - $values/addons/values/ENV/strimzi-access-operator.yaml
+    - repoURL: https://github.com/kumarisback/gitops.git
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kafka
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

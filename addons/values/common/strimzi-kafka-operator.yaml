@@ -1,0 +1,13 @@
+# Strimzi's own Grafana dashboards (Kafka, KRaft, Kafka Exporter for
+# consumer lag, operators), as ConfigMaps the Grafana sidecar loads from the
+# monitoring namespace. They read the metrics streaming/base sets up.
+dashboards:
+  enabled: true
+  namespace: monitoring
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 384Mi
+  limits:
+    memory: 384Mi
