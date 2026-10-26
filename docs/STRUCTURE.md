@@ -32,23 +32,30 @@ Each cluster (local lab, dev, staging, prod) has an **entry folder**,
 
 ```
 gitops/
-├── apps/                    the 3 services: frontend and user-service with Kustomize,
-│   │                          order-service with our own Helm chart (charts/, docs/HELM.md)
+├── apps/                    the services: frontend and user-service with Kustomize,
+│   │                          order-service and notification-service with our own Helm
+│   │                          chart (charts/, docs/HELM.md)
 │   ├── base/                  shared YAML for all environments
 │   ├── components/  ★         shared settings used by all envs: tracing
 │   │                            (otel-instrumentation) and request payload
 │   │                            logging (request-logging), quotas and default
-│   │                            limits per namespace (namespace-guardrails)
+│   │                            limits per namespace (namespace-guardrails),
+│   │                            Kafka connections (kafka-clients, docs/KAFKA.md)
 │   └── local|dev|staging|prod/  only what differs per environment (the lab also
 │                                runs its own MongoDB: apps/local/mongodb.yaml)
 │
 ├── addons/  ★               the "tools": Prometheus, Grafana, Loki, Tempo, collector, Alloy,
 │                            metrics-server, VPA (recommends container sizes)
 │   ├── applications/          one ArgoCD app per tool
+│   ├── streaming/             Kafka: the Strimzi operators and the cluster's config app,
+│   │                            only in the environments that run Kafka (lab, dev)
 │   ├── values/                the tools' settings, in layers (section 3)
 │   └── select-env/            picks the right layers for each environment
 │
 ├── observability/  ★        alerts, SLOs, dashboards, alerting secrets
+├── streaming/  ★            the Kafka cluster "events": topics, users and ACLs, metrics,
+│                            alerts (base + one overlay per environment), and tools/
+│                            for the runbooks' admin pod; see KAFKA.md
 ├── charts/  ★               our own Helm charts: microservice (any of the services) and
 │                            common (a library of shared helpers); see HELM.md
 ├── bootstrap/               ArgoCD entry points, one per environment

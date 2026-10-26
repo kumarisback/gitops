@@ -256,6 +256,152 @@ Prometheus Operator's logs for rejected Probes.
 
 ---
 
+## Kafka
+
+The cluster `events` runs in the `kafka` namespace (`streaming/`,
+`docs/KAFKA.md`). Grafana has Strimzi's dashboards (**Strimzi Kafka**,
+**Strimzi KRaft**, **Strimzi Kafka Exporter** for consumer lag). For Kafka
+commands, start the admin pod (it connects as the `kafka-admin` super user)
+and delete it afterwards:
+
+```bash
+kubectl apply -f streaming/tools/kafka-admin.yaml
+kubectl exec -it -n kafka kafka-admin -- bash
+bin/kafka-topics.sh $ADMIN --describe --under-replicated-partitions
+bin/kafka-consumer-groups.sh $ADMIN --describe --group notification-service
+kubectl delete -f streaming/tools/kafka-admin.yaml
+```
+
+The state Strimzi sees: `kubectl get kafka,kafkanodepool,kafkatopic,kafkauser -n kafka`
+(each has a `Ready` condition and a message when it isn't).
+
+### KafkaOfflinePartitions
+
+**Meaning:** partitions with no leader: every replica of them is down.
+Producers to them get errors (order-service logs `order_event_publish_failed`),
+consumers stall on them.
+
+**Check:** `kubectl get pods -n kafka -l strimzi.io/cluster=events`. Brokers
+not Running: `kubectl describe pod` (a volume that can't attach after a node
+moved zones, OOMKilled, image pull). In the admin pod:
+`bin/kafka-topics.sh $ADMIN --describe --unavailable-partitions`.
+
+**Act:** get the brokers back; the partitions elect a leader on their own.
+Never enable unclean leader election to get a partition back: it accepts
+data loss.
+
+### KafkaUnderMinIsrPartitions
+
+**Meaning:** some partitions have fewer in-sync replicas than
+`min.insync.replicas` (2). Our producers use `acks=all`, so writes to them
+are refused: events are being lost right now (counted in
+`order_events_total{outcome="failed"}`, `user_events_total{outcome="failed"}`).
+
+**Check:** which brokers are down or slow (Strimzi Kafka dashboard,
+`kubectl get pods -n kafka`); in the admin pod
+`bin/kafka-topics.sh $ADMIN --describe --under-min-isr-partitions`.
+
+**Act:** bring the brokers back. Lowering `min.insync.replicas` would accept
+writes that one more failure loses; don't, unless losing those events is
+explicitly acceptable.
+
+### KafkaNoActiveController
+
+**Meaning:** the KRaft controller quorum has no leader (or more than one).
+No leader elections or topic changes can happen; the next broker failure
+leaves partitions offline.
+
+**Check:** `kubectl get pods -n kafka -l strimzi.io/pool-name=controller`: a
+quorum of three needs two up. Both clusters span two zones, so losing the
+zone with two controllers loses the quorum (see `streaming/base/kafka.yaml`).
+Controller logs: `kubectl logs -n kafka events-controller-<n>`.
+
+**Act:** restore the controllers (their zone, their volumes). This is the
+case for a third availability zone.
+
+### KafkaUnderReplicatedPartitions
+
+**Meaning:** some partitions have fewer copies than configured for more than
+10 minutes. Nothing is failing yet; one more broker loss could stop writes
+or lose data.
+
+**Check:** a broker down or restarting (a rolling update that's stuck:
+`kubectl get kafka events -n kafka -o yaml`, status), or a broker that can't
+keep up (Strimzi Kafka dashboard: request queue, network threads busy).
+
+**Act:** restore the broker. If they're all up and a replica keeps falling
+behind, the broker is overloaded: more brokers, or move partitions
+(Cruise Control).
+
+### KafkaCertificateExpiringSoon
+
+**Meaning:** a Strimzi CA or client certificate expires in under 20 days.
+Strimzi renews them 30 days before expiry, so renewal is stuck. When the
+cluster CA expires, no client can connect.
+
+**Check:** `kubectl logs -n kafka deploy/strimzi-cluster-operator | grep -i cert`
+and the `Kafka` resource's status. For a user certificate, the `KafkaUser`'s
+status.
+
+**Act:** fix what blocks the operator (it is down, or a reconciliation fails
+on something else first). A manual renewal: annotate the CA secret with
+`strimzi.io/force-renew=true`.
+
+### KafkaMetricsMissing
+
+**Meaning:** Prometheus has had no broker metrics for 15 minutes. Either the
+brokers are down (then `KafkaOfflinePartitions` would follow, but can't
+fire without metrics) or the scrape is broken.
+
+**Check:** `kubectl get pods -n kafka`; then the PodMonitor
+`kafka-resources-metrics` and Prometheus' Targets page (`podMonitor/kafka/...`).
+
+**Act:** restore the brokers or the scrape (the metrics port is
+`tcp-prometheus`, from `metricsConfig` in the Kafka resource).
+
+### KafkaConsumerLagHigh
+
+**Meaning:** a consumer group is more than 1000 records behind on a topic
+for 10 minutes: users get their notifications late.
+
+**Check:** the **Strimzi Kafka Exporter** dashboard (lag per partition). Lag
+on one partition only: a stuck or slow consumer there (a record retried in
+place: notification-service logs). Lag everywhere: too few consumers, or
+each record is slow (notification-service traces in Tempo). In the admin
+pod: `bin/kafka-consumer-groups.sh $ADMIN --describe --group notification-service`
+shows which consumer owns which partition.
+
+**Act:** scale notification-service up (no further than the topic's
+partition count, 6 for `orders`; more consumers than partitions sit idle),
+or fix what makes each record slow.
+
+### KafkaDeadLetterRecords
+
+**Meaning:** records went to a `-dlq` topic: notification-service gave up on
+them (malformed, or still failing after its retries). Each is a
+notification nobody got.
+
+**Check:** read them with their headers in the admin pod:
+
+```bash
+bin/kafka-console-consumer.sh $ADMIN --topic orders-dlq --from-beginning \
+  --property print.headers=true --property print.key=true --timeout-ms 10000
+```
+
+`kafka_dlt-exception-fqcn` and `kafka_dlt-exception-message` say why;
+notification-service logs `event_dead_lettered` with the same offset.
+
+**Act:** a malformed record (`PermanentEventException`) is the producer's
+bug: fix the producer. A transient failure (a provider outage) can be
+replayed once it's over, by producing the records back to their topic:
+`bin/kafka-console-consumer.sh ... --topic orders-dlq` piped to
+`bin/kafka-console-producer.sh $ADMIN --topic orders --property parse.key=true`
+(print the key, as above, with `--property key.separator=$'\t'` on both sides).
+Replayed events keep their eventId, so a notification already sent isn't
+sent twice by the same replica.
+
+---
+
 ## Observability pipeline
 
 These fire when logs or traces stop reaching Loki or Tempo. They are

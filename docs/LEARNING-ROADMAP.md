@@ -118,7 +118,7 @@ without notes. If you can't do (c), don't move on.
 ## Progress tracker
 
 ✅ done · 🟡 partly done · ☐ not started. Last reviewed against the `tf`, `gitops` and
-app repos on 2026-10-05 (updated after completing steps 01–10; steps 06 and 11 on 2026-10-07); the `tf/learning-topics` notes cover the steps marked done or partly done.
+app repos on 2026-10-05 (updated after completing steps 01–10; steps 06 and 11 on 2026-10-07, step 12 on 2026-10-26); the `tf/learning-topics` notes cover the steps marked done or partly done.
 
 | # | Branch | Phase | 💰 | Done | Notes |
 |---|---|---|---|---|---|
@@ -133,7 +133,7 @@ app repos on 2026-10-05 (updated after completing steps 01–10; steps 06 and 11
 | 09 | `09-elk-logging` | B | 💰💰 | ✅ | Done with Loki instead of ELK (decision 2026-10-05): JSON logs, correlation, masking, edge/api/server (tf topic 08) |
 | 10 | `10-tracing-otel` | B | 💰 | ✅ | The 2s-delay exercise is optional practice (tf topic 09) |
 | 11 | `11-synthetic-blackbox` | B |  | 🟡 | Done: blackbox exporter, Probes per service (lab also through Traefik), alerts with unit tests and runbooks, "Is everything OK?" dashboard; tf: Synthetics canary + Container Insights (both off by default). Waits for the domain (step 03): public-URL and TLS probes, DNS checks. To run on dev: enable the canary, the SG/DNS verify tests (tf topic 11) |
-| 12 | `12-kafka-strimzi` | C: Streaming | 💰💰 | ☐ |  |
+| 12 | `12-kafka-strimzi` | C: Streaming | 💰💰 | ✅ | Strimzi 1.3 / Kafka 4.3 (KRaft), cluster in `streaming/` (lab 1 node; dev 3+3 across zones; staging/prod opt-in), TLS client auth + ACLs via KafkaAccess, notification-service consumer with retries + DLQ, 8 alerts. Also fixed: forgeable sign-in tokens (RS256 + JWKS now). To run on dev: broker-kill and lag exercises (tf topic 12) |
 | 13 | `13-kafka-ecosystem` | C | 💰💰 | ☐ |  |
 | 14 | `14-msk-managed` | C | 💰💰 | ☐ |  |
 | 15 | `15-keda-autoscaling` | C |  | ☐ |  |

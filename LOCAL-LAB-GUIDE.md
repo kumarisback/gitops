@@ -417,7 +417,7 @@ the alert to clear (about 4 minutes; works the same on EKS):
 
 | Step | Topic | Local KinD Execution |
 |---|---|---|
-| **12** | `12-kafka-strimzi` | Install Strimzi operator via Helm. Deploy a 3-broker KRaft Kafka cluster on KinD workers with PVCs. Create `KafkaTopic` and `KafkaUser`. Produce/consume messages. Kill a broker to test ISR resilience. |
+| **12** | `12-kafka-strimzi` | **Done** (`docs/KAFKA.md`): the lab sync installs Strimzi and a one-node KRaft cluster (`streaming/local`), the topics and users, and notification-service. Create an order and watch the notification, the lag and the dead-letter topic ("Try it in the lab"). Kafka adds about 2.5 GiB of memory requests: give the Docker/Podman VM 8 GiB or more, or leave Kafka out: remove `../../../addons/streaming` and `notification-service.yaml` from `bootstrap/envs/local`, the `kafka-clients` component from `apps/local`, and set `kafka.enabled: false` in `apps/local/order-service.values.yaml`. Broker failures need dev's three brokers. |
 | **13** | `13-kafka-ecosystem` | Deploy Apicurio / Confluent Schema Registry. Deploy Kafka Connect. Run an Outbox pattern simulation. |
 | **14** | `14-msk-managed` | *AWS only (timebox 1 hr with MSK Serverless).* |
 | **15** | `15-keda-autoscaling` | Install KEDA in KinD. Add `ScaledObject` targeting Kafka consumer lag. Produce 5,000 messages; watch consumers scale from 0 → 8 → 0. |
