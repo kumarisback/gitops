@@ -23,8 +23,10 @@ Severity decides where an alert goes (see Alertmanager in
 
 ### ServiceUnavailable
 
-**Meaning:** no pod of the Deployment has been ready for 2 minutes, so every
-request to the service fails. Users are affected now. While it fires,
+**Meaning:** no pod of the Deployment has been ready for 2 minutes although
+some are wanted, so every request to the service fails (for notification-service:
+its Kafka backlog grows). Users are affected now. A Deployment scaled to zero on
+purpose (KEDA, or by hand) doesn't fire it. While it fires,
 Alertmanager holds back that service's `ServiceDown`, `ServiceMetricsMissing`
 and SLO alerts, which would only repeat it.
 
@@ -39,11 +41,12 @@ kubectl get events -n <namespace> --sort-by=.lastTimestamp | tail -20
 Common causes, roughly in order: a bad rollout (`CrashLoopBackOff`, failing
 readiness), an image that can't be pulled (`ImagePullBackOff`: the pinned tag
 isn't in ECR), the namespace quota (`exceeded quota` on the ReplicaSet), no
-node with room (`Pending`; check Karpenter), or someone scaled it to 0.
+node with room (`Pending`; check Karpenter). For a service KEDA scales from
+zero, the same causes show up as the first pod after a quiet period never
+becoming ready.
 
 **Act:** roll back a bad release first (`git revert` the image-tag commit and
-let ArgoCD sync). For the other causes, fix that cause. Scaled to 0 on purpose: silence
-the alert for the maintenance window.
+let ArgoCD sync). For the other causes, fix that cause.
 
 ### ServiceDown
 
@@ -496,6 +499,49 @@ against the order rate.
 order-service replicas each run the relay (the lease keeps them from
 publishing the same event twice), or raise `app.events.outbox.batch-size`
 (100 events per poll, every 500 ms).
+
+---
+
+## Autoscaling (KEDA)
+
+KEDA (`docs/KEDA.md`) scales notification-service on its Kafka lag and order-service on
+requests per second in the lab and dev. Its state:
+
+```bash
+kubectl get scaledobject,hpa -n development          # READY, ACTIVE; the HPA KEDA created
+kubectl describe scaledobject <service> -n development   # conditions and events
+kubectl logs -n keda deploy/keda-operator --tail=100
+```
+
+### KedaScalerErrors
+
+**Meaning:** for 10 minutes KEDA has failed to read a trigger's metric for a
+ScaledObject. The service's size no longer follows its load: the HPA keeps the
+current count, or KEDA runs the fallback count (notification-service: 1). A
+service without a fallback that sits at zero stays there.
+
+**Check:** `kubectl describe scaledobject <service> -n <namespace>` and the
+operator's log say which trigger and why. Usual causes: for the Kafka triggers,
+Kafka unreachable (the Kafka alerts) or the service's KafkaAccess Secret missing or
+renewed with a certificate KEDA hasn't picked up; for the Prometheus trigger,
+Prometheus down or the query returning nothing (a renamed metric or label).
+
+**Act:** fix the source; KEDA recovers on its next poll (15 seconds). Meanwhile, if
+the service must work, scale it by hand: pause KEDA with the annotation
+`autoscaling.keda.sh/paused-replicas: "2"` on the ScaledObject, and remove it after.
+
+### KedaMetricsMissing
+
+**Meaning:** Prometheus has had no metrics from the KEDA operator for 15
+minutes. Either KEDA is down, and nothing it scales changes size, or the scrape
+is broken, and `KedaScalerErrors` can't fire.
+
+**Check:** `kubectl get pods -n keda`; then the ServiceMonitor `keda-operator` and
+Prometheus' Targets page.
+
+**Act:** restore the operator (its ArgoCD application `keda`) or the scrape. While
+KEDA is down, services stay at their current size; one at zero stays at zero, so
+watch `KafkaConsumerLagHigh`.
 
 ---
 

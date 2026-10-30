@@ -45,7 +45,8 @@ gitops/
 │                                runs its own MongoDB: apps/local/mongodb.yaml)
 │
 ├── addons/  ★               the "tools": Prometheus, Grafana, Loki, Tempo, collector, Alloy,
-│                            metrics-server, VPA (recommends container sizes)
+│                            metrics-server, VPA (recommends container sizes), KEDA
+│                            (scales on events, KEDA.md)
 │   ├── applications/          one ArgoCD app per tool
 │   ├── streaming/             Kafka: the Strimzi operators and the cluster's config app,
 │   │                            only in the environments that run Kafka (lab, dev)

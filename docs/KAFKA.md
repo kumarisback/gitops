@@ -51,7 +51,7 @@ topic.
 **Partitions.** A topic is split into partitions; a consumer group reads each
 partition with one consumer at a time, and order is guaranteed only within
 a partition. So `orders` has 6 partitions: at most 6 notification-service
-replicas can share the work (its autoscaler stops at 6), and a seventh would
+replicas can share the work (KEDA, `docs/KEDA.md`, stops at 6), and a seventh would
 sit idle. The count can be raised later but never lowered, and raising it
 changes which partition a key lands in, so it's chosen with headroom.
 

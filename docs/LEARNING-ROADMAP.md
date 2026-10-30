@@ -118,7 +118,7 @@ without notes. If you can't do (c), don't move on.
 ## Progress tracker
 
 ✅ done · 🟡 partly done · ☐ not started. Last reviewed against the `tf`, `gitops` and
-app repos on 2026-10-05 (updated after completing steps 01–10; steps 06 and 11 on 2026-10-07, steps 12–13 on 2026-10-26, step 14 on 2026-10-30); the `tf/learning-topics` notes cover the steps marked done or partly done.
+app repos on 2026-10-05 (updated after completing steps 01–10; steps 06 and 11 on 2026-10-07, steps 12–13 on 2026-10-26, steps 14–15 on 2026-10-30); the `tf/learning-topics` notes cover the steps marked done or partly done.
 
 | # | Branch | Phase | 💰 | Done | Notes |
 |---|---|---|---|---|---|
@@ -136,7 +136,7 @@ app repos on 2026-10-05 (updated after completing steps 01–10; steps 06 and 11
 | 12 | `12-kafka-strimzi` | C: Streaming | 💰💰 | ✅ | Strimzi 1.3 / Kafka 4.3 (KRaft), cluster in `streaming/` (lab 1 node; dev 3+3 across zones; staging/prod opt-in), TLS client auth + ACLs via KafkaAccess, notification-service consumer with retries + DLQ, 8 alerts. Also fixed: forgeable sign-in tokens (RS256 + JWKS now). To run on dev: broker-kill and lag exercises (tf topic 12) |
 | 13 | `13-kafka-ecosystem` | C | 💰💰 | ✅ | Apicurio schema registry (Avro, `BACKWARD`), transactional outbox in order-service (lab MongoDB as a replica set), Kafka Connect + Aiven S3 sink archiving `orders`/`users` (dev; tf `enable_events_archive`), read-only Kafka UI, Avro console pod, 4 more alerts. CDC (Debezium) moved to step 23. To run on dev: archive and outbox exercises (tf topic 13) |
 | 14 | `14-msk-managed` | C | 💰💰 | ✅ | `modules/msk` (MSK Serverless, IAM auth, `enable_msk` off) + IRSA roles mirroring the KafkaUser ACLs; chart 0.3.0 `kafka.msk`, `apps/components/kafka-msk`, `msk/topics-job.yaml`; `docs/msk-vs-strimzi.md` (cost, auth, ops). Module `terraform test` with a mocked provider. To run: the afternoon switch-over (tf topic 14) |
-| 15 | `15-keda-autoscaling` | C |  | ☐ |  |
+| 15 | `15-keda-autoscaling` | C |  | ✅ | KEDA 2.21 add-on; chart 0.4.0 `autoscaling.keda` (ScaledObject, Kafka TriggerAuthentication from the KafkaAccess Secret, scale to zero, fallback); notification-service on lag 0–6 (lab 0–3), order-service on Prometheus req/s + CPU in lab/dev; ServiceUnavailable aware of deliberate zero; KedaScalerErrors, KedaMetricsMissing. To run: the burst exercise (docs/KEDA.md) |
 | 16 | `16-kong-gateway` | D: Gateway/Mesh |  | ☐ |  |
 | 17 | `17-kong-plugins` | D |  | ☐ |  |
 | 18 | `18-service-mesh` | D | 💰 | ☐ | Also: restrict the schema registry's admin API to the rules Job (open since step 13) |
