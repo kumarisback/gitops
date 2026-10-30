@@ -1,0 +1,103 @@
+# Creates the event topics on Amazon MSK (roadmap step 14,
+# docs/msk-vs-strimzi.md). MSK has no Topic Operator, so this Job plays its
+# part, with the partitions and retention of the KafkaTopics in
+# streaming/base/topics.yaml: keep the two equal. MSK Serverless fixes
+# replication (3) and min.insync.replicas (2) itself. Safe to run again: it
+# creates what is missing and (re)sets retention. Partitions can only be
+# raised, by hand (kafka-topics.sh --alter).
+#
+# Not deployed by ArgoCD. Run it with the tf output filled in:
+#
+#   BOOTSTRAP=$(terraform -chdir=<tf repo>/infrastructure/app-cluster/01-infra output -raw msk_bootstrap_brokers)
+#   sed "s|MSK_BOOTSTRAP_SERVERS|${BOOTSTRAP}|" msk/topics-job.yaml | kubectl apply -f -
+#   kubectl logs -n msk-admin job/msk-topics -f
+#   kubectl delete -f msk/topics-job.yaml
+#
+# It runs in a namespace of its own, so only cluster admins can use the
+# msk-admin role.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: msk-admin
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: msk-admin
+  namespace: msk-admin
+  annotations:
+    # tf output irsa_role_arns["msk_admin"]: may create and configure
+    # topics, never read or write their data.
+    eks.amazonaws.com/role-arn: arn:aws:iam::602367507570:role/microservices-dev-irsa-msk_admin
+# The Kubernetes API isn't needed; EKS mounts the AWS token separately.
+automountServiceAccountToken: false
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: msk-topics
+  namespace: msk-admin
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: msk-topics
+    spec:
+      serviceAccountName: msk-admin
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: topics
+          # Our Kafka image: Kafka's tools plus MSK's IAM login module (app
+          # repo kafka-connect/). Same tag as streaming/dev's KafkaConnect.
+          image: 602367507570.dkr.ecr.us-east-1.amazonaws.com/kafka-connect:5859301cb5af1c764790573bc55261e472a83f90
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+              cat > /tmp/client.properties <<'PROPS'
+              security.protocol=SASL_SSL
+              sasl.mechanism=AWS_MSK_IAM
+              sasl.jaas.config=software.amazon.msk.auth.iam.IAMLoginModule required;
+              sasl.client.callback.handler.class=software.amazon.msk.auth.iam.IAMClientCallbackHandler
+              PROPS
+              kafka=(--bootstrap-server "${BOOTSTRAP_SERVERS}" --command-config /tmp/client.properties)
+              topic() {  # NAME PARTITIONS RETENTION_MS
+                /opt/kafka/bin/kafka-topics.sh "${kafka[@]}" --create --if-not-exists \
+                  --topic "$1" --partitions "$2" --config "retention.ms=$3"
+                /opt/kafka/bin/kafka-configs.sh "${kafka[@]}" --alter --entity-type topics \
+                  --entity-name "$1" --add-config "retention.ms=$3"
+              }
+              topic orders 6 604800000        # 7 days
+              topic users 3 604800000
+              topic orders-dlq 1 2592000000   # 30 days
+              topic users-dlq 1 2592000000
+              /opt/kafka/bin/kafka-topics.sh "${kafka[@]}" --describe
+          env:
+            - name: BOOTSTRAP_SERVERS
+              value: MSK_BOOTSTRAP_SERVERS
+            - name: HOME
+              value: /tmp
+            # Kafka's scripts create a log directory; the root filesystem
+            # is read-only.
+            - name: LOG_DIR
+              value: /tmp/logs
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+          resources:
+            requests: {cpu: 100m, memory: 512Mi}
+            limits: {memory: 512Mi}
+      volumes:
+        - name: tmp
+          emptyDir: {}

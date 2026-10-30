@@ -22,7 +22,7 @@ patches:
       metadata:
         name: events-connect
       spec:
-        image: 602367507570.dkr.ecr.us-east-1.amazonaws.com/kafka-connect:6a1c60ad5ab60f824b6e9f4af97885237eb1374d
+        image: 602367507570.dkr.ecr.us-east-1.amazonaws.com/kafka-connect:5859301cb5af1c764790573bc55261e472a83f90
         template:
           serviceAccount:
             metadata:

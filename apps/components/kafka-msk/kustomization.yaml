@@ -1,0 +1,65 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Amazon MSK instead of Strimzi (roadmap step 14, docs/msk-vs-strimzi.md),
+# for user-service, which is still deployed with Kustomize: what the
+# chart's kafka.msk does for the others. Use it in place of
+# ../components/kafka-clients.
+#
+# The environment adds ConfigMap kafka-msk as a resource (not a generator,
+# which would run after this component):
+#   bootstrap.servers       tf output msk_bootstrap_brokers
+#   user-service-role-arn   tf output irsa_role_arns["msk_user_service"]
+
+# user-service signs in with its IRSA role.
+replacements:
+  - source:
+      kind: ConfigMap
+      name: kafka-msk
+      fieldPath: data.user-service-role-arn
+    targets:
+      - select:
+          kind: ServiceAccount
+          name: user-service
+        fieldPaths:
+          - metadata.annotations.[eks.amazonaws.com/role-arn]
+        options:
+          create: true
+
+# SASL over TLS with IAM, through AWS's login module (in the image); MSK's
+# certificates are publicly trusted, so no SSL bundle.
+patches:
+  - target:
+      kind: Deployment
+      name: user-service
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: APP_EVENTS_ENABLED
+          value: "true"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+          valueFrom: {configMapKeyRef: {name: kafka-msk, key: bootstrap.servers}}
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: SPRING_KAFKA_SECURITY_PROTOCOL
+          value: SASL_SSL
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: SPRING_KAFKA_PROPERTIES_SASL_MECHANISM
+          value: AWS_MSK_IAM
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: SPRING_KAFKA_PROPERTIES_SASL_JAAS_CONFIG
+          value: software.amazon.msk.auth.iam.IAMLoginModule required;
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: SPRING_KAFKA_PROPERTIES_SASL_CLIENT_CALLBACK_HANDLER_CLASS
+          value: software.amazon.msk.auth.iam.IAMClientCallbackHandler

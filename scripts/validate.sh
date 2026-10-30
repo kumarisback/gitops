@@ -168,7 +168,9 @@ blackbox_check() { extract configmap "$1" blackbox.yaml "$2" && blackbox_exporte
 # All of it first, so the CRDs the charts install are known (step 2) before
 # any custom resource is checked against them (step 3).
 echo "Render"
-KUSTOMIZE_DIRS=(platform platform/karpenter/dev)
+# tests/kustomize/*: validation-only overlays for variants no environment
+# runs yet (apps-msk: the services on Amazon MSK).
+KUSTOMIZE_DIRS=(platform platform/karpenter/dev tests/kustomize/apps-msk)
 for env in "${ENVS[@]}"; do KUSTOMIZE_DIRS+=("apps/${env}" "observability/${env}" "streaming/${env}" "bootstrap/envs/${env}"); done
 for dir in "${KUSTOMIZE_DIRS[@]}"; do
   check "build ${dir}" render_kustomize "${dir}" "${OUT}/kustomize/$(echo "${dir}" | tr '/' '_').yaml"
@@ -221,7 +223,7 @@ echo "Lab ingress controller"
 
 # Manifests applied by hand when a runbook needs them (not by ArgoCD).
 echo "Operator tools"
-for f in streaming/tools/*.yaml; do check "schema ${f}" kubeconform_file "${f}"; done
+for f in streaming/tools/*.yaml msk/*.yaml; do check "schema ${f}" kubeconform_file "${f}"; done
 
 # This repo's own charts (charts/): lint, and the unit tests in
 # charts/<chart>/tests (helm-unittest). The services' rendered releases are

@@ -1,0 +1,9 @@
+# What apps/<env>/kafka-msk.yaml looks like, with example values (the tf
+# outputs msk_bootstrap_brokers and irsa_role_arns["msk_user_service"]).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-msk
+data:
+  bootstrap.servers: boot-abc123.c1.kafka-serverless.us-east-1.amazonaws.com:9098
+  user-service-role-arn: arn:aws:iam::602367507570:role/microservices-dev-irsa-msk_user_service

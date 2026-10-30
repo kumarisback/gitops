@@ -26,7 +26,11 @@ service:
 serviceAccount:
   create: true
   # The services never call the Kubernetes API, so they get no token.
+  # (IRSA works without it: EKS mounts a separate token for AWS.)
   automountToken: false
+  # e.g. the IRSA role for Amazon MSK:
+  # eks.amazonaws.com/role-arn: arn:aws:iam::<account>:role/microservices-<env>-irsa-msk_<service>
+  annotations: {}
 
 # Used only when autoscaling is off; with the HPA on, the chart sets no
 # replicas at all, so ArgoCD and the HPA don't fight over the count.
@@ -107,6 +111,12 @@ kafka:
   enabled: false
   # The KafkaAccess Secret's name, e.g. order-service-kafka.
   accessSecret: ""
+  # Amazon MSK instead (roadmap step 14): its bootstrap servers (tf output
+  # msk_bootstrap_brokers) switch the connection to IAM sign-in;
+  # accessSecret is then unused. Needs the service's IRSA role in
+  # serviceAccount.annotations. See docs/msk-vs-strimzi.md.
+  msk:
+    bootstrapServers: ""
 
 # The OpenTelemetry Java agent (in the image) and the log "environment"
 # field. Same settings as apps/components/otel-instrumentation.

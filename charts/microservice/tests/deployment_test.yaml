@@ -179,6 +179,58 @@ tests:
             name: SPRING_KAFKA_SSL_BUNDLE
           any: true
 
+  - it: signs in to Amazon MSK with IAM when kafka.msk is set
+    set:
+      kafka.enabled: true
+      kafka.msk.bootstrapServers: boot-abc123.c1.kafka-serverless.us-east-1.amazonaws.com:9098
+      serviceAccount.annotations:
+        eks.amazonaws.com/role-arn: arn:aws:iam::602367507570:role/microservices-dev-irsa-msk_order_service
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+            value: boot-abc123.c1.kafka-serverless.us-east-1.amazonaws.com:9098
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SPRING_KAFKA_SECURITY_PROTOCOL
+            value: SASL_SSL
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SPRING_KAFKA_PROPERTIES_SASL_MECHANISM
+            value: AWS_MSK_IAM
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SPRING_KAFKA_PROPERTIES_SASL_JAAS_CONFIG
+            value: software.amazon.msk.auth.iam.IAMLoginModule required;
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SPRING_KAFKA_PROPERTIES_SASL_CLIENT_CALLBACK_HANDLER_CLASS
+            value: software.amazon.msk.auth.iam.IAMClientCallbackHandler
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: APP_EVENTS_ENABLED
+            value: "true"
+      # Nothing from Strimzi's KafkaAccess Secret.
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SPRING_KAFKA_SSL_BUNDLE
+          any: true
+
+  - it: refuses kafka.msk without the service's IRSA role
+    set:
+      kafka.enabled: true
+      kafka.msk.bootstrapServers: boot-abc123.c1.kafka-serverless.us-east-1.amazonaws.com:9098
+    asserts:
+      - failedTemplate:
+          errorMessage: "kafka.msk needs the service's IRSA role in serviceAccount.annotations (eks.amazonaws.com/role-arn)"
+
   - it: refuses kafka.enabled without the Secret's name
     set:
       kafka.enabled: true

@@ -49,6 +49,25 @@ tests:
           path: spec.updatePolicy.updateMode
           value: "Off"
 
+  - it: gives the ServiceAccount no annotations by default
+    template: templates/serviceaccount.yaml
+    asserts:
+      - notExists:
+          path: metadata.annotations
+      - equal:
+          path: automountServiceAccountToken
+          value: false
+
+  - it: annotates the ServiceAccount, e.g. with an IRSA role
+    template: templates/serviceaccount.yaml
+    set:
+      serviceAccount.annotations:
+        eks.amazonaws.com/role-arn: arn:aws:iam::602367507570:role/microservices-dev-irsa-msk_order_service
+    asserts:
+      - equal:
+          path: metadata.annotations["eks.amazonaws.com/role-arn"]
+          value: arn:aws:iam::602367507570:role/microservices-dev-irsa-msk_order_service
+
   - it: can switch each one off
     set:
       autoscaling.enabled: false
