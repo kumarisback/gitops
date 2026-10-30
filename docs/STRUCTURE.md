@@ -63,7 +63,9 @@ gitops/
 ├── platform/                cluster-wide settings for the cloud clusters: RBAC,
 │                            the AWS secret store, disk types (storage/), and
 │                            dev's Karpenter node pools (karpenter/dev)
-├── tests/  ★                tests for the alert rules and the log pipeline
+├── msk/                     the topics Job for Amazon MSK, run by hand (msk-vs-strimzi.md)
+├── tests/  ★                tests for the alert rules and the log pipeline, and
+│                            kustomize/: overlays only validate.sh builds (apps-msk)
 ├── ci/  ★                   Docker image with all the checking tools (for Jenkins)
 ├── scripts/                 lab scripts, plus validate.sh ★ (checks everything) and
 │                            alert-drill.sh ★ (breaks a service, checks the alert fires)

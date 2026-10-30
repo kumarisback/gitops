@@ -134,6 +134,7 @@ takes to survive a zone outage.
 | lab | 1 combined node, replication 1; registry and UI, no archive | Fits on a laptop; shows how Kafka works, not how it survives failures |
 | dev | production shape, plus the S3 archive | The failure exercises need three brokers |
 | staging, prod | not yet | Three brokers and three controllers cost real money; `addons/streaming/kustomization.yaml` says how to turn it on |
+| dev, for an afternoon | Amazon MSK Serverless instead (step 14) | The managed alternative: `docs/msk-vs-strimzi.md` switches the services over and back, and compares the two |
 
 Where Kafka isn't deployed, the services run exactly as before: event
 publishing is off (`app.events.enabled=false`) and notification-service
