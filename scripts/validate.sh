@@ -170,7 +170,7 @@ blackbox_check() { extract configmap "$1" blackbox.yaml "$2" && blackbox_exporte
 echo "Render"
 # tests/kustomize/*: validation-only overlays for variants no environment
 # runs yet (apps-msk: the services on Amazon MSK).
-KUSTOMIZE_DIRS=(platform platform/karpenter/dev tests/kustomize/apps-msk)
+KUSTOMIZE_DIRS=(platform platform/karpenter/dev streaming/keda tests/kustomize/apps-msk)
 for env in "${ENVS[@]}"; do KUSTOMIZE_DIRS+=("apps/${env}" "observability/${env}" "streaming/${env}" "bootstrap/envs/${env}"); done
 for dir in "${KUSTOMIZE_DIRS[@]}"; do
   check "build ${dir}" render_kustomize "${dir}" "${OUT}/kustomize/$(echo "${dir}" | tr '/' '_').yaml"

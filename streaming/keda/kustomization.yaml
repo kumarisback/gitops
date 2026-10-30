@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# How KEDA reads consumer lag from the Kafka cluster (roadmap step 15,
+# docs/KEDA.md), deployed into the keda namespace by the streaming-keda
+# Application (addons/streaming). KEDA may read Secrets only in its own
+# namespace (addons/values/common/keda.yaml), so its Kafka credentials are
+# delivered there, and services' kafka triggers refer to them through a
+# ClusterTriggerAuthentication.
+namespace: keda
+
+resources:
+  - access.yaml

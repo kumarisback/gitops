@@ -1,0 +1,38 @@
+# KEDA's Kafka credentials (streaming/keda): only where Kafka runs. A Git
+# path rather than KEDA chart values, so it is applied after the Strimzi
+# Access Operator's and KEDA's CRDs exist.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: streaming-keda
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: streaming-keda
+    # Git-sourced: follows the root app's revision.
+    app.kubernetes.io/part-of: gitops-config
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/kumarisback/gitops.git
+    targetRevision: HEAD
+    path: streaming/keda
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: keda
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    # The KafkaAccess and ClusterTriggerAuthentication kinds come from the
+    # access operator and keda applications; retry until they exist.
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      - CreateNamespace=true
+      - SkipDryRunOnMissingResource=true

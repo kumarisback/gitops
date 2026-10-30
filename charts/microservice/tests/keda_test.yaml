@@ -1,7 +1,6 @@
 suite: KEDA autoscaling
 templates:
   - templates/scaledobject.yaml
-  - templates/triggerauthentication.yaml
   - templates/hpa.yaml
   - templates/poddisruptionbudget.yaml
 release:
@@ -16,16 +15,11 @@ tests:
           count: 0
         template: templates/scaledobject.yaml
       - hasDocuments:
-          count: 0
-        template: templates/triggerauthentication.yaml
-      - hasDocuments:
           count: 1
         template: templates/hpa.yaml
 
   - it: scales a Kafka consumer on lag, down to zero, with KEDA instead of the HPA
     set:
-      kafka.enabled: true
-      kafka.accessSecret: notification-service-kafka
       autoscaling.minReplicas: 0
       autoscaling.maxReplicas: 6
       autoscaling.keda.enabled: true
@@ -39,7 +33,8 @@ tests:
             lagThreshold: "50"
             tls: enable
           authenticationRef:
-            name: notification-service-kafka
+            kind: ClusterTriggerAuthentication
+            name: kafka-lag-reader
     asserts:
       - hasDocuments:
           count: 0
@@ -69,23 +64,14 @@ tests:
           path: spec.triggers[0].metadata.topic
           value: orders
         template: templates/scaledobject.yaml
-      # KEDA signs in to Kafka as the service, with its certificate.
-      - isKind:
-          of: TriggerAuthentication
-        template: templates/triggerauthentication.yaml
       - equal:
-          path: metadata.name
-          value: notification-service-kafka
-        template: templates/triggerauthentication.yaml
-      - contains:
-          path: spec.secretTargetRef
-          content:
-            parameter: key
-            name: notification-service-kafka
-            key: ssl.keystore.key
-        template: templates/triggerauthentication.yaml
+          path: spec.triggers[0].authenticationRef
+          value:
+            kind: ClusterTriggerAuthentication
+            name: kafka-lag-reader
+        template: templates/scaledobject.yaml
 
-  - it: needs no Kafka credentials for other triggers
+  - it: has no fallback unless asked
     set:
       autoscaling.keda.enabled: true
       autoscaling.keda.triggers:
@@ -95,9 +81,6 @@ tests:
             query: sum(rate(http_server_requests_seconds_count{job="notification-service"}[2m]))
             threshold: "20"
     asserts:
-      - hasDocuments:
-          count: 0
-        template: templates/triggerauthentication.yaml
       - notExists:
           path: spec.fallback
         template: templates/scaledobject.yaml

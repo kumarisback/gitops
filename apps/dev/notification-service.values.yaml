@@ -16,8 +16,9 @@ service:
 # none 5 minutes after both topics are drained.
 # One trigger per topic: with no topic named, a group scaled to zero that
 # never committed would never be woken. offsetResetPolicy matches the
-# consumer's auto.offset.reset. If KEDA can't read the lag, it runs one
-# consumer rather than none (fallbackReplicas).
+# consumer's auto.offset.reset. KEDA signs in as its own Kafka user, which
+# can see offsets but not events (streaming/keda). If KEDA can't read the
+# lag, it runs one consumer rather than none (fallbackReplicas).
 autoscaling:
   minReplicas: 0
   maxReplicas: 6
@@ -34,7 +35,8 @@ autoscaling:
           offsetResetPolicy: earliest
           tls: enable
         authenticationRef:
-          name: notification-service-kafka
+          kind: ClusterTriggerAuthentication
+          name: kafka-lag-reader
       - type: kafka
         metadata:
           bootstrapServers: events-kafka-bootstrap.kafka.svc:9093
@@ -44,7 +46,8 @@ autoscaling:
           offsetResetPolicy: earliest
           tls: enable
         authenticationRef:
-          name: notification-service-kafka
+          kind: ClusterTriggerAuthentication
+          name: kafka-lag-reader
 # Usually one pod or none: let a node drain take it (its records wait in
 # Kafka) instead of blocking the drain.
 podDisruptionBudget:

@@ -98,3 +98,24 @@ spec:
         operations: [Describe]
       - resource: { type: cluster }
         operations: [Describe, DescribeConfigs]
+---
+# KEDA (roadmap step 15, streaming/keda): measures notification-service's
+# lag to scale it. Describe only: it sees offsets, never an event.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  name: keda
+  labels:
+    strimzi.io/cluster: events
+spec:
+  authentication:
+    type: tls
+  authorization:
+    type: simple
+    acls:
+      - resource: { type: group, name: notification-service, patternType: literal }
+        operations: [Describe]
+      - resource: { type: topic, name: orders, patternType: literal }
+        operations: [Describe]
+      - resource: { type: topic, name: users, patternType: literal }
+        operations: [Describe]

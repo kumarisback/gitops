@@ -1,0 +1,39 @@
+# KEDA's own Kafka identity: KafkaUser keda (streaming/base/users.yaml)
+# may only describe groups and topics, so it can measure lag but never read
+# an event. The Access Operator keeps its certificate here, in Secret
+# keda-kafka.
+apiVersion: access.strimzi.io/v1alpha1
+kind: KafkaAccess
+metadata:
+  name: keda-kafka
+spec:
+  secretName: keda-kafka
+  kafka:
+    name: events
+    namespace: kafka
+    listener: tls
+  user:
+    kind: KafkaUser
+    apiGroup: kafka.strimzi.io
+    name: keda
+    namespace: kafka
+---
+# What a kafka trigger names (authenticationRef: kind
+# ClusterTriggerAuthentication, name kafka-lag-reader) to sign in with that
+# certificate. Cluster-scoped; KEDA reads the Secret from its own
+# namespace.
+apiVersion: keda.sh/v1alpha1
+kind: ClusterTriggerAuthentication
+metadata:
+  name: kafka-lag-reader
+spec:
+  secretTargetRef:
+    - parameter: ca
+      name: keda-kafka
+      key: ssl.truststore.crt
+    - parameter: cert
+      name: keda-kafka
+      key: ssl.keystore.crt
+    - parameter: key
+      name: keda-kafka
+      key: ssl.keystore.key

@@ -46,9 +46,9 @@ autoscaling:
   # (add a cpu trigger to keep scaling on CPU). Needs the keda add-on.
   keda:
     enabled: false
-    # KEDA trigger specs (https://keda.sh/docs/2.21/scalers/). A kafka
-    # trigger authenticates with authenticationRef <service>-kafka, which
-    # the chart creates from the KafkaAccess Secret.
+    # KEDA trigger specs (https://keda.sh/docs/2.21/scalers/). KEDA reads
+    # Secrets only in its own namespace, so a trigger that signs in names a
+    # ClusterTriggerAuthentication (Kafka: kafka-lag-reader, streaming/keda).
     triggers: []
     # Seconds between metric reads.
     pollingInterval: 15

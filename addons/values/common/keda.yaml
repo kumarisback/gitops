@@ -5,6 +5,15 @@
 # ScaledObjects, e.g. two for one Deployment). The chart's defaults run them
 # as non-root with a read-only root filesystem.
 #
+# KEDA may read Secrets only in its own namespace. By default it can list
+# every Secret in the cluster, so a compromised operator would expose them
+# all. Credentials a trigger needs live in keda (streaming/keda) and are
+# named through ClusterTriggerAuthentications.
+permissions:
+  operator:
+    restrict:
+      secret: true
+
 # Prometheus scrapes the operator and the metrics server: scaler errors
 # and the metric values each trigger reports (observability/base
 # autoscaling-alerts.yaml).

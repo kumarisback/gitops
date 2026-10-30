@@ -57,6 +57,7 @@ gitops/
 ├── streaming/  ★            the Kafka cluster "events": topics, users and ACLs, metrics,
 │                            alerts, the schema registry (base + one overlay per
 │                            environment), components/ (the S3 events archive, dev),
+│                            keda/ (KEDA's Kafka credentials, in its own namespace),
 │                            and tools/ for the runbooks' admin and Avro pods; see KAFKA.md
 ├── charts/  ★               our own Helm charts: microservice (any of the services) and
 │                            common (a library of shared helpers); see HELM.md

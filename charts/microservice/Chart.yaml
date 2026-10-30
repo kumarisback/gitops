@@ -12,7 +12,7 @@ type: application
 # The chart's own version: bump it with every change here (scripts/publish-chart.sh
 # refuses to publish changed contents under an existing version). The image a
 # release runs is image.tag in its values, not this.
-version: 0.4.0
+version: 0.5.0
 dependencies:
   - name: common
     version: 0.1.0

@@ -23,7 +23,8 @@ going from 0 to 1 replica and back.
 | Piece | Where | What it does |
 |---|---|---|
 | KEDA 2.21 | `addons/applications/keda.yaml`, `addons/values/common/keda.yaml` | Operator, metrics server, admission webhooks, in every environment; scraped by Prometheus |
-| Chart support | `charts/microservice` 0.4.0, `autoscaling.keda` | A `ScaledObject` instead of the CPU HPA; `minReplicas: 0` allowed only with it; a `TriggerAuthentication` from the service's Kafka certificate; `podDisruptionBudget.maxUnavailable` |
+| Chart support | `charts/microservice` 0.5.0, `autoscaling.keda` | A `ScaledObject` instead of the CPU HPA; `minReplicas: 0` allowed only with it; `podDisruptionBudget.maxUnavailable` |
+| KEDA's Kafka identity | `streaming/keda`, KafkaUser `keda` | A certificate that can see offsets but not events, in KEDA's namespace, named by the `ClusterTriggerAuthentication` `kafka-lag-reader` |
 | notification-service | `apps/{local,dev}/notification-service.values.yaml` | Two Kafka triggers (orders, users): 0 to 6 replicas in dev, 0 to 3 in the lab |
 | order-service | `apps/{local,dev}/order-service.values.yaml` | Prometheus (requests per second) and CPU triggers, 2 to 10 in dev; staging and prod keep the plain CPU HPA |
 | Alerts | `observability/base/autoscaling-alerts.yaml`, `service-alerts.yaml` | `KedaScalerErrors`, `KedaMetricsMissing`; `ServiceUnavailable` no longer fires for a service scaled to zero on purpose |
@@ -53,10 +54,13 @@ certificate), an HPA would simply stop changing anything: a service at zero woul
 zero with work piling up. notification-service has `fallbackReplicas: 1`: after three failed
 reads it runs one consumer. `KedaScalerErrors` says when that happens.
 
-**How KEDA signs in to Kafka.** As the service it scales: the `TriggerAuthentication` uses the
-service's own certificate from its KafkaAccess Secret, and that KafkaUser may already describe
-its group and topics. No new identity, no new ACLs. (On MSK, step 14, the trigger would need
-IAM instead; left as an exercise.)
+**How KEDA signs in to Kafka.** As itself: KafkaUser `keda` may only *describe* the group and
+its topics, so it can measure lag but never read an event. Its certificate is delivered into
+KEDA's own namespace (`streaming/keda`), because KEDA may read Secrets only there: by default
+it can list every Secret in the cluster, and a compromised operator would expose them all
+(`permissions.operator.restrict.secret`). Triggers name the credentials through the
+cluster-wide `ClusterTriggerAuthentication` `kafka-lag-reader`. (On MSK, step 14, the trigger
+would need IAM instead; left as an exercise.)
 
 **Disruption budget.** A budget of "at least one available" on a service that often runs one
 pod blocks every node drain (Karpenter's consolidation included). notification-service uses

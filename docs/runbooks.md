@@ -522,8 +522,8 @@ service without a fallback that sits at zero stays there.
 
 **Check:** `kubectl describe scaledobject <service> -n <namespace>` and the
 operator's log say which trigger and why. Usual causes: for the Kafka triggers,
-Kafka unreachable (the Kafka alerts) or the service's KafkaAccess Secret missing or
-renewed with a certificate KEDA hasn't picked up; for the Prometheus trigger,
+Kafka unreachable (the Kafka alerts), or KEDA's own credentials missing
+(`kubectl get kafkaaccess,secret keda-kafka -n keda`; the KafkaUser `keda`); for the Prometheus trigger,
 Prometheus down or the query returning nothing (a renamed metric or label).
 
 **Act:** fix the source; KEDA recovers on its next poll (15 seconds). Meanwhile, if
