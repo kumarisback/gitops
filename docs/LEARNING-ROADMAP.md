@@ -139,8 +139,8 @@ app repos on 2026-10-05 (updated after completing steps 01–10; steps 06 and 11
 | 15 | `15-keda-autoscaling` | C |  | ☐ |  |
 | 16 | `16-kong-gateway` | D: Gateway/Mesh |  | ☐ |  |
 | 17 | `17-kong-plugins` | D |  | ☐ |  |
-| 18 | `18-service-mesh` | D | 💰 | ☐ |  |
-| 19 | `19-network-policies` | D |  | ☐ |  |
+| 18 | `18-service-mesh` | D | 💰 | ☐ | Also: restrict the schema registry's admin API to the rules Job (open since step 13) |
+| 19 | `19-network-policies` | D |  | ☐ | Enforcement already on in the lab (KinD ≥ 0.24) and dev (tf `enable_network_policy`, step 13): policies for Kafka UI, the registry, blackbox exporter |
 | 20 | `20-argo-rollouts` | E: Delivery |  | ☐ |  |
 | 21 | `21-argo-workflows-events` | E |  | ☐ |  |
 | 22 | `22-feature-flags` | E |  | ☐ |  |

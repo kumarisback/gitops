@@ -1,0 +1,64 @@
+# Who may connect to the two HTTP services in this namespace that have no
+# login of their own. Enforced in the lab (KinD's network plugin enforces
+# NetworkPolicy since v0.24) and in the cloud once the VPC CNI's policy
+# agent is on (tf 01-infra, enable_network_policy). Roadmap step 19 adds a
+# default deny for every namespace; these two can't wait for it.
+#
+# Traffic from the pod's own node is always allowed (kubelet probes), and
+# kubectl port-forward enters the pod's network namespace directly, so
+# neither needs a rule.
+
+# Kafka UI: nobody. It is used only through
+#   kubectl port-forward svc/kafka-ui 8080:80 -n kafka
+# which needs Kubernetes access to this namespace. Without this policy any
+# pod in the cluster could browse every topic through its Service.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kafka-ui
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kafka-ui
+      app.kubernetes.io/instance: kafka-ui
+  policyTypes: [Ingress]
+  ingress: []
+---
+# The schema registry's API: the services that produce and consume events
+# (namespace development, in every environment that runs Kafka), and in
+# this namespace the UI, the rules Job and the Avro console pod
+# (streaming/tools). Its metrics and health port: Prometheus.
+#
+# This limits who can reach the API, not what they may do there: a service
+# could still call the admin endpoints (/apis/registry/v3/admin). Telling
+# callers apart needs their identity, which the service mesh's
+# authorization policies bring (roadmap step 18).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: schema-registry
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: schema-registry
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: development
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [kafka-ui, schema-registry-rules, avro-console]
+      ports:
+        - port: http
+          protocol: TCP
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: management
+          protocol: TCP

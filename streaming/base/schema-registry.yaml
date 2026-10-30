@@ -8,8 +8,9 @@
 # database to run: the three topics below are its journal. Clients use its
 # Confluent-compatible API: http://schema-registry.kafka.svc:8080/apis/ccompat/v7
 #
-# No authentication on the API: it is reachable only inside the cluster,
-# and the NetworkPolicies of roadmap step 19 narrow it to the services.
+# No authentication on the API (Apicurio's needs an OIDC provider):
+# network-policies.yaml lets only the services, and a few tools here, reach
+# it.
 apiVersion: kafka.strimzi.io/v1
 kind: KafkaTopic
 metadata:
@@ -236,6 +237,10 @@ spec:
   backoffLimit: 6
   ttlSecondsAfterFinished: 3600
   template:
+    metadata:
+      labels:
+        # Allowed to reach the API (network-policies.yaml).
+        app.kubernetes.io/name: schema-registry-rules
     spec:
       restartPolicy: Never
       automountServiceAccountToken: false

@@ -112,6 +112,15 @@ notification-service may read `orders` and `users` and write the
 dead-letter topics. The certificates are renewed automatically, and the
 Access Operator keeps the copies in the services' namespace current.
 
+Kafka UI and the schema registry are plain HTTP services without a login,
+so NetworkPolicies (`streaming/base/network-policies.yaml`) decide who reaches
+them: nobody reaches Kafka UI except through `kubectl port-forward`; only the
+services' namespace and three tools reach the registry's API. The lab enforces
+NetworkPolicies already (KinD 0.24 and later); dev does with tf's
+`enable_network_policy`. What remains open: a service may call the registry's
+admin endpoints (it could change the compatibility rule). Telling callers
+apart takes their identity, which the service mesh (step 18) brings.
+
 **Durability across zones.** Replication factor 3 and `min.insync.replicas`
 2: losing one broker loses no acknowledged data and doesn't stop writes.
 The VPCs span two zones, though, so pods spread 2+1, and losing the zone

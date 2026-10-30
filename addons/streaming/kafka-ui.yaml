@@ -1,6 +1,7 @@
 # Kafka UI (kafbat, the maintained fork of provectus kafka-ui): topics,
 # messages (Avro decoded through the schema registry), consumer groups and
-# lag, schemas. Read-only, and reachable only through port-forward:
+# lag, schemas. Read-only, and reachable only through port-forward (the
+# NetworkPolicy in streaming/base/network-policies.yaml refuses the rest):
 #   kubectl port-forward svc/kafka-ui 8080:80 -n kafka   # http://localhost:8080
 apiVersion: argoproj.io/v1alpha1
 kind: Application

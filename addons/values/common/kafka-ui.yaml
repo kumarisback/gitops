@@ -19,7 +19,8 @@ yamlApplicationConfig:
           ssl.truststore.location: /etc/cluster-ca/ca.p12
           ssl.truststore.password: ${KAFKA_CA_PASSWORD}
   # No login: reachable only through kubectl port-forward, which already
-  # needs Kubernetes access to the kafka namespace.
+  # needs Kubernetes access to the kafka namespace. A NetworkPolicy
+  # (streaming/base/network-policies.yaml) refuses all other traffic.
   auth:
     type: disabled
   management:

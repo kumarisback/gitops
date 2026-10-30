@@ -87,8 +87,9 @@ extraVolumeMounts:
 # Prometheus may call it, and it may only reach DNS and the namespaces it
 # probes: not the node's metadata service, not the VPC, not the internet.
 # Probes of public URLs (the domain, roadmap step 03) need an egress rule
-# for them. Enforced once the cluster's network plugin enforces
-# NetworkPolicy (roadmap step 19); until then it documents the intent.
+# for them. Enforced in the lab (KinD's network plugin, v0.24 and later)
+# and in clouds with tf enable_network_policy (dev; every environment from
+# roadmap step 19).
 extraManifests:
   - apiVersion: networking.k8s.io/v1
     kind: NetworkPolicy

@@ -140,6 +140,11 @@ to it.
   console tools.
 - **The outbox's retry delay never reached its 5-minute ceiling** (it stopped at about 4
   minutes); now it does, as documented.
+- **Kafka UI and the schema registry answered every pod in the cluster.** Neither has a
+  login, and "reachable only through port-forward" was true only of the intent. Network
+  policies now limit them: Kafka UI to port-forward, the registry to the services and its
+  tools. The lab enforces such policies already; dev now does too (tf
+  `enable_network_policy`, pulled forward from step 19).
 - **The repo's manifest checker rejected a valid Kafka Connect resource** because it read
   one kind of schema rule too strictly; it is fixed, and still catches real typos.
 
@@ -166,8 +171,8 @@ endpoint, already in the code before this branch):
 |---|---|---|
 | 16 Kong gateway | Kong in DB-less mode takes over routing behind the load balancer, declared in Git, first with Ingress and then with the newer Gateway API (`HTTPRoute`); versioned routes (`/v1`, `/v2`); Kong metrics in Grafana. | ☐ |
 | 17 Kong plugins | What a gateway is for: rate limits with shared counters in Redis, API keys with two customer tiers, JWT validation, CORS, header changes, per-route metrics, and a weighted canary route. | ☐ |
-| 18 Service mesh | Encrypted, authenticated traffic between services without code changes, retries and timeouts, "only frontend may call order-service" rules, and weighted traffic splits; a written opinion on when a mesh is worth it. | ☐ |
-| 19 Network policies | The cluster starts enforcing NetworkPolicies; each namespace denies everything by default and allows only the traffic it needs; pods can no longer reach the EC2 metadata service; database security groups allow only the cluster. | ☐ |
+| 18 Service mesh | Encrypted, authenticated traffic between services without code changes, retries and timeouts, "only frontend may call order-service" rules (and: only the rules Job may change the schema registry's rules, a gap left open in step 13), and weighted traffic splits; a written opinion on when a mesh is worth it. | ☐ |
+| 19 Network policies | Every environment enforces NetworkPolicies (the lab and dev already do since step 13); each namespace denies everything by default and allows only the traffic it needs; pods can no longer reach the EC2 metadata service; database security groups allow only the cluster. | ☐ |
 
 ### Phase E — Progressive delivery
 
