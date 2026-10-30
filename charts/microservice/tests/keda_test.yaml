@@ -1,0 +1,131 @@
+suite: KEDA autoscaling
+templates:
+  - templates/scaledobject.yaml
+  - templates/triggerauthentication.yaml
+  - templates/hpa.yaml
+  - templates/poddisruptionbudget.yaml
+release:
+  name: notification-service
+set:
+  image.tag: 6d9dfdcb454b4596b14a6cc09e19d9fa5ead7e35
+  openTelemetry.environment: dev
+tests:
+  - it: uses the plain CPU HPA by default
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/scaledobject.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/triggerauthentication.yaml
+      - hasDocuments:
+          count: 1
+        template: templates/hpa.yaml
+
+  - it: scales a Kafka consumer on lag, down to zero, with KEDA instead of the HPA
+    set:
+      kafka.enabled: true
+      kafka.accessSecret: notification-service-kafka
+      autoscaling.minReplicas: 0
+      autoscaling.maxReplicas: 6
+      autoscaling.keda.enabled: true
+      autoscaling.keda.fallbackReplicas: 1
+      autoscaling.keda.triggers:
+        - type: kafka
+          metadata:
+            bootstrapServers: events-kafka-bootstrap.kafka.svc:9093
+            consumerGroup: notification-service
+            topic: orders
+            lagThreshold: "50"
+            tls: enable
+          authenticationRef:
+            name: notification-service-kafka
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/hpa.yaml
+      - isKind:
+          of: ScaledObject
+        template: templates/scaledobject.yaml
+      - equal:
+          path: spec.scaleTargetRef.name
+          value: notification-service
+        template: templates/scaledobject.yaml
+      - equal:
+          path: spec.minReplicaCount
+          value: 0
+        template: templates/scaledobject.yaml
+      - equal:
+          path: spec.maxReplicaCount
+          value: 6
+        template: templates/scaledobject.yaml
+      - equal:
+          path: spec.fallback
+          value:
+            failureThreshold: 3
+            replicas: 1
+        template: templates/scaledobject.yaml
+      - equal:
+          path: spec.triggers[0].metadata.topic
+          value: orders
+        template: templates/scaledobject.yaml
+      # KEDA signs in to Kafka as the service, with its certificate.
+      - isKind:
+          of: TriggerAuthentication
+        template: templates/triggerauthentication.yaml
+      - equal:
+          path: metadata.name
+          value: notification-service-kafka
+        template: templates/triggerauthentication.yaml
+      - contains:
+          path: spec.secretTargetRef
+          content:
+            parameter: key
+            name: notification-service-kafka
+            key: ssl.keystore.key
+        template: templates/triggerauthentication.yaml
+
+  - it: needs no Kafka credentials for other triggers
+    set:
+      autoscaling.keda.enabled: true
+      autoscaling.keda.triggers:
+        - type: prometheus
+          metadata:
+            serverAddress: http://kube-prometheus-stack-prometheus.monitoring:9090
+            query: sum(rate(http_server_requests_seconds_count{job="notification-service"}[2m]))
+            threshold: "20"
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/triggerauthentication.yaml
+      - notExists:
+          path: spec.fallback
+        template: templates/scaledobject.yaml
+
+  - it: refuses KEDA without triggers
+    set:
+      autoscaling.keda.enabled: true
+    asserts:
+      - failedTemplate:
+          errorMessage: autoscaling.keda.triggers needs at least one trigger
+        template: templates/scaledobject.yaml
+
+  - it: refuses to scale to zero without KEDA
+    set:
+      autoscaling.minReplicas: 0
+    asserts:
+      - failedTemplate:
+          errorMessage: "autoscaling.minReplicas 0 (scale to zero) needs autoscaling.keda.enabled: an HPA can't scale to zero"
+        template: templates/hpa.yaml
+
+  - it: can let one pod go at a time instead of keeping one
+    set:
+      podDisruptionBudget.maxUnavailable: 1
+    asserts:
+      - equal:
+          path: spec.maxUnavailable
+          value: 1
+        template: templates/poddisruptionbudget.yaml
+      - notExists:
+          path: spec.minAvailable
+        template: templates/poddisruptionbudget.yaml

@@ -20,5 +20,6 @@ resources:
   - alloy.yaml
   - metrics-server.yaml
   - vertical-pod-autoscaler.yaml
+  - keda.yaml
   - blackbox-exporter.yaml
   - observability-config.yaml

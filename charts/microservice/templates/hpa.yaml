@@ -1,4 +1,7 @@
-{{- if .Values.autoscaling.enabled }}
+{{- if and .Values.autoscaling.enabled (not .Values.autoscaling.keda.enabled) }}
+{{- if lt (int .Values.autoscaling.minReplicas) 1 }}
+{{- fail "autoscaling.minReplicas 0 (scale to zero) needs autoscaling.keda.enabled: an HPA can't scale to zero" }}
+{{- end }}
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:

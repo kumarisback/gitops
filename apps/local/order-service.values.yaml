@@ -5,10 +5,27 @@ image:
   # Built and loaded into kind by start-lab-podman.sh, never pulled.
   tag: latest
   pullPolicy: IfNotPresent
-# One replica in the lab.
+# KEDA (roadmap step 15, docs/KEDA.md) on two signals, whichever asks for
+# more replicas: requests per second per replica (Prometheus; 20 is a
+# starting point until step 40's load tests measure what a replica
+# handles) and CPU as before. Never to zero: an API must answer at once.
+# staging and prod keep the plain CPU autoscaler, to compare. The lab
+# allows a second replica, to see it scale.
 autoscaling:
   minReplicas: 1
-  maxReplicas: 1
+  maxReplicas: 2
+  keda:
+    enabled: true
+    triggers:
+      - type: prometheus
+        metadata:
+          serverAddress: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
+          query: sum(rate(http_server_requests_seconds_count{namespace="development", job="order-service", uri!~".*actuator.*"}[2m]))
+          threshold: "20"
+      - type: cpu
+        metricType: Utilization
+        metadata:
+          value: "70"
 openTelemetry:
   environment: local
 # The lab logs every request payload (apps/components/request-logging).

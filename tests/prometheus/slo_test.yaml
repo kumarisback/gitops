@@ -104,13 +104,17 @@ tests:
               description: "20% of order-service requests in development are taking longer than 500ms. At this rate the 30-day budget (1% of requests) runs out in under two days."
               runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#slolatencybudgetburnfast
 
-  # Every order-service pod is gone (scaled to 0, crash-looping, never
-  # scheduled): no scrape target, so only the Deployment shows it.
+  # Every order-service pod is gone (crash-looping, never scheduled) while
+  # two are wanted: no scrape target, so only the Deployment shows it.
   - interval: 1m
     input_series:
       - series: 'kube_deployment_status_replicas_available{deployment="order-service",namespace="development",job="kube-state-metrics",pod="kube-state-metrics-6c5d8"}'
         values: '2 2 0x10'
+      - series: 'kube_deployment_spec_replicas{deployment="order-service",namespace="development",job="kube-state-metrics",pod="kube-state-metrics-6c5d8"}'
+        values: '2x12'
       - series: 'kube_deployment_status_replicas_available{deployment="user-service",namespace="development",job="kube-state-metrics",pod="kube-state-metrics-6c5d8"}'
+        values: '2x12'
+      - series: 'kube_deployment_spec_replicas{deployment="user-service",namespace="development",job="kube-state-metrics",pod="kube-state-metrics-6c5d8"}'
         values: '2x12'
     alert_rule_test:
       - eval_time: 3m
@@ -126,7 +130,36 @@ tests:
               job: order-service
             exp_annotations:
               summary: "order-service has no ready pods in development"
-              description: "No pod of order-service has been ready for 2 minutes, so every request to it is failing."
+              description: "No pod of order-service has been ready for 2 minutes although some are wanted: requests to it fail, or for a consumer (notification-service) its Kafka backlog grows."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#serviceunavailable
+
+  # KEDA keeps notification-service at zero while Kafka is drained: no
+  # alert. A backlog arrives at 10m, KEDA wants one pod, and it never gets
+  # ready (an image that won't start): critical 2 minutes later.
+  - interval: 1m
+    input_series:
+      - series: 'kube_deployment_status_replicas_available{deployment="notification-service",namespace="development",job="kube-state-metrics",pod="kube-state-metrics-6c5d8"}'
+        values: '0x20'
+      - series: 'kube_deployment_spec_replicas{deployment="notification-service",namespace="development",job="kube-state-metrics",pod="kube-state-metrics-6c5d8"}'
+        values: '0x9 1x10'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: ServiceUnavailable
+        exp_alerts: []
+      - eval_time: 11m
+        alertname: ServiceUnavailable
+        exp_alerts: []
+      - eval_time: 14m
+        alertname: ServiceUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: development
+              deployment: notification-service
+              job: notification-service
+            exp_annotations:
+              summary: "notification-service has no ready pods in development"
+              description: "No pod of notification-service has been ready for 2 minutes although some are wanted: requests to it fail, or for a consumer (notification-service) its Kafka backlog grows."
               runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#serviceunavailable
 
   # order-service's scrape target is failing; user-service has no target

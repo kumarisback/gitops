@@ -40,10 +40,31 @@ autoscaling:
   minReplicas: 2
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
+  # KEDA instead of the CPU HPA above (roadmap step 15, docs/KEDA.md): a
+  # ScaledObject with these triggers, between minReplicas and maxReplicas;
+  # minReplicas may then be 0. targetCPUUtilizationPercentage is unused
+  # (add a cpu trigger to keep scaling on CPU). Needs the keda add-on.
+  keda:
+    enabled: false
+    # KEDA trigger specs (https://keda.sh/docs/2.21/scalers/). A kafka
+    # trigger authenticates with authenticationRef <service>-kafka, which
+    # the chart creates from the KafkaAccess Secret.
+    triggers: []
+    # Seconds between metric reads.
+    pollingInterval: 15
+    # Seconds without an active trigger before scaling to zero.
+    cooldownPeriod: 300
+    # Replicas to run while a trigger's metric can't be read; null for
+    # none. Not with cpu or memory triggers.
+    fallbackReplicas: null
 
 podDisruptionBudget:
   enabled: true
   minAvailable: 1
+  # Instead of minAvailable, e.g. 1 for a service that often runs a single
+  # pod (a consumer scaled by KEDA): minAvailable 1 would then block every
+  # node drain.
+  maxUnavailable: null
 
 # Recommendations only (updateMode "Off"), see addons/values/common/vertical-pod-autoscaler.yaml.
 verticalPodAutoscaler:

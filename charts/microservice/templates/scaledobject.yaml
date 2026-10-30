@@ -1,0 +1,36 @@
+{{- if and .Values.autoscaling.enabled .Values.autoscaling.keda.enabled }}
+{{- if not .Values.autoscaling.keda.triggers }}
+{{- fail "autoscaling.keda.triggers needs at least one trigger" }}
+{{- end }}
+{{- /*
+KEDA (roadmap step 15) instead of the chart's CPU HorizontalPodAutoscaler:
+KEDA creates and drives an HPA from these triggers, and scales the
+Deployment between 0 and 1 itself, which an HPA can't.
+*/}}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "microservice.name" . }}
+  labels:
+    {{- include "microservice.labels" . | nindent 4 }}
+  annotations:
+    # The kind exists once the keda add-on has installed its CRDs; until
+    # then ArgoCD skips the dry run for this object.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  scaleTargetRef:
+    name: {{ include "microservice.name" . }}
+  minReplicaCount: {{ .Values.autoscaling.minReplicas }}
+  maxReplicaCount: {{ .Values.autoscaling.maxReplicas }}
+  pollingInterval: {{ .Values.autoscaling.keda.pollingInterval }}
+  cooldownPeriod: {{ .Values.autoscaling.keda.cooldownPeriod }}
+  {{- with .Values.autoscaling.keda.fallbackReplicas }}
+  # While a trigger's metric can't be read three times in a row, run this
+  # many replicas instead of freezing (or staying at zero).
+  fallback:
+    failureThreshold: 3
+    replicas: {{ . }}
+  {{- end }}
+  triggers:
+    {{- toYaml .Values.autoscaling.keda.triggers | nindent 4 }}
+{{- end }}

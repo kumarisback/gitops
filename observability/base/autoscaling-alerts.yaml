@@ -1,0 +1,35 @@
+# The autoscaler itself (roadmap step 15, docs/KEDA.md). When KEDA can't
+# read a trigger's metric, nothing fails loudly: the service just stops
+# following its load. These say so.
+#
+# KEDA labels its metrics with the ScaledObject's namespace; Prometheus
+# keeps its own namespace label (keda, where the operator runs), so KEDA's
+# arrives as exported_namespace.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: autoscaling-alerts
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: keda
+      rules:
+        - alert: KedaScalerErrors
+          expr: sum by (exported_namespace, scaledObject) (rate(keda_scaled_object_errors_total[5m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "KEDA can't read the metrics that scale {{ $labels.scaledObject }} in {{ $labels.exported_namespace }}"
+            description: "For 10 minutes. Its replica count no longer follows its load: it stays where it is, or runs the fallback count if one is set (notification-service: 1)."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kedascalererrors
+        - alert: KedaMetricsMissing
+          expr: absent_over_time(keda_build_info[10m])
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "No metrics from the KEDA operator for 15 minutes"
+            description: "KEDA is down, or Prometheus can't scrape it. Services it scales stay at their current size, and one at zero stays at zero."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kedametricsmissing

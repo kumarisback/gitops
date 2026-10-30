@@ -1,0 +1,41 @@
+# KEDA (roadmap step 15, docs/KEDA.md): autoscaling on events (Kafka lag,
+# Prometheus queries, queues) instead of CPU, down to zero. Services opt in
+# with the chart's autoscaling.keda; KEDA then creates and drives their HPA.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: keda
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: cluster-addons
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - chart: keda
+      repoURL: https://kedacore.github.io/charts
+      targetRevision: 2.21.0
+      helm:
+        # TIER and ENV are filled in by addons/select-env (see
+        # kustomization.yaml); missing files are skipped.
+        ignoreMissingValueFiles: true
+        valueFiles:
+          - $values/addons/values/common/keda.yaml
+          - $values/addons/values/TIER/keda.yaml
+          - $values/addons/values/ENV/keda.yaml
+    - repoURL: https://github.com/kumarisback/gitops.git
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: keda
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # The ScaledObject CRD is too large for client-side apply's
+      # last-applied annotation.
+      - ServerSideApply=true

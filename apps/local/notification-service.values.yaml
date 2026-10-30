@@ -10,9 +10,46 @@ contextPath: ""
 service:
   # Not behind the load balancer: no health-check annotation.
   annotations: {}
+# Scales on its backlog in Kafka with KEDA (roadmap step 15, docs/KEDA.md):
+# one more consumer per 50 records waiting, up to the partition count
+# (orders has 6, users 3; a seventh consumer would sit idle), and down to
+# none 5 minutes after both topics are drained. The lab stops at 3, to save
+# memory.
+# One trigger per topic: with no topic named, a group scaled to zero that
+# never committed would never be woken. offsetResetPolicy matches the
+# consumer's auto.offset.reset. If KEDA can't read the lag, it runs one
+# consumer rather than none (fallbackReplicas).
 autoscaling:
-  minReplicas: 1
-  maxReplicas: 1
+  minReplicas: 0
+  maxReplicas: 3
+  keda:
+    enabled: true
+    fallbackReplicas: 1
+    triggers:
+      - type: kafka
+        metadata:
+          bootstrapServers: events-kafka-bootstrap.kafka.svc:9093
+          consumerGroup: notification-service
+          topic: orders
+          lagThreshold: "50"
+          offsetResetPolicy: earliest
+          tls: enable
+        authenticationRef:
+          name: notification-service-kafka
+      - type: kafka
+        metadata:
+          bootstrapServers: events-kafka-bootstrap.kafka.svc:9093
+          consumerGroup: notification-service
+          topic: users
+          lagThreshold: "50"
+          offsetResetPolicy: earliest
+          tls: enable
+        authenticationRef:
+          name: notification-service-kafka
+# Usually one pod or none: let a node drain take it (its records wait in
+# Kafka) instead of blocking the drain.
+podDisruptionBudget:
+  maxUnavailable: 1
 mongodbUriSecret: null
 openTelemetry:
   environment: local

@@ -1,0 +1,31 @@
+{{- $kafkaTrigger := false }}
+{{- range .Values.autoscaling.keda.triggers }}
+{{- if eq .type "kafka" }}{{ $kafkaTrigger = true }}{{ end }}
+{{- end }}
+{{- if and .Values.autoscaling.enabled .Values.autoscaling.keda.enabled $kafkaTrigger .Values.kafka.enabled (not .Values.kafka.msk.bootstrapServers) }}
+{{- /*
+How KEDA reads the service's consumer lag from Strimzi's Kafka: as the
+service itself, with the certificate and cluster CA from its KafkaAccess
+Secret (its KafkaUser may describe its group and topics). A kafka trigger
+refers to it as authenticationRef <service>-kafka and sets tls: enable.
+*/}}
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: {{ include "microservice.name" . }}-kafka
+  labels:
+    {{- include "microservice.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretTargetRef:
+    - parameter: ca
+      name: {{ required "kafka.accessSecret is required when kafka.enabled" .Values.kafka.accessSecret }}
+      key: ssl.truststore.crt
+    - parameter: cert
+      name: {{ .Values.kafka.accessSecret }}
+      key: ssl.keystore.crt
+    - parameter: key
+      name: {{ .Values.kafka.accessSecret }}
+      key: ssl.keystore.key
+{{- end }}

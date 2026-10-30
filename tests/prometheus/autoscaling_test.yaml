@@ -1,0 +1,46 @@
+# Unit tests for observability/base/autoscaling-alerts.yaml (validate.sh
+# extracts the rule file first; see slo_test.yaml).
+rule_files:
+  - ../../.validate/rules/observability/autoscaling-alerts.yaml
+
+evaluation_interval: 30s
+
+tests:
+  # KEDA fails to read notification-service's lag from 2m (Kafka
+  # unreachable); order-service's ScaledObject is fine.
+  - interval: 1m
+    input_series:
+      - series: 'keda_scaled_object_errors_total{namespace="keda",exported_namespace="development",scaledObject="notification-service",job="keda-operator",pod="keda-operator-7d9f"}'
+        values: '0 0 2+2x20'
+      - series: 'keda_scaled_object_errors_total{namespace="keda",exported_namespace="development",scaledObject="order-service",job="keda-operator",pod="keda-operator-7d9f"}'
+        values: '0x22'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: KedaScalerErrors
+        exp_alerts: []
+      - eval_time: 14m
+        alertname: KedaScalerErrors
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              exported_namespace: development
+              scaledObject: notification-service
+            exp_annotations:
+              summary: "KEDA can't read the metrics that scale notification-service in development"
+              description: "For 10 minutes. Its replica count no longer follows its load: it stays where it is, or runs the fallback count if one is set (notification-service: 1)."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kedascalererrors
+
+  - interval: 1m
+    input_series:
+      - series: 'up{job="prometheus"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: KedaMetricsMissing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "No metrics from the KEDA operator for 15 minutes"
+              description: "KEDA is down, or Prometheus can't scrape it. Services it scales stay at their current size, and one at zero stays at zero."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kedametricsmissing

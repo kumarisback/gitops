@@ -1,0 +1,23 @@
+# KEDA 2.21 (Kubernetes 1.34 to 1.36). Three Deployments: the operator
+# (reads the triggers' metrics, scales between 0 and 1, owns the HPAs),
+# the metrics server (serves those metrics to the HPAs through the
+# external metrics API) and the admission webhooks (refuse invalid
+# ScaledObjects, e.g. two for one Deployment). The chart's defaults run them
+# as non-root with a read-only root filesystem.
+#
+# Prometheus scrapes the operator and the metrics server: scaler errors
+# and the metric values each trigger reports (observability/base
+# autoscaling-alerts.yaml).
+prometheus:
+  operator:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        release: kube-prometheus-stack
+  metricServer:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        release: kube-prometheus-stack

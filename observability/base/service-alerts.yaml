@@ -18,12 +18,22 @@ spec:
         # the services' own request metrics disappear with their pods. So
         # it's read from the Deployment (kube-state-metrics). job is set to
         # the deployment so Alertmanager can inhibit the alerts it implies.
+        # Only while pods are wanted: KEDA scales notification-service to
+        # zero on purpose when Kafka is drained (roadmap step 15).
         - alert: ServiceUnavailable
           expr: |
             label_replace(
-              max by (namespace, deployment) (
-                kube_deployment_status_replicas_available{deployment=~"frontend|order-service|user-service|notification-service"}
-              ) == 0,
+              (
+                max by (namespace, deployment) (
+                  kube_deployment_status_replicas_available{deployment=~"frontend|order-service|user-service|notification-service"}
+                ) == 0
+              )
+              and on (namespace, deployment)
+              (
+                max by (namespace, deployment) (
+                  kube_deployment_spec_replicas{deployment=~"frontend|order-service|user-service|notification-service"}
+                ) > 0
+              ),
               "job", "$1", "deployment", "(.+)"
             )
           for: 2m
@@ -31,7 +41,7 @@ spec:
             severity: critical
           annotations:
             summary: "{{ $labels.deployment }} has no ready pods in {{ $labels.namespace }}"
-            description: "No pod of {{ $labels.deployment }} has been ready for 2 minutes, so every request to it is failing."
+            description: "No pod of {{ $labels.deployment }} has been ready for 2 minutes although some are wanted: requests to it fail, or for a consumer (notification-service) its Kafka backlog grows."
             runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#serviceunavailable
         - alert: ServiceDown
           expr: up{job=~"order-service|user-service|notification-service"} == 0
