@@ -39,6 +39,26 @@ cases:
         log_type: edge
         tenant: null
 
+  - name: Kong access lines are the gateway layer, with query secrets masked
+    container: proxy
+    namespace: kong
+    lines:
+      - '10.244.1.7 - - [30/Oct/2026:10:15:02 +0000] "GET /api/reset?token=s3cr3t&user=alice HTTP/1.1" 200 41 "-" "curl/8.10.1" kong_request_id: "8b1c2f6d0e4a5c3b"'
+    expect:
+      - line: '10.244.1.7 - - [30/Oct/2026:10:15:02 +0000] "GET /api/reset?token=<redacted>&user=alice HTTP/1.1" 200 41 "-" "curl/8.10.1" kong_request_id: "8b1c2f6d0e4a5c3b"'
+        log_type: gateway
+        tenant: null
+
+  - name: Kong error lines are about Kong itself
+    container: proxy
+    namespace: kong
+    lines:
+      - '2026/10/30 10:15:03 [error] 1281#0: *4021 connect() failed (111: Connection refused) while connecting to upstream, client: 10.244.1.7, server: kong, request: "GET /api/orders HTTP/1.1"'
+    expect:
+      - line: '2026/10/30 10:15:03 [error] 1281#0: *4021 connect() failed (111: Connection refused) while connecting to upstream, client: 10.244.1.7, server: kong, request: "GET /api/orders HTTP/1.1"'
+        log_type: server
+        tenant: null
+
   - name: a query-string secret stops at a JSON-escaped ampersand
     container: traefik
     namespace: traefik

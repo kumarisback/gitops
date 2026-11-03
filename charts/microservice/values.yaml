@@ -18,10 +18,7 @@ contextPath: /api/orders
 
 service:
   port: 80
-  annotations:
-    # The ALB health-checks targets at "/" unless told otherwise, which this
-    # service answers with 404 (it lives under its context path).
-    alb.ingress.kubernetes.io/healthcheck-path: /api/orders/actuator/health/readiness
+  annotations: {}
 
 serviceAccount:
   create: true

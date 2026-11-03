@@ -1,0 +1,62 @@
+# Kong's "ingress" chart: two releases of the kong chart in one, the
+# controller (Kong Ingress Controller 3.5) and the gateway (Kong 3.9, open
+# source, DB-less). The controller finds the gateway pods through their
+# admin API Service and pushes the configuration to each.
+controller:
+  ingressController:
+    image:
+      tag: "3.5.13"
+    # Ingresses of class kong would work too; this repo uses Gateway API
+    # routes (docs/KONG.md compares the two).
+    ingressClass: kong
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+  # Configuration pushes and their failures (KongConfigurationPushFailing).
+  serviceMonitor:
+    enabled: true
+    trustCRDsExist: true
+    labels:
+      release: kube-prometheus-stack
+
+gateway:
+  image:
+    tag: "3.9.4"
+  env:
+    # One NGINX worker per CPU by default, each with its own memory: bound
+    # it so the pod's memory doesn't depend on the node's size.
+    nginx_worker_processes: "2"
+    # The edge (ALB, Traefik) puts the client's address in
+    # X-Forwarded-For. Trusted only from private addresses, where the edge
+    # is: a client on the internet can't make Kong believe a forged one.
+    real_ip_header: X-Forwarded-For
+    trusted_ips: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    # No Kong Manager (below); without this Kong would still serve it on
+    # 8002.
+    admin_gui_listen: "off"
+  # Reached only through the edge: no load balancer of its own, and no
+  # TLS port (TLS ends at the ALB, roadmap step 03).
+  proxy:
+    type: ClusterIP
+    tls:
+      enabled: false
+  # No Kong Manager (the admin GUI): configuration comes from Git, and the
+  # chart would expose it on every node (NodePort).
+  manager:
+    enabled: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  # Per-route metrics from the prometheus plugin (platform/kong), on the
+  # status port.
+  serviceMonitor:
+    enabled: true
+    trustCRDsExist: true
+    labels:
+      release: kube-prometheus-stack

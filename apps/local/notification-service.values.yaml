@@ -7,9 +7,6 @@ image:
   tag: latest
   pullPolicy: IfNotPresent
 contextPath: ""
-service:
-  # Not behind the load balancer: no health-check annotation.
-  annotations: {}
 # Scales on its backlog in Kafka with KEDA (roadmap step 15, docs/KEDA.md):
 # one more consumer per 50 records waiting, up to the partition count
 # (orders has 6, users 3; a seventh consumer would sit idle), and down to

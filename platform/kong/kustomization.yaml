@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Kong's cluster-wide configuration (roadmap step 16, docs/KONG.md),
+# deployed by the kong-config Application in every environment. Routes
+# belong to the services (apps/base/routes.yaml); this is what they attach
+# to, and what applies to all of them. No namespace transformer: Kustomize
+# would stamp one on the cluster-scoped kinds it doesn't know (GatewayClass,
+# KongClusterPlugin); the Gateway names its own.
+
+resources:
+  - gateway.yaml
+  - plugins.yaml
+  - network-policy.yaml

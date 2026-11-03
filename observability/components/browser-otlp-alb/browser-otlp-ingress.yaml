@@ -1,8 +1,9 @@
 # Browser spans in the cloud: /otlp on the application's own ALB, to the
 # collector gateway's browser receiver (port 4319, path forwarded
 # unchanged). An Ingress can only reach Services in its own namespace, so
-# this one lives in monitoring and joins the app Ingress's ALB through the
-# "microservices" IngressGroup (see apps/base/ingress.yaml).
+# this one lives in monitoring and joins the app's ALB through the
+# "microservices" IngressGroup (the Kong gateway's Ingress,
+# addons/values/cloud/kong.yaml).
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -10,7 +11,7 @@ metadata:
   namespace: monitoring
   annotations:
     alb.ingress.kubernetes.io/group.name: microservices
-    # Lower runs first: /otlp is matched before the app Ingress's "/".
+    # Lower runs first: /otlp is matched before Kong's "/".
     alb.ingress.kubernetes.io/group.order: "-10"
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip

@@ -155,7 +155,7 @@ alloy:
         // at the entrance, with the same trace_id as the service's own api
         // line. Its other lines are about Traefik itself: log_type="server".
         // In the cloud the ALB is the edge; its access logs go to S3 (see
-        // apps/base/ingress.yaml).
+        // addons/values/cloud/kong.yaml).
         stage.match {
           selector = "{namespace=\"traefik\", container=\"traefik\"} |= \"\\\"DownstreamStatus\\\":\""
 
@@ -166,6 +166,27 @@ alloy:
 
         stage.match {
           selector = "{namespace=\"traefik\", container=\"traefik\"} != \"\\\"DownstreamStatus\\\":\""
+
+          stage.static_labels {
+            values = { log_type = "server" }
+          }
+        }
+
+        // Kong (the API gateway behind the edge, roadmap step 16) writes an
+        // NGINX access line per request it proxies, starting
+        // "<client> - <user> [": log_type="gateway". Its other lines are
+        // about Kong itself (errors, configuration): log_type="server".
+        // ("[[]" is a literal "[".)
+        stage.match {
+          selector = "{namespace=\"kong\", container=\"proxy\"} |~ \"^[0-9a-fA-F.:]+ - [^ ]+ [[]\""
+
+          stage.static_labels {
+            values = { log_type = "gateway" }
+          }
+        }
+
+        stage.match {
+          selector = "{namespace=\"kong\", container=\"proxy\"} !~ \"^[0-9a-fA-F.:]+ - [^ ]+ [[]\""
 
           stage.static_labels {
             values = { log_type = "server" }

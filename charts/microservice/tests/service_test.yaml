@@ -19,6 +19,7 @@ tests:
       - equal:
           path: metadata.labels.app
           value: order-service
-      - equal:
-          path: metadata.annotations["alb.ingress.kubernetes.io/healthcheck-path"]
-          value: /api/orders/actuator/health/readiness
+      # Reached through Kong, not straight from the ALB: no health-check
+      # annotations.
+      - notExists:
+          path: metadata.annotations

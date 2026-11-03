@@ -1,0 +1,22 @@
+# Plugins for every route (global: "true"). Step 17 adds the ones a gateway
+# is for: rate limits, keys, JWT, CORS.
+#
+# Prometheus: request counts, latency and bandwidth per Kong service and
+# route, scraped from each gateway pod's status port (the kong add-on's
+# ServiceMonitor) and shown on the Kong dashboard.
+apiVersion: configuration.konghq.com/v1
+kind: KongClusterPlugin
+metadata:
+  name: prometheus
+  annotations:
+    kubernetes.io/ingress.class: kong
+  labels:
+    global: "true"
+plugin: prometheus
+config:
+  status_code_metrics: true
+  latency_metrics: true
+  bandwidth_metrics: true
+  upstream_health_metrics: true
+  # Per consumer would add a label per API client; step 17 decides.
+  per_consumer: false

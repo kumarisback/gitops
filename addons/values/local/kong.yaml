@@ -1,0 +1,10 @@
+gateway:
+  proxy:
+    # The lab's edge: Traefik (scripts/start-lab.sh, localhost:80) sends
+    # every path to Kong, as the ALB does in the cloud. Traefik keeps
+    # tracing and logging each request at the edge.
+    ingress:
+      enabled: true
+      ingressClassName: traefik
+      path: /
+      pathType: Prefix

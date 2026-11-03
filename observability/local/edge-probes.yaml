@@ -1,8 +1,9 @@
-# The lab's checks through its way in: Traefik routes these exactly as it
-# routes a browser on localhost (app-ingress: /api/orders, /api, /). Each
-# repeats a check in ../components/synthetic-probes, so when an edge probe
-# fails and its service probe passes, the problem is the routing (Traefik,
-# the Ingress), not the service.
+# The lab's checks through its way in: Traefik hands these to Kong exactly
+# as it does a browser's requests on localhost, and Kong routes them
+# (apps/base/routes.yaml: /api/orders, /api, /). Each repeats a check in
+# ../components/synthetic-probes, so when an edge probe fails and its
+# service probe passes, the problem is the routing (Traefik, Kong, a
+# route), not the service.
 apiVersion: monitoring.coreos.com/v1
 kind: Probe
 metadata:

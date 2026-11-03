@@ -7,9 +7,6 @@ image:
   # bumps it by pull request.
   tag: "921853b8deac44cdf5080b80b1f61e7107d416fb"
 contextPath: ""
-service:
-  # Not behind the load balancer: no health-check annotation.
-  annotations: {}
 # Scales on its backlog in Kafka with KEDA (roadmap step 15, docs/KEDA.md):
 # one more consumer per 50 records waiting, up to the partition count
 # (orders has 6, users 3; a seventh consumer would sit idle), and down to

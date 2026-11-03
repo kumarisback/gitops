@@ -21,5 +21,8 @@ resources:
   - metrics-server.yaml
   - vertical-pod-autoscaler.yaml
   - keda.yaml
+  - gateway-api.yaml
+  - kong.yaml
+  - kong-config.yaml
   - blackbox-exporter.yaml
   - observability-config.yaml

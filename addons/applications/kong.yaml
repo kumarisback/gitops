@@ -1,0 +1,44 @@
+# Kong (roadmap step 16, docs/KONG.md): the API gateway behind the edge (the
+# ALB in the cloud, Traefik in the lab). Kong Gateway 3.9, open source, in
+# DB-less mode: the Kong Ingress Controller turns Kubernetes resources
+# (Gateway API routes in apps/base/routes.yaml, the Gateway and plugins in
+# platform/kong) into Kong's configuration and pushes it to every gateway
+# pod. No database, nothing configured by hand.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kong
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: cluster-addons
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - chart: ingress
+      repoURL: https://charts.konghq.com
+      targetRevision: 0.24.0
+      helm:
+        # TIER and ENV are filled in by addons/select-env (see
+        # kustomization.yaml); missing files are skipped.
+        ignoreMissingValueFiles: true
+        valueFiles:
+          - $values/addons/values/common/kong.yaml
+          - $values/addons/values/TIER/kong.yaml
+          - $values/addons/values/ENV/kong.yaml
+    - repoURL: https://github.com/kumarisback/gitops.git
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kong
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # Kong's CRDs are too large for client-side apply's last-applied
+      # annotation.
+      - ServerSideApply=true

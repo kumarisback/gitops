@@ -1,0 +1,36 @@
+# The Gateway API's two halves of "a load balancer": the GatewayClass says
+# which controller implements it (Kong's), the Gateway is the listener
+# routes attach to. "Unmanaged": the Kong deployment already exists (the
+# kong add-on); the controller configures it rather than creating one per
+# Gateway.
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: kong
+  annotations:
+    konghq.com/gatewayclass-unmanaged: "true"
+spec:
+  controllerName: konghq.com/kic-gateway-controller
+---
+# Plain HTTP on port 80, Kong's proxy port behind the edge: TLS ends at the
+# ALB (and its certificate arrives with the domain, roadmap step 03).
+# Routes may attach only from the application namespaces.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: kong
+  namespace: kong
+spec:
+  gatewayClassName: kong
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchExpressions:
+              - key: kubernetes.io/metadata.name
+                operator: In
+                values: [development, staging, production]

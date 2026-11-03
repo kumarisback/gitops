@@ -14,6 +14,7 @@ resources:
   - pipeline-alerts.yaml
   - synthetic-alerts.yaml
   - autoscaling-alerts.yaml
+  - gateway-alerts.yaml
 
 # The Grafana sidecar loads every ConfigMap labelled grafana_dashboard from
 # the monitoring namespace. Stable names, so a dashboard keeps its URL.
@@ -35,6 +36,13 @@ configMapGenerator:
   - name: dashboard-overview
     files:
       - dashboards/overview.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+  - name: dashboard-kong
+    files:
+      - dashboards/kong.json
     options:
       disableNameSuffixHash: true
       labels:

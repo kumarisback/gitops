@@ -6,11 +6,11 @@ metadata:
   labels:
     app: frontend
 spec:
-  # ClusterIP, not LoadBalancer: the Ingress in ingress.yaml is now the single
-  # public entrypoint (ALB) for frontend + /api routing to order-service and
-  # user-service. A separate LoadBalancer here would give the frontend its
-  # own NLB with no path routing, so any same-origin `/api/...` fetch from
-  # the browser would hit that NLB directly and never reach a backend.
+  # ClusterIP, not LoadBalancer: the single public entrypoint is the edge
+  # (ALB, or Traefik in the lab) in front of Kong, which routes / here and
+  # /api to the backends (routes.yaml). A LoadBalancer of its own would give
+  # the frontend an entrance with no path routing, so a same-origin
+  # `/api/...` fetch from the browser would never reach a backend.
   type: ClusterIP
   selector:
     app: frontend

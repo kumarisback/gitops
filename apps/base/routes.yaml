@@ -1,0 +1,82 @@
+# How requests reach the services (roadmap step 16, docs/KONG.md): Gateway
+# API routes attached to Kong's Gateway (platform/kong), which sits behind
+# the edge (the ALB in the cloud, Traefik in the lab). They replace the
+# Ingress the ALB used to route with.
+#
+# The longest matching path wins, whatever the order of rules or routes:
+# /api/orders goes to order-service, the rest of /api to user-service,
+# everything else to the frontend. The Ingress needed its rules in that
+# order; routes don't.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: frontend
+spec:
+  parentRefs:
+    - name: kong
+      namespace: kong
+      sectionName: http
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: frontend
+          port: 80
+---
+# Sign-up, sign-in and the user API live under user-service's /api.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: user-service
+spec:
+  parentRefs:
+    - name: kong
+      namespace: kong
+      sectionName: http
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api
+      backendRefs:
+        - name: user-service
+          port: 80
+---
+# order-service (deployed with charts/microservice), under its context path
+# /api/orders. Also reachable as /api/v1/orders: a versioned path the
+# gateway maps to the service's own, so clients can name a version before
+# there is a second one. When a v2 with an incompatible API exists, it gets
+# its own Deployment and Service, and a rule for /api/v2/orders pointing
+# there, while v1 clients keep working (docs/KONG.md, exercise).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: order-service
+spec:
+  parentRefs:
+    - name: kong
+      namespace: kong
+      sectionName: http
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/orders
+      backendRefs:
+        - name: order-service
+          port: 80
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/v1/orders
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /api/orders
+      backendRefs:
+        - name: order-service
+          port: 80

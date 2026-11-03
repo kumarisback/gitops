@@ -1,0 +1,28 @@
+# The Gateway API CRDs (platform/gateway-api). Never pruned and no
+# finalizer: deleting a CRD deletes every route of that kind, which would
+# take the whole application offline.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gateway-api
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: gateway-api
+    # Git-sourced: follows the root app's revision.
+    app.kubernetes.io/part-of: gitops-config
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/kumarisback/gitops.git
+    targetRevision: HEAD
+    path: platform/gateway-api
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      # The CRDs are too large for client-side apply's last-applied
+      # annotation.
+      - ServerSideApply=true

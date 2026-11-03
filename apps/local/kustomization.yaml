@@ -71,16 +71,6 @@ patches:
       - op: replace
         path: /spec/maxReplicas
         value: 1
-  # Local ingress controller: Traefik (scripts/start-lab.sh). It traces
-  # every request on its own (local-setup/traefik-values.yaml), so the
-  # Ingress needs no per-object tracing annotations.
-  - target:
-      kind: Ingress
-      name: app-ingress
-    patch: |-
-      - op: replace
-        path: /spec/ingressClassName
-        value: traefik
   - target:
       kind: Deployment
     patch: |-

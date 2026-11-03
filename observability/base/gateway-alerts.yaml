@@ -1,0 +1,51 @@
+# Kong, the API gateway behind the edge (roadmap step 16, docs/KONG.md).
+# Every request to the services passes through it, so it being down is as
+# bad as all of them being down. The controller's failures are quieter:
+# Kong keeps serving the last configuration it accepted, and only changes
+# (a new route, a plugin) silently don't arrive.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: gateway-alerts
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: kong
+      rules:
+        # No ready gateway pod while some are wanted: nothing gets past the
+        # edge. The synthetic checks through the edge fail too.
+        - alert: KongGatewayUnavailable
+          expr: |
+            (
+              max by (namespace, deployment) (kube_deployment_status_replicas_available{namespace="kong", deployment="kong-gateway"}) == 0
+            )
+            and on (namespace, deployment)
+            (
+              max by (namespace, deployment) (kube_deployment_spec_replicas{namespace="kong", deployment="kong-gateway"}) > 0
+            )
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "No Kong gateway pod is ready"
+            description: "Every request from the edge to the services fails (the ALB or Traefik has nowhere to send it)."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#konggatewayunavailable
+        - alert: KongConfigurationPushFailing
+          expr: sum by (namespace) (increase(ingress_controller_configuration_push_count{success="false"}[10m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Kong is refusing its new configuration"
+            description: "For 20 minutes the controller's pushes have failed. Kong keeps serving the last configuration it accepted: changes to routes and plugins since then aren't live."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kongconfigurationpushfailing
+        - alert: KongResourcesRejected
+          expr: max(ingress_controller_translation_broken_resource_count) > 0 or max(ingress_controller_configuration_push_broken_resource_count) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $value }} routes or plugins left out of Kong's configuration"
+            description: "The controller couldn't translate them, or Kong refused them; the rest of the configuration is live without them."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kongresourcesrejected

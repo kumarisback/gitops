@@ -3,4 +3,4 @@ kind: Kustomization
 resources:
   - frontend/
   - user-service/
-  - ingress.yaml
+  - routes.yaml

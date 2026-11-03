@@ -1,0 +1,68 @@
+# Unit tests for observability/base/gateway-alerts.yaml (validate.sh
+# extracts the rule file first; see slo_test.yaml).
+rule_files:
+  - ../../.validate/rules/observability/gateway-alerts.yaml
+
+evaluation_interval: 30s
+
+tests:
+  # Both gateway pods go at 3m (a bad rollout): critical 2 minutes later.
+  - interval: 1m
+    input_series:
+      - series: 'kube_deployment_status_replicas_available{namespace="kong",deployment="kong-gateway",job="kube-state-metrics"}'
+        values: '2 2 2 0x10'
+      - series: 'kube_deployment_spec_replicas{namespace="kong",deployment="kong-gateway",job="kube-state-metrics"}'
+        values: '2x13'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: KongGatewayUnavailable
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: KongGatewayUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: kong
+              deployment: kong-gateway
+            exp_annotations:
+              summary: "No Kong gateway pod is ready"
+              description: "Every request from the edge to the services fails (the ALB or Traefik has nowhere to send it)."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#konggatewayunavailable
+
+  # Pushes start failing at 5m (a plugin Kong refuses); successes stop.
+  - interval: 1m
+    input_series:
+      - series: 'ingress_controller_configuration_push_count{namespace="kong",success="false",protocol="db-less",failure_reason="other",dataplane="https://10.244.1.9:8444",instance_id="a1"}'
+        values: '0x4 1+1x30'
+      - series: 'ingress_controller_configuration_push_count{namespace="kong",success="true",protocol="db-less",failure_reason="",dataplane="https://10.244.1.9:8444",instance_id="a1"}'
+        values: '0+1x4 5x30'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: KongConfigurationPushFailing
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: KongConfigurationPushFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: kong
+            exp_annotations:
+              summary: "Kong is refusing its new configuration"
+              description: "For 20 minutes the controller's pushes have failed. Kong keeps serving the last configuration it accepted: changes to routes and plugins since then aren't live."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kongconfigurationpushfailing
+
+  # An HTTPRoute naming a Service that doesn't exist: left out.
+  - interval: 1m
+    input_series:
+      - series: 'ingress_controller_translation_broken_resource_count{namespace="kong",instance_id="a1"}'
+        values: '0 0 1x20'
+    alert_rule_test:
+      - eval_time: 13m
+        alertname: KongResourcesRejected
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "1 routes or plugins left out of Kong's configuration"
+              description: "The controller couldn't translate them, or Kong refused them; the rest of the configuration is live without them."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kongresourcesrejected

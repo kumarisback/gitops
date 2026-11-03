@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The Gateway API CRDs (GatewayClass, Gateway, HTTPRoute, GRPCRoute,
+# ReferenceGrant), standard channel v1.3.0: the version the Kong Ingress
+# Controller 3.5 is built against (roadmap step 16, docs/KONG.md).
+# Installed by the gateway-api Application in every environment.
+#
+# standard-install.yaml is the release asset, unchanged:
+#   https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.3.0/standard-install.yaml
+#   sha256 78796d5c51450fc55d8dc8092ba8137f8c807982d7508d7875d5c537a24082b9
+# Upgrade by replacing it with a later release's file, once the controller
+# supports that version.
+resources:
+  - standard-install.yaml

@@ -1,0 +1,40 @@
+gateway:
+  # Two gateways in different zones; one may go at a time.
+  replicaCount: 2
+  podDisruptionBudget:
+    enabled: true
+    maxUnavailable: 1
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/instance: kong
+          app.kubernetes.io/name: gateway
+  proxy:
+    # The edge: the application's ALB sends every path to Kong, which routes
+    # it (apps/base/routes.yaml). It replaces the app-ingress the services
+    # had before step 16; the ALB stays the same one (IngressGroup
+    # microservices, shared with observability's /otlp Ingress, which goes
+    # first).
+    ingress:
+      enabled: true
+      ingressClassName: alb
+      path: /
+      pathType: Prefix
+      annotations:
+        alb.ingress.kubernetes.io/scheme: internet-facing
+        alb.ingress.kubernetes.io/target-type: ip
+        alb.ingress.kubernetes.io/group.name: microservices
+        # Kong answers 404 on its proxy port for a path no route has;
+        # health-check its status endpoint instead (ready once it has a
+        # configuration).
+        alb.ingress.kubernetes.io/healthcheck-port: "8100"
+        alb.ingress.kubernetes.io/healthcheck-path: /status/ready
+        # Edge access log: one line per request as the client saw it at the
+        # ALB. ALBs write it to S3 (queried with Athena), so it needs a
+        # bucket whose policy lets ALB log delivery write to it. Create that
+        # in the tf repo first, then add per environment:
+        #   alb.ingress.kubernetes.io/load-balancer-attributes: access_logs.s3.enabled=true,access_logs.s3.bucket=<bucket>,access_logs.s3.prefix=<env>
+        # It applies to the whole ALB group, so set it on this Ingress only.
