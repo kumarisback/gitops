@@ -6,6 +6,7 @@ apiVersion: access.strimzi.io/v1alpha1
 kind: KafkaAccess
 metadata:
   name: keda-kafka
+  namespace: keda
 spec:
   secretName: keda-kafka
   kafka:

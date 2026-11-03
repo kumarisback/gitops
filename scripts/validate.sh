@@ -191,6 +191,7 @@ check "local/traefik: helm template" render_traefik "${OUT}/helm/local-traefik.y
 # --- 2. Schemas for the CRDs we install ------------------------------------
 echo "CRD schemas"
 check "schemas from the rendered CRDs" crd_schemas
+check "cluster-scoped objects have no namespace" ruby scripts/lib/manifest_tool.rb scope-check "${OUT}"/kustomize/*.yaml "${OUT}"/helm/*.yaml
 
 # --- 3. Kubernetes schemas and component configs ---------------------------
 echo "Kustomize overlays"

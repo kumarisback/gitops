@@ -6,8 +6,9 @@ kind: Kustomization
 # Application (addons/streaming). KEDA may read Secrets only in its own
 # namespace (addons/values/common/keda.yaml), so its Kafka credentials are
 # delivered there, and services' kafka triggers refer to them through a
-# ClusterTriggerAuthentication.
-namespace: keda
+# ClusterTriggerAuthentication. No namespace transformer: Kustomize would
+# stamp one on the cluster-scoped ClusterTriggerAuthentication too; the
+# KafkaAccess names its own.
 
 resources:
   - access.yaml

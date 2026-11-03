@@ -55,6 +55,26 @@ def docs(file)
   YAML.load_stream(File.read(file)).compact.select { |d| d.is_a?(Hash) }
 end
 
+# Built-in kinds without a namespace, as group/kind (core group: "").
+CLUSTER_SCOPED_KINDS = %w[
+  /Namespace /Node /PersistentVolume
+  rbac.authorization.k8s.io/ClusterRole rbac.authorization.k8s.io/ClusterRoleBinding
+  apiextensions.k8s.io/CustomResourceDefinition apiregistration.k8s.io/APIService
+  admissionregistration.k8s.io/ValidatingWebhookConfiguration
+  admissionregistration.k8s.io/MutatingWebhookConfiguration
+  admissionregistration.k8s.io/ValidatingAdmissionPolicy
+  admissionregistration.k8s.io/ValidatingAdmissionPolicyBinding
+  storage.k8s.io/StorageClass storage.k8s.io/CSIDriver storage.k8s.io/VolumeAttachment
+  scheduling.k8s.io/PriorityClass networking.k8s.io/IngressClass node.k8s.io/RuntimeClass
+  flowcontrol.apiserver.k8s.io/FlowSchema flowcontrol.apiserver.k8s.io/PriorityLevelConfiguration
+  certificates.k8s.io/CertificateSigningRequest
+].freeze
+
+def group_kind(doc)
+  api = doc['apiVersion'].to_s
+  "#{api.include?('/') ? api.split('/').first : ''}/#{doc['kind']}"
+end
+
 def find(file, kind, key, name_re)
   docs(file).find do |d|
     d['kind'] == kind && (name_re.nil? || d.dig('metadata', 'name') =~ Regexp.new(name_re)) &&
@@ -107,6 +127,24 @@ when 'dashboards'
     end
   end
   puts count
+# A namespace on a cluster-scoped object is a mistake (usually a Kustomize
+# namespace transformer stamping a kind it doesn't know), and schemas don't
+# catch it. Cluster-scoped kinds: the built-ins plus every rendered CRD
+# with scope Cluster.
+when 'scope-check'
+  all = [file, *rest].flat_map { |f| docs(f).map { |d| [f, d] } }
+  cluster = CLUSTER_SCOPED_KINDS.dup
+  all.each do |_, d|
+    next unless d['kind'] == 'CustomResourceDefinition' && d.dig('spec', 'scope') == 'Cluster'
+
+    cluster << "#{d.dig('spec', 'group')}/#{d.dig('spec', 'names', 'kind')}"
+  end
+  bad = all.select { |_, d| d.dig('metadata', 'namespace') && cluster.include?(group_kind(d)) }
+  bad.each do |f, d|
+    warn "#{File.basename(f)}: #{d['kind']} #{d.dig('metadata', 'name')} is cluster-scoped but has namespace #{d.dig('metadata', 'namespace')}"
+  end
+  abort "#{bad.size} cluster-scoped objects with a namespace" unless bad.empty?
+  puts "#{all.size} objects, #{cluster.uniq.size} cluster-scoped kinds"
 when 'crd-schemas'
   outdir = rest[0]
   count = 0
