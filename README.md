@@ -14,15 +14,16 @@ for the `kubectl port-forward` flow (and the Jenkins-tunnel variant for
 staging/prod).
 
 `frontend`, `order-service`, and `user-service` are all `ClusterIP` — none of them is
-individually reachable from outside the cluster. Public access goes through one shared
-`Ingress` (`apps/base/ingress.yaml`), provisioned as an ALB by the AWS Load Balancer
-Controller, which routes `/api/orders` → `order-service`, everything else under `/api`
-(auth, tasks) → `user-service`, and `/` → `frontend`. This exists because the frontend
-calls its own backend with same-origin relative paths (e.g. `fetch("/api/auth/signin")`) —
-without this Ingress, those calls have nowhere correct to land. After ArgoCD syncs it, get
-the URL with:
+individually reachable from outside the cluster. Public access goes through one ALB (the
+AWS Load Balancer Controller provisions it from the Kong gateway's Ingress,
+`addons/values/cloud/kong.yaml`), which sends everything to **Kong**; Kong routes
+`/api/orders` → `order-service`, everything else under `/api` (auth, tasks) →
+`user-service`, and `/` → `frontend` (`apps/base/routes.yaml`, `docs/KONG.md`). This exists
+because the frontend calls its own backend with same-origin relative paths (e.g.
+`fetch("/api/auth/signin")`) — without one entrance routing by path, those calls have
+nowhere correct to land. After ArgoCD syncs it, get the URL with:
 ```bash
-kubectl get ingress app-ingress -n <development|staging|production> \
+kubectl get ingress kong-gateway-proxy -n kong \
   -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
 ```
 

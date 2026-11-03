@@ -428,7 +428,7 @@ the alert to clear (about 4 minutes; works the same on EKS):
 
 | Step | Topic | Local KinD Execution |
 |---|---|---|
-| **16** | `16-kong-gateway` | Deploy Kong Ingress Controller in DB-less mode in KinD. Route `/api/orders` and `/api/users`. Compare with K8s Gateway API (`HTTPRoute`). |
+| **16** | `16-kong-gateway` | **Done** (`docs/KONG.md`): the lab sync installs Kong (DB-less, about 400 MiB) behind Traefik and the Gateway API CRDs; the services are routed by `HTTPRoute`s (`apps/base/routes.yaml`), `/api/v1/orders` included. "Try it in the lab": the routes' status, a broken route and its alert, the admin API refusing a pod. |
 | **17** | `17-kong-plugins` | Enable plugins: rate limiting (backed by Redis container), key-auth, JWT validation, CORS, request transformation. |
 | **18** | `18-service-mesh` | Install Linkerd or Istio in KinD. Mesh namespaces. Verify mTLS between services using `linkerd viz` or `istioctl`. Test 90/10 traffic splitting. |
 | **19** | `19-network-policies` | Install Calico or Cilium in KinD. Create default-deny NetworkPolicies. Allow only legitimate microservice-to-microservice traffic. |

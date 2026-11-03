@@ -46,7 +46,7 @@ gitops/
 │
 ├── addons/  ★               the "tools": Prometheus, Grafana, Loki, Tempo, collector, Alloy,
 │                            metrics-server, VPA (recommends container sizes), KEDA
-│                            (scales on events, KEDA.md)
+│                            (scales on events, KEDA.md), Kong (the API gateway, KONG.md)
 │   ├── applications/          one ArgoCD app per tool
 │   ├── streaming/             Kafka: the Strimzi operators and the cluster's config app,
 │   │                            only in the environments that run Kafka (lab, dev)
@@ -64,7 +64,9 @@ gitops/
 ├── bootstrap/               ArgoCD entry points, one per environment
 ├── platform/                cluster-wide settings for the cloud clusters: RBAC,
 │                            the AWS secret store, disk types (storage/), and
-│                            dev's Karpenter node pools (karpenter/dev)
+│                            dev's Karpenter node pools (karpenter/dev); in every
+│                            environment, the Gateway API CRDs (gateway-api/) and
+│                            Kong's Gateway, plugins and policy (kong/, KONG.md)
 ├── msk/                     the topics Job for Amazon MSK, run by hand (msk-vs-strimzi.md)
 ├── tests/  ★                tests for the alert rules and the log pipeline, and
 │                            kustomize/: overlays only validate.sh builds (apps-msk)
@@ -177,7 +179,7 @@ One request leaves up to three kinds of line, all with the same `trace_id`:
 
 - **Edge log:** one line per request at the entrance. Lab: Traefik. Cloud:
   the ALB writes it to S3 (switched on per environment, see
-  `apps/base/ingress.yaml`).
+  `addons/values/cloud/kong.yaml`).
 - **API log:** one line per HTTP request inside the service
   (`RequestLoggingFilter`). Health checks are not logged.
 - **Server log:** everything else the service writes.

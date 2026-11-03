@@ -193,8 +193,11 @@ the same thing get the same result.
 - `via="service"` failing too: the service itself. If `ServiceUnavailable`
   fires for it, start there. Otherwise look at the probe's debug output
   and the service's logs (`ServiceDown` above has the queries).
-- only `via="ingress"` failing: the routing. `kubectl get ingress app-ingress -n development -o yaml`,
-  Traefik's logs (`kubectl logs -n traefik deploy/traefik`).
+- only `via="ingress"` failing: the routing, between the edge and the service. The routes:
+  `kubectl get httproute -n development` (each `Accepted` and `ResolvedRefs`); Kong's own
+  view and logs (the **Kong gateway** dashboard, `kubectl logs -n kong deploy/kong-gateway`);
+  the edge: Traefik's logs in the lab (`kubectl logs -n traefik deploy/traefik`), the
+  ALB's target health in the cloud.
 - `check="signin"` with status 500: user-service couldn't check the
   credentials, usually MongoDB. With **200**: sign-in accepted a random
   password (the probe makes a new one each time its pod starts), so
@@ -499,6 +502,61 @@ against the order rate.
 order-service replicas each run the relay (the lease keeps them from
 publishing the same event twice), or raise `app.events.outbox.batch-size`
 (100 events per poll, every 500 ms).
+
+---
+
+## API gateway (Kong)
+
+Every request from the edge reaches the services through Kong (`docs/KONG.md`). Its state:
+
+```bash
+kubectl get pods -n kong                                  # kong-gateway-*, kong-controller-*
+kubectl get gateway -n kong; kubectl get httproute -A     # Programmed / Accepted, ResolvedRefs
+kubectl logs -n kong deploy/kong-controller --tail=100    # translation and push errors
+```
+
+Grafana: **Kong gateway** (traffic, errors and latency per route; configuration pushes).
+
+### KongGatewayUnavailable
+
+**Meaning:** no Kong gateway pod has been ready for 2 minutes. Nothing from the edge reaches
+any service: the whole application is down for users, though every service may be healthy
+(their own checks still pass).
+
+**Check:** `kubectl describe deploy kong-gateway -n kong` and the pods' events: a bad rollout
+(a Kong image or chart change), pods that can't be scheduled, or readiness failing. Kong is
+ready only once it has a configuration: a controller that can't push one
+(`KongConfigurationPushFailing`) keeps new gateway pods unready.
+
+**Act:** roll back the last change to the `kong` application (`git revert`, let ArgoCD sync).
+If the controller is the cause, fix it first.
+
+### KongConfigurationPushFailing
+
+**Meaning:** for 20 minutes Kong has refused the configuration the controller sends. Kong keeps
+serving the last configuration it accepted, so users see nothing wrong, but no change since
+then (a new route, a plugin) is live, and a gateway pod that restarts may start with nothing.
+
+**Check:** the controller's log (`kubectl logs -n kong deploy/kong-controller | grep -i error`)
+names the entity Kong rejected and why; `failure_reason` on
+`ingress_controller_configuration_push_count` says whether it was a conflict, the network or
+something else.
+
+**Act:** fix or revert the resource it names (usually the last change to a route or plugin).
+The controller pushes again on its own.
+
+### KongResourcesRejected
+
+**Meaning:** some routes or plugins are left out of Kong's configuration: the controller
+couldn't translate them, or Kong refused them. Everything else works; what they would have
+routed doesn't.
+
+**Check:** `kubectl get httproute -A` and `kubectl describe` the routes whose `Accepted` or
+`ResolvedRefs` is `False` (a backend Service or port that doesn't exist, a route attaching from
+a namespace the Gateway doesn't allow); for plugins, the controller's log and the events on the
+`KongPlugin` or `KongClusterPlugin`.
+
+**Act:** fix the resource; the controller picks the change up at once.
 
 ---
 

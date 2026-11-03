@@ -130,6 +130,14 @@ to it.
 | 14 Amazon MSK | An optional **MSK Serverless** cluster in Terraform (`enable_msk`, off: about $0.75 an hour), with one IAM role per service allowed exactly what its Kafka user is allowed on Strimzi. The services switch to it by configuration only: the chart's `kafka.msk` setting and a matching piece for user-service; the one code change is AWS's sign-in library, with a test per service. A Job creates the topics on MSK. `docs/msk-vs-strimzi.md` gives the switch-over steps and the comparison with numbers: about $95 a month for Strimzi in dev against about $570 for MSK Serverless, and what the difference buys. First `terraform test` in the repo (mocked AWS, no cost). Notes: tf topic 14. | ✅ |
 | 15 KEDA | **KEDA** installed as an add-on in every environment. notification-service now scales on its Kafka backlog instead of CPU: none at all when there's nothing to do, up to one per partition when events pile up, and one as a safety net if KEDA can't read the backlog. order-service, in the lab and dev, scales on requests per second as well as CPU (staging and prod keep CPU only, to compare). The "service unavailable" alert no longer fires for a service at zero on purpose; two new alerts for KEDA itself. KEDA reads lag with its own Kafka user that can't read events, and may read Kubernetes Secrets only in its own namespace (a security review of the first version found it could read every Secret in the cluster). A setting that slows notification-service down on purpose, for the exercise that shows why CPU-based scaling misses a backlog. Guide: `docs/KEDA.md`; notes: tf topic 15. | ✅ |
 
+**Fixed along the way in step 16:**
+
+- **A setting in step 15's security fix carried the wrong namespace.** A cluster-wide KEDA
+  object was stamped with a namespace by the tool that assembles the manifests. The repo's
+  checks now refuse any cluster-wide object with a namespace, and the fix is corrected.
+- **Kong's defaults exposed its admin screens.** The chart would have published the Kong
+  Manager GUI on every node; it is off, and its admin API is limited to the controller.
+
 **Fixed along the way in step 13:**
 
 - **A damaged event was retried as if the registry were down.** notification-service
@@ -169,7 +177,7 @@ endpoint, already in the code before this branch):
 
 | Step | What changes | Status |
 |---|---|---|
-| 16 Kong gateway | Kong in DB-less mode takes over routing behind the load balancer, declared in Git, first with Ingress and then with the newer Gateway API (`HTTPRoute`); versioned routes (`/v1`, `/v2`); Kong metrics in Grafana. | ☐ |
+| 16 Kong gateway | **Kong** (open source, no database) now sits between the load balancer and the services in every environment: the load balancer sends everything to Kong, and Kong routes each path to its service. The routing is written with the newer **Gateway API** (`HTTPRoute`s next to the services) instead of the old Ingress; the guide shows both side by side. `/api/v1/orders` works as a versioned path. Kong's metrics on a new Grafana dashboard, three tested alerts, its log lines labelled. Kong's admin API, which could reroute all traffic, is reachable only by Kong's own controller. Also a new check in the repo's validation that caught a mistake in step 15's fix (below). Guide: `docs/KONG.md`; notes: tf topic 16. | ✅ |
 | 17 Kong plugins | What a gateway is for: rate limits with shared counters in Redis, API keys with two customer tiers, JWT validation, CORS, header changes, per-route metrics, and a weighted canary route. | ☐ |
 | 18 Service mesh | Encrypted, authenticated traffic between services without code changes, retries and timeouts, "only frontend may call order-service" rules (and: only the rules Job may change the schema registry's rules, a gap left open in step 13), and weighted traffic splits; a written opinion on when a mesh is worth it. | ☐ |
 | 19 Network policies | Every environment enforces NetworkPolicies (the lab and dev already do since step 13); each namespace denies everything by default and allows only the traffic it needs; pods can no longer reach the EC2 metadata service; database security groups allow only the cluster. | ☐ |

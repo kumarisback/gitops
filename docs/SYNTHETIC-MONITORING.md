@@ -125,7 +125,7 @@ ArgoCD puts everything back.
    Both order-service checks turn red; `EndpointDown` fires after 2
    minutes (Alertmanager: `kubectl port-forward svc/kube-prometheus-stack-alertmanager 9093 -n monitoring`),
    next to `ServiceUnavailable`. Scale back to 1.
-2. **The routing breaks, the service doesn't.** `kubectl edit ingress app-ingress -n development`,
+2. **The routing breaks, the service doesn't.** `kubectl edit httproute order-service -n development`,
    change `/api/orders` to `/api/order`. Only the `via=ingress` status
    check fails: the service check still passes. Change it back.
 3. **The database goes away.** `kubectl scale statefulset mongodb -n development --replicas=0`.
@@ -144,7 +144,7 @@ off by default because they cost money while on. To turn on in
 `environments/app-cluster/<env>.tfvars` after the first ArgoCD sync:
 
 ```hcl
-synthetics_base_url       = "http://<ALB DNS name>"   # kubectl get ingress app-ingress -n development
+synthetics_base_url       = "http://<ALB DNS name>"   # kubectl get ingress kong-gateway-proxy -n kong
 synthetics_alarm_email    = "you@example.com"          # optional
 enable_container_insights = true                       # optional
 ```
