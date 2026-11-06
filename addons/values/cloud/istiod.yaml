@@ -1,0 +1,8 @@
+# One may go at a time (a node drain, an upgrade) without anyone noticing.
+replicaCount: 2
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    memory: 2Gi

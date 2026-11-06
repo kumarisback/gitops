@@ -1,0 +1,13 @@
+# Istio's control plane in ambient mode (roadmap step 18, docs/MESH.md).
+profile: ambient
+# Two in the cloud (cloud/istiod.yaml); one is enough to keep issuing
+# certificates and pushing configuration, and traffic keeps flowing
+# without any for as long as the current certificates last (a day).
+autoscaleEnabled: false
+replicaCount: 1
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 1Gi

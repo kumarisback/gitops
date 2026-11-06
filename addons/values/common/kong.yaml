@@ -25,6 +25,10 @@ controller:
 gateway:
   image:
     tag: "3.9.4"
+  # In the service mesh (roadmap step 18, docs/MESH.md): the services only
+  # accept mutual TLS, and their policies name Kong by this identity.
+  podLabels:
+    istio.io/dataplane-mode: ambient
   env:
     # One NGINX worker per CPU by default, each with its own memory: bound
     # it so the pod's memory doesn't depend on the node's size.

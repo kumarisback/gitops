@@ -80,6 +80,13 @@ spec:
           requests:
             storage: 2Gi
 ---
+# Its own identity, so the mesh policy below can name it.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mongodb-init
+automountServiceAccountToken: false
+---
 # Makes mongodb-0 the primary of replica set rs0, once. Safe to run again:
 # it does nothing when the set already exists.
 apiVersion: batch/v1
@@ -91,6 +98,7 @@ spec:
   ttlSecondsAfterFinished: 600
   template:
     spec:
+      serviceAccountName: mongodb-init
       restartPolicy: OnFailure
       automountServiceAccountToken: false
       containers:
@@ -118,3 +126,22 @@ spec:
           resources:
             requests: {cpu: 50m, memory: 128Mi}
             limits: {memory: 256Mi}
+---
+# In the service mesh (roadmap step 18, docs/MESH.md): only the services
+# that use the database, and the Job above, may connect to it.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: mongodb-connections
+spec:
+  selector:
+    matchLabels:
+      app: mongodb
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "*/sa/user-service"
+              - "*/sa/order-service"
+              - "*/sa/mongodb-init"

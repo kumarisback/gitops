@@ -1,0 +1,59 @@
+# The service mesh (roadmap step 18, docs/MESH.md). In ambient mode the
+# mesh is on the path of every request between services: its parts failing
+# is the application failing, not a monitoring detail.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: mesh-alerts
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: mesh
+      rules:
+        # ztunnel carries every connection of the meshed pods on its node; a
+        # node without one cuts them off.
+        - alert: ZtunnelUnavailable
+          expr: max by (namespace, daemonset) (kube_daemonset_status_number_unavailable{namespace="istio-system", daemonset="ztunnel"}) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "ztunnel is missing on {{ $value }} nodes"
+            description: "Meshed pods on those nodes can neither send nor receive traffic until it is back."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#ztunnelunavailable
+        # Requests to the application's Services pass through it.
+        - alert: WaypointUnavailable
+          expr: |
+            (
+              max by (namespace, deployment) (kube_deployment_status_replicas_available{deployment="waypoint"}) == 0
+            )
+            and on (namespace, deployment)
+            (
+              max by (namespace, deployment) (kube_deployment_spec_replicas{deployment="waypoint"}) > 0
+            )
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "The mesh waypoint of {{ $labels.namespace }} has no ready pod"
+            description: "Requests to every Service in {{ $labels.namespace }} fail: from Kong, between the services and from the synthetic checks."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#waypointunavailable
+        # Without istiod nothing new is configured or certified; traffic keeps
+        # flowing on what was there, until the certificates expire (a day).
+        - alert: IstiodUnavailable
+          expr: |
+            (
+              max by (namespace, deployment) (kube_deployment_status_replicas_available{namespace="istio-system", deployment="istiod"}) == 0
+            )
+            and on (namespace, deployment)
+            (
+              max by (namespace, deployment) (kube_deployment_spec_replicas{namespace="istio-system", deployment="istiod"}) > 0
+            )
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Istio's control plane (istiod) has no ready pod"
+            description: "New pods get no mesh identity and policy changes don't apply. Existing traffic continues until workload certificates expire, within a day."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#istiodunavailable

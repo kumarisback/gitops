@@ -5,3 +5,4 @@ resources:
   - user-service/
   - routes.yaml
   - kong.yaml
+  - mesh.yaml

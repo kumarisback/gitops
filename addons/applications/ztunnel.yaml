@@ -1,0 +1,41 @@
+# Istio 1.31 in ambient mode (roadmap step 18, docs/MESH.md).
+# ztunnel (a DaemonSet): the per-node proxy that encrypts and
+# authenticates traffic between meshed pods with mutual TLS (HBONE, port
+# 15008), and enforces layer-4 AuthorizationPolicies.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ztunnel
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: cluster-addons
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - chart: ztunnel
+      repoURL: https://blob.istio.io/istio-release/charts
+      targetRevision: 1.31.3
+      helm:
+        # TIER and ENV are filled in by addons/select-env (see
+        # kustomization.yaml); missing files are skipped.
+        ignoreMissingValueFiles: true
+        valueFiles:
+          - $values/addons/values/common/ztunnel.yaml
+          - $values/addons/values/TIER/ztunnel.yaml
+          - $values/addons/values/ENV/ztunnel.yaml
+    - repoURL: https://github.com/kumarisback/gitops.git
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: istio-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # Istio's CRDs are too large for client-side apply.
+      - ServerSideApply=true

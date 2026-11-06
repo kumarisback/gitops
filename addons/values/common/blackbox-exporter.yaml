@@ -102,10 +102,22 @@ extraManifests:
           app.kubernetes.io/instance: blackbox-exporter
       policyTypes: [Ingress, Egress]
       ingress:
+        # Prometheus is in the mesh too: its scrapes arrive through ztunnel
+        # on 15008 (HBONE).
         - from:
             - podSelector:
                 matchLabels:
                   app.kubernetes.io/name: prometheus
+          ports:
+            - port: 9115
+              protocol: TCP
+            - port: 15008
+              protocol: TCP
+        # The kubelet's health checks: in ambient mode they come from this
+        # link-local address, not the node's.
+        - from:
+            - ipBlock:
+                cidr: 169.254.7.127/32
           ports:
             - port: 9115
               protocol: TCP
@@ -128,6 +140,12 @@ extraManifests:
                   - key: kubernetes.io/metadata.name
                     operator: In
                     values: [development, staging, production, traefik]
+
+# In the service mesh (roadmap step 18, docs/MESH.md): the services only
+# accept mutual TLS, and their policies let this identity call what it checks.
+pod:
+  labels:
+    istio.io/dataplane-mode: ambient
 
 # Its own metrics (probe counts, config reloads), not the probe results.
 serviceMonitor:

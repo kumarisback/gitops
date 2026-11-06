@@ -18,7 +18,10 @@ contextPath: /api/orders
 
 service:
   port: 80
-  annotations: {}
+  # Kong sends requests to the Service's address, not straight to a pod,
+  # so they pass the service mesh's waypoint and its policies (docs/MESH.md).
+  annotations:
+    ingress.kubernetes.io/service-upstream: "true"
 
 serviceAccount:
   create: true

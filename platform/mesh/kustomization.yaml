@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The service mesh's own monitoring (roadmap step 18, docs/MESH.md),
+# deployed by the mesh-config Application in every environment. The mesh's
+# policies belong to the application namespace (apps/base/mesh.yaml).
+resources:
+  - monitors.yaml

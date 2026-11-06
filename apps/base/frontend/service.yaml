@@ -5,6 +5,10 @@ metadata:
   namespace: production
   labels:
     app: frontend
+  # Kong sends requests to the Service's address, not straight to a pod,
+  # so they pass the mesh's waypoint and its policies (docs/MESH.md).
+  annotations:
+    ingress.kubernetes.io/service-upstream: "true"
 spec:
   # ClusterIP, not LoadBalancer: the single public entrypoint is the edge
   # (ALB, or Traefik in the lab) in front of Kong, which routes / here and

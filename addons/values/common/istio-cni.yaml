@@ -1,0 +1,8 @@
+# Istio's CNI agent in ambient mode: redirects the traffic of every pod in
+# the mesh (namespace or pod label istio.io/dataplane-mode=ambient) through
+# ztunnel (roadmap step 18, docs/MESH.md).
+profile: ambient
+resources:
+  requests:
+    cpu: 20m
+    memory: 64Mi

@@ -19,7 +19,9 @@ tests:
       - equal:
           path: metadata.labels.app
           value: order-service
-      # Reached through Kong, not straight from the ALB: no health-check
-      # annotations.
-      - notExists:
+      # Kong calls the Service's address, so requests pass the mesh's
+      # waypoint (docs/MESH.md).
+      - equal:
           path: metadata.annotations
+          value:
+            ingress.kubernetes.io/service-upstream: "true"

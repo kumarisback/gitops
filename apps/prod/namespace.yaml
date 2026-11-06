@@ -1,4 +1,11 @@
+# The application namespace, in the service mesh (roadmap step 18,
+# docs/MESH.md): every pod here gets a mesh identity and mutual TLS through
+# ztunnel, and traffic to its Services passes the namespace's waypoint
+# (apps/base/mesh.yaml), where the layer-7 policies apply.
 apiVersion: v1
 kind: Namespace
 metadata:
   name: production
+  labels:
+    istio.io/dataplane-mode: ambient
+    istio.io/use-waypoint: waypoint

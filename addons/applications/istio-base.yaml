@@ -1,0 +1,40 @@
+# Istio 1.31 in ambient mode (roadmap step 18, docs/MESH.md).
+# Istio's CRDs and cluster roles (the base chart). Installed first; never
+# pruned, as removing a CRD removes every object of that kind.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istio-base
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: cluster-addons
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - chart: base
+      repoURL: https://blob.istio.io/istio-release/charts
+      targetRevision: 1.31.3
+      helm:
+        # TIER and ENV are filled in by addons/select-env (see
+        # kustomization.yaml); missing files are skipped.
+        ignoreMissingValueFiles: true
+        valueFiles:
+          - $values/addons/values/common/istio-base.yaml
+          - $values/addons/values/TIER/istio-base.yaml
+          - $values/addons/values/ENV/istio-base.yaml
+    - repoURL: https://github.com/kumarisback/gitops.git
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: istio-system
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # Istio's CRDs are too large for client-side apply.
+      - ServerSideApply=true

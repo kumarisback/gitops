@@ -1,0 +1,27 @@
+# The service mesh's own monitoring (platform/mesh, roadmap step 18).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mesh-config
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: mesh-config
+    # Git-sourced: follows the root app's revision.
+    app.kubernetes.io/part-of: gitops-config
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/kumarisback/gitops.git
+    targetRevision: HEAD
+    path: platform/mesh
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: istio-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

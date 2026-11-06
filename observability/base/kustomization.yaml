@@ -15,6 +15,7 @@ resources:
   - synthetic-alerts.yaml
   - autoscaling-alerts.yaml
   - gateway-alerts.yaml
+  - mesh-alerts.yaml
 
 # The Grafana sidecar loads every ConfigMap labelled grafana_dashboard from
 # the monitoring namespace. Stable names, so a dashboard keeps its URL.

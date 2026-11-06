@@ -6,6 +6,10 @@ metadata:
   # ServiceMonitor selects Services by these labels, not by spec.selector.
   labels:
     app: user-service
+  # Kong sends requests to the Service's address, not straight to a pod,
+  # so they pass the mesh's waypoint and its policies (docs/MESH.md).
+  annotations:
+    ingress.kubernetes.io/service-upstream: "true"
 spec:
   type: ClusterIP
   selector:

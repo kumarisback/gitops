@@ -35,3 +35,16 @@ spec:
       ports:
         - port: admin-tls
           protocol: TCP
+    # The gateways are in the service mesh (roadmap step 18); Prometheus,
+    # also in it, reaches their metrics through ztunnel on 15008 (HBONE).
+    # Nothing else in the mesh may reach them that way.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - port: 15008
+          protocol: TCP

@@ -1,0 +1,9 @@
+# ztunnel, one per node (roadmap step 18, docs/MESH.md). Its memory grows
+# with the number of pods and connections it knows; the chart's default
+# request (512Mi) is sized for clusters of thousands of nodes.
+resources:
+  requests:
+    cpu: 50m
+    memory: 96Mi
+  limits:
+    memory: 512Mi

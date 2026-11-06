@@ -1,5 +1,10 @@
 prometheus:
   prometheusSpec:
+    # In the service mesh (roadmap step 18, docs/MESH.md): the services only
+    # accept mutual TLS, so Prometheus scrapes them through ztunnel.
+    podMetadata:
+      labels:
+        istio.io/dataplane-mode: ambient
     # Pick up every ServiceMonitor/PrometheusRule regardless of its labels.
     serviceMonitorSelectorNilUsesHelmValues: false
     # Keep the trace IDs (exemplars) the collector's span metrics carry, so

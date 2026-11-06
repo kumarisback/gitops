@@ -71,6 +71,17 @@ patches:
       - op: replace
         path: /spec/maxReplicas
         value: 1
+  # One mesh waypoint in the lab (apps/base/mesh.yaml asks for two).
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: waypoint
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 1
   - target:
       kind: Deployment
     patch: |-

@@ -1,0 +1,274 @@
+# The application namespace in the service mesh (roadmap step 18,
+# docs/MESH.md). Istio in ambient mode: no sidecars. ztunnel, on every
+# node, gives each pod an identity and encrypts pod-to-pod traffic with
+# mutual TLS; the namespace's waypoint (an Envoy proxy) sees requests to its
+# Services and applies the HTTP-level rules below.
+#
+# Identities are ServiceAccounts, written as principals:
+#   cluster.local/ns/kong/sa/kong-gateway                       Kong's gateways
+#   cluster.local/ns/monitoring/sa/kube-prometheus-stack-prometheus  Prometheus
+#   cluster.local/ns/monitoring/sa/blackbox-exporter            the synthetic checks
+#   */sa/<name>                                                 a ServiceAccount in this
+#                                                               namespace (each environment
+#                                                               is its own cluster with one
+#                                                               application namespace)
+#
+# Everything here is an allow-list: once a policy selects a workload, what
+# it doesn't allow is refused.
+
+# Mutual TLS only: plaintext from outside the mesh is refused. Kong,
+# Prometheus and the blackbox exporter are in the mesh for that reason.
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: default
+spec:
+  mtls:
+    mode: STRICT
+---
+# The namespace's waypoint: the proxy that requests to this namespace's
+# Services pass through (namespace label istio.io/use-waypoint). Istio
+# creates its Deployment, ServiceAccount waypoint, from this Gateway.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: waypoint
+  labels:
+    istio.io/waypoint-for: service
+spec:
+  gatewayClassName: istio-waypoint
+  listeners:
+    - name: mesh
+      port: 15008
+      protocol: HBONE
+---
+# The waypoint is on the path of every request to this namespace's
+# Services: at least two, one may go at a time (the lab overlay runs one).
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: waypoint
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: waypoint
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: waypoint
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      gateway.networking.k8s.io/gateway-name: waypoint
+---
+# Layer 4, enforced by ztunnel at each pod: who may open a connection at
+# all. Requests to a Service arrive from the waypoint (which has checked
+# them); Prometheus scrapes pods directly.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: frontend-connections
+spec:
+  selector:
+    matchLabels:
+      app: frontend
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: ["*/sa/waypoint"]
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: user-service-connections
+spec:
+  selector:
+    matchLabels:
+      app: user-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "*/sa/waypoint"
+              - cluster.local/ns/monitoring/sa/kube-prometheus-stack-prometheus
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: order-service-connections
+spec:
+  selector:
+    matchLabels:
+      app: order-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "*/sa/waypoint"
+              - cluster.local/ns/monitoring/sa/kube-prometheus-stack-prometheus
+---
+# notification-service only consumes from Kafka; nothing calls it.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: notification-service-connections
+spec:
+  selector:
+    matchLabels:
+      app: notification-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/monitoring/sa/kube-prometheus-stack-prometheus
+---
+# Layer 7, enforced by the waypoint for requests to each Service: who may
+# call what. Kong may call everything it routes; one service may call the
+# other only where it needs to; the synthetic checks only what they check.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: frontend-callers
+spec:
+  targetRefs:
+    - kind: Service
+      group: ""
+      name: frontend
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: [cluster.local/ns/kong/sa/kong-gateway]
+    - from:
+        - source:
+            principals: [cluster.local/ns/monitoring/sa/blackbox-exporter]
+      to:
+        - operation:
+            methods: [GET]
+            paths: ["/"]
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: user-service-callers
+spec:
+  targetRefs:
+    - kind: Service
+      group: ""
+      name: user-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: [cluster.local/ns/kong/sa/kong-gateway]
+    # order-service checks tokens against user-service's public keys.
+    - from:
+        - source:
+            principals: ["*/sa/order-service"]
+      to:
+        - operation:
+            methods: [GET]
+            paths: ["/api/auth/jwks.json"]
+    - from:
+        - source:
+            principals: [cluster.local/ns/monitoring/sa/blackbox-exporter]
+      to:
+        - operation:
+            methods: [POST]
+            paths: ["/api/auth/signin"]
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: order-service-callers
+spec:
+  targetRefs:
+    - kind: Service
+      group: ""
+      name: order-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: [cluster.local/ns/kong/sa/kong-gateway]
+    # user-service shows a user their orders, passing on the user's token.
+    - from:
+        - source:
+            principals: ["*/sa/user-service"]
+      to:
+        - operation:
+            methods: [GET]
+            paths: ["/api/orders/user/*"]
+    - from:
+        - source:
+            principals: [cluster.local/ns/monitoring/sa/blackbox-exporter]
+      to:
+        - operation:
+            methods: [GET]
+            paths: ["/api/orders/status"]
+---
+# Nobody may call notification-service's Service (an ALLOW with no rules
+# allows nothing).
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: notification-service-callers
+spec:
+  targetRefs:
+    - kind: Service
+      group: ""
+      name: notification-service
+  action: ALLOW
+---
+# Retries and a deadline for calls to the two APIs, at the waypoint, without
+# any code. Only failures where the request certainly never reached the
+# service are retried: the connection failed, was refused, or was reset
+# before the request was sent. Retrying anything else could create an
+# order twice. 503s and timeouts are not retried; the caller decides.
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: order-service
+spec:
+  hosts: [order-service]
+  http:
+    - timeout: 10s
+      retries:
+        attempts: 2
+        perTryTimeout: 4s
+        retryOn: connect-failure,refused-stream,reset-before-request
+      route:
+        - destination:
+            host: order-service
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: user-service
+spec:
+  hosts: [user-service]
+  http:
+    - timeout: 10s
+      retries:
+        attempts: 2
+        perTryTimeout: 4s
+        retryOn: connect-failure,refused-stream,reset-before-request
+      route:
+        - destination:
+            host: user-service

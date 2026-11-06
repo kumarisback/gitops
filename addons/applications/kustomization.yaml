@@ -22,6 +22,11 @@ resources:
   - vertical-pod-autoscaler.yaml
   - keda.yaml
   - gateway-api.yaml
+  - istio-base.yaml
+  - istiod.yaml
+  - istio-cni.yaml
+  - ztunnel.yaml
+  - mesh-config.yaml
   - kong.yaml
   - kong-config.yaml
   - blackbox-exporter.yaml
