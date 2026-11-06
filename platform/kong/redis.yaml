@@ -1,0 +1,117 @@
+# The rate limits' shared counters (roadmap step 17, docs/KONG.md). Every
+# gateway pod counts in the same place, so a limit of 10 a minute is 10,
+# not 10 per pod. Valkey (the Linux Foundation's open-source Redis fork;
+# Kong speaks to it as to Redis), in memory only: counters last a minute
+# or an hour, so losing them on a restart just restarts the windows.
+# ElastiCache (tf enable_elasticache) would do the same as a managed
+# service.
+#
+# Password in Secret kong-redis (key password): created by
+# scripts/start-lab.sh in the lab, generated in the cluster by External
+# Secrets in the cloud (platform/kong-redis-password.yaml). If Valkey is
+# down, Kong lets requests through unlimited (fault_tolerant) rather than
+# failing them, and KongRateLimitStoreUnavailable fires.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kong-redis
+  namespace: kong
+  labels:
+    app.kubernetes.io/name: kong-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kong-redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kong-redis
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: valkey
+          image: valkey/valkey:8.1.11-alpine
+          command:
+            - valkey-server
+            - --requirepass
+            - $(VALKEY_PASSWORD)
+            # Nothing on disk: no snapshots, no append-only file.
+            - --save
+            - ""
+            - --appendonly
+            - "no"
+            # A bound on memory, evicting counters closest to expiry first.
+            - --maxmemory
+            - 64mb
+            - --maxmemory-policy
+            - volatile-ttl
+          env:
+            - name: VALKEY_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: kong-redis, key: password}
+          ports:
+            - name: redis
+              containerPort: 6379
+          readinessProbe:
+            tcpSocket:
+              port: redis
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: redis
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - {name: data, mountPath: /data}
+          resources:
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {memory: 128Mi}
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong-redis
+  namespace: kong
+spec:
+  selector:
+    app.kubernetes.io/name: kong-redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+---
+# Only the gateways count; nothing else may reach the counters.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kong-redis
+  namespace: kong
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kong-redis
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: kong
+              app.kubernetes.io/name: gateway
+      ports:
+        - port: redis
+          protocol: TCP

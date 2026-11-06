@@ -12,3 +12,4 @@ resources:
   - gateway.yaml
   - plugins.yaml
   - network-policy.yaml
+  - redis.yaml

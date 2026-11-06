@@ -1,9 +1,17 @@
-# Plugins for every route (global: "true"). Step 17 adds the ones a gateway
-# is for: rate limits, keys, JWT, CORS.
+# Kong plugins defined once for the cluster (roadmap steps 16-17,
+# docs/KONG.md). Two kinds:
 #
-# Prometheus: request counts, latency and bandwidth per Kong service and
-# route, scraped from each gateway pod's status port (the kong add-on's
-# ServiceMonitor) and shown on the Kong dashboard.
+#   global: "true"   runs on every route (metrics, security headers)
+#   no label         a route or consumer opts in by naming it in its
+#                    konghq.com/plugins annotation (apps/base/routes.yaml,
+#                    apps/base/kong.yaml)
+#
+# Plugins attached to the same request run in Kong's fixed priority order,
+# not the order they're listed: authentication first (jwt, key-auth), then
+# rate limits, then request changes, then the response.
+
+# Request counts, latency and bandwidth per service, route and consumer
+# (the partner tiers), scraped from each gateway pod's status port.
 apiVersion: configuration.konghq.com/v1
 kind: KongClusterPlugin
 metadata:
@@ -18,5 +26,115 @@ config:
   latency_metrics: true
   bandwidth_metrics: true
   upstream_health_metrics: true
-  # Per consumer would add a label per API client; step 17 decides.
-  per_consumer: false
+  # A consumer label for requests from identified clients: the partner
+  # tiers and the user-token consumer, a handful of values.
+  per_consumer: true
+---
+# Response headers that tell browsers to be careful with what they get:
+# don't guess content types, don't send full URLs to other sites, don't
+# show the app inside someone else's frame. "add" leaves a header the
+# service set itself alone. Strict-Transport-Security comes with HTTPS
+# (step 03); a Content-Security-Policy needs the frontend's sources listed
+# first, or it breaks the page.
+apiVersion: configuration.konghq.com/v1
+kind: KongClusterPlugin
+metadata:
+  name: security-headers
+  annotations:
+    kubernetes.io/ingress.class: kong
+  labels:
+    global: "true"
+plugin: response-transformer
+config:
+  add:
+    headers:
+      - "X-Content-Type-Options:nosniff"
+      - "Referrer-Policy:strict-origin-when-cross-origin"
+      - "X-Frame-Options:DENY"
+---
+# Password guessing: 10 sign-in or sign-up attempts a minute per client
+# address, counted across every gateway pod (Valkey, redis.yaml). Over it,
+# 429 until the minute is up.
+apiVersion: configuration.konghq.com/v1
+kind: KongClusterPlugin
+metadata:
+  name: auth-attempts
+  annotations:
+    kubernetes.io/ingress.class: kong
+plugin: rate-limiting
+config:
+  minute: 10
+  limit_by: ip
+  policy: redis
+  redis:
+    host: kong-redis.kong.svc
+    port: 6379
+    timeout: 500
+  # Counters unreachable: let requests through rather than refuse every
+  # sign-in (KongRateLimitStoreUnavailable says so).
+  fault_tolerant: true
+  error_message: "Too many attempts; try again in a minute."
+configPatches:
+  - path: /redis/password
+    valueFrom:
+      secretKeyRef: {name: kong-redis, namespace: kong, key: password}
+---
+# The partner API's two tiers (apps/base/kong.yaml), per partner
+# application whichever address it calls from.
+apiVersion: configuration.konghq.com/v1
+kind: KongClusterPlugin
+metadata:
+  name: partner-tier-basic
+  annotations:
+    kubernetes.io/ingress.class: kong
+plugin: rate-limiting
+config:
+  minute: 60
+  hour: 1000
+  limit_by: consumer
+  policy: redis
+  redis:
+    host: kong-redis.kong.svc
+    port: 6379
+    timeout: 500
+  fault_tolerant: true
+configPatches:
+  - path: /redis/password
+    valueFrom:
+      secretKeyRef: {name: kong-redis, namespace: kong, key: password}
+---
+apiVersion: configuration.konghq.com/v1
+kind: KongClusterPlugin
+metadata:
+  name: partner-tier-premium
+  annotations:
+    kubernetes.io/ingress.class: kong
+plugin: rate-limiting
+config:
+  minute: 600
+  hour: 20000
+  limit_by: consumer
+  policy: redis
+  redis:
+    host: kong-redis.kong.svc
+    port: 6379
+    timeout: 500
+  fault_tolerant: true
+configPatches:
+  - path: /redis/password
+    valueFrom:
+      secretKeyRef: {name: kong-redis, namespace: kong, key: password}
+---
+# A switch for planned work: a route that names it answers 503 with this
+# message instead of reaching its service (docs/KONG.md, "Maintenance").
+# Attached nowhere by default.
+apiVersion: configuration.konghq.com/v1
+kind: KongClusterPlugin
+metadata:
+  name: maintenance
+  annotations:
+    kubernetes.io/ingress.class: kong
+plugin: request-termination
+config:
+  status_code: 503
+  message: "Down for maintenance; back shortly."

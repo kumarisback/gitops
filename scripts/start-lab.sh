@@ -128,6 +128,45 @@ kubectl create secret generic jwt-signing-key \
   --from-file=private-key.pem="${JWT_KEY_FILE}" \
   --dry-run=client -o yaml | kubectl apply -f - > /dev/null
 
+#    Kong's credentials (roadmap step 17, docs/KONG.md), made here because
+#    the lab has no External Secrets. Each is generated once into a
+#    git-ignored file under apps/local, so restarting the lab keeps it:
+#    the rate-limit counters' password, the two partner API keys (use them
+#    to call /api/v1/orders), and user-service's public key, for checking
+#    sign-in tokens at the gateway.
+kubectl create namespace kong --dry-run=client -o yaml | kubectl apply -f - > /dev/null
+REDIS_PASSWORD_FILE="${REPO_ROOT}/apps/local/kong-redis-password"
+[ -f "${REDIS_PASSWORD_FILE}" ] || (umask 077 && openssl rand -hex 24 > "${REDIS_PASSWORD_FILE}")
+kubectl create secret generic kong-redis \
+--namespace kong \
+--from-literal=password="$(cat "${REDIS_PASSWORD_FILE}")" \
+--dry-run=client -o yaml | kubectl apply -f - > /dev/null
+
+PARTNER_KEYS_FILE="${REPO_ROOT}/apps/local/partner-api-keys.env"
+if [ ! -f "${PARTNER_KEYS_FILE}" ]; then
+echo "🔑 Generating the lab's partner API keys (apps/local/partner-api-keys.env)..."
+(umask 077 && printf 'PARTNER_BASIC_KEY=%s\nPARTNER_PREMIUM_KEY=%s\n' \
+  "$(openssl rand -hex 20)" "$(openssl rand -hex 20)" > "${PARTNER_KEYS_FILE}")
+fi
+for tier in basic premium; do
+key=$(sed -n "s/^PARTNER_$(echo "${tier}" | tr '[:lower:]' '[:upper:]')_KEY=//p" "${PARTNER_KEYS_FILE}")
+kubectl create secret generic "partner-${tier}-key" \
+  --namespace development \
+  --from-literal=key="${key}" \
+  --dry-run=client -o yaml \
+  | kubectl label --local -f - -o yaml konghq.com/credential=key-auth \
+  | kubectl apply -f - > /dev/null
+done
+
+kubectl create secret generic user-service-jwt \
+--namespace development \
+--from-literal=key=user-service \
+--from-literal=algorithm=RS256 \
+--from-literal=rsa_public_key="$(openssl pkey -in "${JWT_KEY_FILE}" -pubout)" \
+--dry-run=client -o yaml \
+| kubectl label --local -f - -o yaml konghq.com/credential=jwt \
+| kubectl apply -f - > /dev/null
+
 # 8. Restore the local Argo app-of-apps. start-lab-podman.sh sets
 #    SKIP_ROOT_APP=1 because it deploys with sync-local-stack.rb instead,
 #    and an auto-syncing root app would fight that script.

@@ -4,3 +4,5 @@ apps/local/app-secrets.env
 # (ArgoCD, validate.sh and the lab sync all run it).
 charts/*/charts/
 apps/local/jwt-signing-key.pem
+apps/local/kong-redis-password
+apps/local/partner-api-keys.env

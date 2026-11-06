@@ -4,3 +4,4 @@ resources:
   - frontend/
   - user-service/
   - routes.yaml
+  - kong.yaml

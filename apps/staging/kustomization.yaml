@@ -6,6 +6,7 @@ resources:
   - ../base
   - app-secrets.yaml
   - jwt-signing-key.yaml
+  - kong-credentials.yaml
 
 namespace: staging
 

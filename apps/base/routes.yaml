@@ -1,12 +1,11 @@
-# How requests reach the services (roadmap step 16, docs/KONG.md): Gateway
-# API routes attached to Kong's Gateway (platform/kong), which sits behind
-# the edge (the ALB in the cloud, Traefik in the lab). They replace the
-# Ingress the ALB used to route with.
+# How requests reach the services (roadmap steps 16-17, docs/KONG.md):
+# Gateway API routes attached to Kong's Gateway (platform/kong), which sits
+# behind the edge (the ALB in the cloud, Traefik in the lab).
 #
 # The longest matching path wins, whatever the order of rules or routes:
-# /api/orders goes to order-service, the rest of /api to user-service,
-# everything else to the frontend. The Ingress needed its rules in that
-# order; routes don't.
+# /api/orders/status before /api/orders before /api, and / last. Plugins
+# (konghq.com/plugins) apply to a whole route, so paths that need different
+# checks are routes of their own.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -25,7 +24,8 @@ spec:
         - name: frontend
           port: 80
 ---
-# Sign-up, sign-in and the user API live under user-service's /api.
+# The user API, tasks and the public key (/api/auth/jwks.json) live under
+# user-service's /api.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -44,16 +44,59 @@ spec:
         - name: user-service
           port: 80
 ---
-# order-service (deployed with charts/microservice), under its context path
-# /api/orders. Also reachable as /api/v1/orders: a versioned path the
-# gateway maps to the service's own, so clients can name a version before
-# there is a second one. When a v2 with an incompatible API exists, it gets
-# its own Deployment and Service, and a rule for /api/v2/orders pointing
-# there, while v1 clients keep working (docs/KONG.md, exercise).
+# Sign-in and sign-up: at most 10 attempts a minute per client address, so
+# passwords can't be guessed at speed.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: user-service-auth
+  annotations:
+    konghq.com/plugins: auth-attempts
+spec:
+  parentRefs:
+    - name: kong
+      namespace: kong
+      sectionName: http
+  rules:
+    - matches:
+        - path:
+            type: Exact
+            value: /api/auth/signin
+        - path:
+            type: Exact
+            value: /api/auth/signup
+      backendRefs:
+        - name: user-service
+          port: 80
+---
+# order-service's open endpoint: the synthetic checks and anyone may ask
+# whether it is up, without a token.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: order-service-status
+spec:
+  parentRefs:
+    - name: kong
+      namespace: kong
+      sectionName: http
+  rules:
+    - matches:
+        - path:
+            type: Exact
+            value: /api/orders/status
+      backendRefs:
+        - name: order-service
+          port: 80
+---
+# The order API for the browser: a valid sign-in token is checked at the
+# gateway (user-tokens, apps/base/kong.yaml), then again by order-service.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: order-service
+  annotations:
+    konghq.com/plugins: user-tokens
 spec:
   parentRefs:
     - name: kong
@@ -67,6 +110,25 @@ spec:
       backendRefs:
         - name: order-service
           port: 80
+---
+# The partner API, versioned: /api/v1/orders reaches order-service's own
+# /api/orders. A partner application identifies itself with its API key
+# (partner-keys), which sets its rate-limit tier, and acts for a user whose
+# sign-in token order-service checks as usual. A v2 with an incompatible
+# API would be a Deployment and Service of its own with a route for
+# /api/v2/orders, while v1 clients keep working.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: order-service-partner
+  annotations:
+    konghq.com/plugins: partner-keys,partner-api-v1
+spec:
+  parentRefs:
+    - name: kong
+      namespace: kong
+      sectionName: http
+  rules:
     - matches:
         - path:
             type: PathPrefix

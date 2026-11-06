@@ -7,5 +7,6 @@ kind: Kustomization
 # alongside the cluster rather than as a manifest here.
 resources:
   - external-secrets.yaml
+  - kong-redis-password.yaml
   - rbac
   - storage

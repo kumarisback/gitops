@@ -49,3 +49,22 @@ spec:
             summary: "{{ $value }} routes or plugins left out of Kong's configuration"
             description: "The controller couldn't translate them, or Kong refused them; the rest of the configuration is live without them."
             runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kongresourcesrejected
+        # The rate limits' counters (platform/kong/redis.yaml) are gone: Kong
+        # lets every request through unlimited (fault_tolerant) rather than
+        # refusing them, so nothing else notices.
+        - alert: KongRateLimitStoreUnavailable
+          expr: |
+            (
+              max by (namespace, deployment) (kube_deployment_status_replicas_available{namespace="kong", deployment="kong-redis"}) == 0
+            )
+            and on (namespace, deployment)
+            (
+              max by (namespace, deployment) (kube_deployment_spec_replicas{namespace="kong", deployment="kong-redis"}) > 0
+            )
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Kong's rate limits are off"
+            description: "Their counter store (kong-redis) has had no ready pod for 5 minutes. Kong lets every request through unlimited until it is back: sign-in attempts and partner tiers aren't limited."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kongratelimitstoreunavailable

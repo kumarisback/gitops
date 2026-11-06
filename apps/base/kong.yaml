@@ -1,0 +1,89 @@
+# What the gateway checks before a request reaches the services (roadmap
+# step 17, docs/KONG.md): plugins the routes in routes.yaml name, and the
+# consumers (API clients) they recognise. Their credentials are Secrets made
+# outside Git: scripts/start-lab.sh in the lab, External Secrets in the
+# cloud (apps/<env>/kong-credentials.yaml).
+
+# Sign-in tokens, checked at the gateway before order-service sees them: a
+# forged, expired or foreign token is refused at the edge with 401.
+# order-service still verifies every token itself; this only stops the bad
+# ones earlier. RS256 against user-service's public key, found through the
+# token's iss claim ("user-service") on consumer user-service-tokens.
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: user-tokens
+plugin: jwt
+config:
+  key_claim_name: iss
+  claims_to_verify: [exp]
+  # user-service issues tokens for 24 hours; refuse any promising longer.
+  maximum_expiration: 86400
+  # Only the Authorization header: a token in a URL or cookie ends up in
+  # access logs and browser history.
+  header_names: [authorization]
+  uri_param_names: []
+  cookie_names: []
+---
+# The partner API (/api/v1/orders): each partner application presents its
+# API key in the apikey header; Kong knows which consumer it is (and its
+# tier) and removes the key before passing the request on.
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: partner-keys
+plugin: key-auth
+config:
+  key_names: [apikey]
+  key_in_header: true
+  key_in_query: false
+  key_in_body: false
+  hide_credentials: true
+---
+# Tells order-service which API version the client asked for, whatever
+# the client claims (remove, then add).
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: partner-api-v1
+plugin: request-transformer
+config:
+  remove:
+    headers: [X-Api-Version]
+  add:
+    headers: ["X-Api-Version:1"]
+---
+# The holder of user-service's public key (Secret user-service-jwt).
+apiVersion: configuration.konghq.com/v1
+kind: KongConsumer
+metadata:
+  name: user-service-tokens
+  annotations:
+    kubernetes.io/ingress.class: kong
+username: user-service-tokens
+credentials:
+  - user-service-jwt
+---
+# Two partner applications on two tiers (platform/kong/plugins.yaml):
+# basic 60 requests a minute, premium 600.
+apiVersion: configuration.konghq.com/v1
+kind: KongConsumer
+metadata:
+  name: partner-basic
+  annotations:
+    kubernetes.io/ingress.class: kong
+    konghq.com/plugins: partner-tier-basic
+username: partner-basic
+credentials:
+  - partner-basic-key
+---
+apiVersion: configuration.konghq.com/v1
+kind: KongConsumer
+metadata:
+  name: partner-premium
+  annotations:
+    kubernetes.io/ingress.class: kong
+    konghq.com/plugins: partner-tier-premium
+username: partner-premium
+credentials:
+  - partner-premium-key

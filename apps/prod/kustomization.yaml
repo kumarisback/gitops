@@ -5,6 +5,7 @@ resources:
   - ../base
   - app-secrets.yaml
   - jwt-signing-key.yaml
+  - kong-credentials.yaml
 namespace: production
 
 # order-service is deployed from charts/microservice; its tag is in

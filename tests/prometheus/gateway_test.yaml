@@ -51,6 +51,29 @@ tests:
               description: "For 20 minutes the controller's pushes have failed. Kong keeps serving the last configuration it accepted: changes to routes and plugins since then aren't live."
               runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kongconfigurationpushfailing
 
+  # The counter store dies at 2m: warning after 5 minutes.
+  - interval: 1m
+    input_series:
+      - series: 'kube_deployment_status_replicas_available{namespace="kong",deployment="kong-redis",job="kube-state-metrics"}'
+        values: '1 1 0x10'
+      - series: 'kube_deployment_spec_replicas{namespace="kong",deployment="kong-redis",job="kube-state-metrics"}'
+        values: '1x12'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: KongRateLimitStoreUnavailable
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: KongRateLimitStoreUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: kong
+              deployment: kong-redis
+            exp_annotations:
+              summary: "Kong's rate limits are off"
+              description: "Their counter store (kong-redis) has had no ready pod for 5 minutes. Kong lets every request through unlimited until it is back: sign-in attempts and partner tiers aren't limited."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#kongratelimitstoreunavailable
+
   # An HTTPRoute naming a Service that doesn't exist: left out.
   - interval: 1m
     input_series:
