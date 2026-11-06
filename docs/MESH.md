@@ -46,7 +46,10 @@ bigger and has more ways to be configured wrongly.
 
 **Two layers of policy.** Each pod's ztunnel lets in only two identities: the namespace's
 waypoint, through which every request to a Service comes, and Prometheus, which scrapes pods
-directly. The waypoint then decides per request:
+directly, and only on port 8081. For that the services serve actuator (health checks and
+metrics) on a port of its own (`management.server.port`); before, it shared the API's port and
+path, so the gateway exposed it to anyone and Prometheus couldn't be let in without also being
+able to call the API. The waypoint then decides per request:
 
 | Service | May be called by |
 |---|---|
@@ -60,9 +63,11 @@ A compromised order-service can fetch user-service's public key and nothing else
 before this step it could call any endpoint of any service.
 
 **Identities.** A ServiceAccount is the identity: `cluster.local/ns/kong/sa/kong-gateway` is
-Kong's gateways. For callers in the application's own namespace the policies write
-`*/sa/<name>`: the namespace differs per environment (development, staging, production), and
-each environment is its own cluster with one application namespace.
+Kong's gateways. Callers in the application's own namespace are written `*/sa/<name>` together
+with `namespaces: [development]`, and both must match: the namespace differs per environment
+(development, staging, production), so each overlay (`apps/<env>/kustomization.yaml`) fills in
+its own with a Kustomize replacement. A ServiceAccount of the same name in any other namespace
+doesn't match.
 
 **Kong through the waypoint.** Kong normally sends requests straight to a pod's address,
 which would skip the waypoint and its rules. The `ingress.kubernetes.io/service-upstream`
@@ -79,6 +84,12 @@ meshed pods arrives on port 15008 (HBONE), so two NetworkPolicies allow that por
 Prometheus; and in ambient mode the kubelet's health checks come from `169.254.7.127`, which
 the blackbox exporter's policy now lets in. Exercises that ran a pod of their own inside the
 namespace now go through Kong.
+
+**Kong's admin port and the mesh.** A NetworkPolicy sees mesh traffic only as port 15008; the
+port inside the tunnel is invisible to it. So letting Prometheus reach Kong's gateways over the
+mesh would have let it reach their admin API too, which in DB-less mode replaces the whole
+configuration. An Istio policy on the gateways (`platform/kong/mesh-policy.yaml`) refuses every
+mesh identity on the admin port; the controller, outside the mesh, still reaches it.
 
 **Not done here.** *Traffic splitting* needs two versions of a service; Argo Rollouts does
 weighted canaries with the mesh in step 20. *The schema registry's admin API* (open since

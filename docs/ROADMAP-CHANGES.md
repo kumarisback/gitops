@@ -132,6 +132,13 @@ to it.
 
 **Fixed along the way in step 18:**
 
+- **Health checks and metrics were reachable by anyone through the public entrance**
+  (`/api/orders/actuator/...`). They are now on a port of their own, which only Kubernetes
+  and Prometheus can reach; a test proves the public port no longer has them.
+- **A review of the mesh found three loose ends**, all closed: Prometheus could have called
+  the APIs as well as scraping them (now only the metrics port); "the user-service account"
+  matched an account of that name in any namespace (now only in the app's own); and the
+  mesh tunnel to Kong could have reached Kong's admin port (now refused).
 - **The sign-in limit could have been sidestepped with another spelling of the path.** A
   review pointed out that `/api/auth/signin/` (with a slash) would bypass the limit if
   user-service accepted it. Tested: user-service refuses such spellings; the limit now covers

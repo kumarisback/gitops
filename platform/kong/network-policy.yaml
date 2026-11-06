@@ -37,7 +37,8 @@ spec:
           protocol: TCP
     # The gateways are in the service mesh (roadmap step 18); Prometheus,
     # also in it, reaches their metrics through ztunnel on 15008 (HBONE).
-    # Nothing else in the mesh may reach them that way.
+    # Nothing else in the mesh may reach them that way, and mesh-policy.yaml
+    # keeps that tunnel away from the admin port.
     - from:
         - namespaceSelector:
             matchLabels:

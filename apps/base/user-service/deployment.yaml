@@ -87,7 +87,11 @@ spec:
               key: private-key.pem
 
         ports:
-        - containerPort: 8080
+        - name: http
+          containerPort: 8080
+        # Actuator (probes, metrics): management.server.port, not the API port.
+        - name: management
+          containerPort: 8081
 
         securityContext:
           allowPrivilegeEscalation: false
@@ -100,29 +104,29 @@ spec:
             exec:
               command: ["sh", "-c", "sleep 5"]
 
-        # server.servlet.context-path=/api (application.properties) —
-        # actuator's base path nests under it when sharing the app's port.
+        # Actuator answers on its own port (management.server.port=8081),
+        # outside the context path, so the probes use /actuator/... there.
         # Uses the liveness group, not the full aggregate health, so a Mongo
         # outage at boot can't restart-loop a pod that's otherwise fine —
         # same reasoning as livenessProbe below, just for the startup gate.
         startupProbe:
           httpGet:
-            path: /api/actuator/health/liveness
-            port: 8080
+            path: /actuator/health/liveness
+            port: management
           periodSeconds: 5
           failureThreshold: 24
 
         readinessProbe:
           httpGet:
-            path: /api/actuator/health/readiness
-            port: 8080
+            path: /actuator/health/readiness
+            port: management
           periodSeconds: 5
           failureThreshold: 3
 
         livenessProbe:
           httpGet:
-            path: /api/actuator/health/liveness
-            port: 8080
+            path: /actuator/health/liveness
+            port: management
           periodSeconds: 10
           failureThreshold: 3
 

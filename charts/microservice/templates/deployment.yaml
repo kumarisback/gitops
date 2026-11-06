@@ -45,6 +45,8 @@ spec:
           ports:
             - name: http
               containerPort: {{ .Values.containerPort }}
+            - name: management
+              containerPort: {{ .Values.managementPort }}
           env:
             {{- with .Values.mongodbUriSecret }}
             - name: SPRING_DATA_MONGODB_URI
@@ -91,20 +93,20 @@ spec:
                 command: ["sh", "-c", "sleep {{ .Values.preStopSleepSeconds }}"]
           startupProbe:
             httpGet:
-              path: {{ include "microservice.path" (dict "root" . "path" .Values.probes.startup.path) }}
-              port: http
+              path: {{ .Values.probes.startup.path }}
+              port: management
             periodSeconds: {{ .Values.probes.startup.periodSeconds }}
             failureThreshold: {{ .Values.probes.startup.failureThreshold }}
           readinessProbe:
             httpGet:
-              path: {{ include "microservice.path" (dict "root" . "path" .Values.probes.readiness.path) }}
-              port: http
+              path: {{ .Values.probes.readiness.path }}
+              port: management
             periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
             failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
           livenessProbe:
             httpGet:
-              path: {{ include "microservice.path" (dict "root" . "path" .Values.probes.liveness.path) }}
-              port: http
+              path: {{ .Values.probes.liveness.path }}
+              port: management
             periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
             failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
           resources:

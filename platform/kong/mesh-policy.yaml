@@ -1,0 +1,25 @@
+# The gateways are in the service mesh (roadmap step 18), so a meshed pod
+# reaches them through ztunnel on port 15008, and the NetworkPolicy beside
+# this file sees only 15008, not the port inside. Without this, any meshed
+# identity the NetworkPolicy lets through (Prometheus) could reach the
+# admin API, which in DB-less mode can replace Kong's whole configuration.
+# So: no identity from the mesh may use the admin port. The controller
+# isn't in the mesh (its requests carry no identity) and is unaffected.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: kong-admin-not-from-the-mesh
+  namespace: kong
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: kong
+      app.kubernetes.io/name: gateway
+  action: DENY
+  rules:
+    - from:
+        - source:
+            principals: ["*"]
+      to:
+        - operation:
+            ports: ["8444"]

@@ -29,12 +29,15 @@ tests:
           path: spec.metrics[0].resource.target.averageUtilization
           value: 70
 
-  - it: scrapes metrics under the context path
+  - it: scrapes metrics on the management port
     template: templates/servicemonitor.yaml
     asserts:
       - equal:
+          path: spec.endpoints[0].port
+          value: management
+      - equal:
           path: spec.endpoints[0].path
-          value: /api/orders/actuator/prometheus
+          value: /actuator/prometheus
       - equal:
           path: spec.selector.matchLabels.app
           value: order-service

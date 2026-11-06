@@ -11,9 +11,12 @@ image:
   tag: ""
   pullPolicy: IfNotPresent
 
-# The port Spring listens on, and its server.servlet.context-path: the
-# actuator (probes, metrics) is served under it.
+# The port Spring serves the API on, and its server.servlet.context-path.
 containerPort: 8080
+# Actuator (probes, metrics) on a port of its own (management.server.port),
+# without the context path: the gateway and the mesh expose only the API
+# port, so health and metrics are for the kubelet and Prometheus only.
+managementPort: 8081
 contextPath: /api/orders
 
 service:

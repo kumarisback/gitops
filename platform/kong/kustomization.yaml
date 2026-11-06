@@ -12,4 +12,5 @@ resources:
   - gateway.yaml
   - plugins.yaml
   - network-policy.yaml
+  - mesh-policy.yaml
   - redis.yaml

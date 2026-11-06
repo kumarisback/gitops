@@ -24,6 +24,7 @@
       }
     },
     "containerPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "managementPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
     "contextPath": { "type": "string", "pattern": "^(/[A-Za-z0-9._~-]+)*$" },
     "service": {
       "type": "object",

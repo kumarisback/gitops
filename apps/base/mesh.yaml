@@ -8,10 +8,11 @@
 #   cluster.local/ns/kong/sa/kong-gateway                       Kong's gateways
 #   cluster.local/ns/monitoring/sa/kube-prometheus-stack-prometheus  Prometheus
 #   cluster.local/ns/monitoring/sa/blackbox-exporter            the synthetic checks
-#   */sa/<name>                                                 a ServiceAccount in this
-#                                                               namespace (each environment
-#                                                               is its own cluster with one
-#                                                               application namespace)
+#   */sa/<name> with namespaces: [development]                  a ServiceAccount in this
+#                                                               namespace: the namespace is
+#                                                               set per environment by the
+#                                                               overlay (apps/<env>), so both
+#                                                               must match
 #
 # Everything here is an allow-list: once a policy selects a workload, what
 # it doesn't allow is refused.
@@ -75,11 +76,14 @@ spec:
 ---
 # Layer 4, enforced by ztunnel at each pod: who may open a connection at
 # all. Requests to a Service arrive from the waypoint (which has checked
-# them); Prometheus scrapes pods directly.
+# them); Prometheus scrapes actuator's port directly.
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:
   name: frontend-connections
+  labels:
+    # Names callers in this namespace: the overlay fills in which one.
+    same-namespace-callers: "true"
 spec:
   selector:
     matchLabels:
@@ -89,11 +93,15 @@ spec:
     - from:
         - source:
             principals: ["*/sa/waypoint"]
+            namespaces: [development]
 ---
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:
   name: user-service-connections
+  labels:
+    # Names callers in this namespace: the overlay fills in which one.
+    same-namespace-callers: "true"
 spec:
   selector:
     matchLabels:
@@ -102,14 +110,25 @@ spec:
   rules:
     - from:
         - source:
+            principals: ["*/sa/waypoint"]
+            namespaces: [development]
+    # Prometheus scrapes the pods directly, and only actuator's port: the
+    # API port is reachable only through the waypoint and its rules.
+    - from:
+        - source:
             principals:
-              - "*/sa/waypoint"
               - cluster.local/ns/monitoring/sa/kube-prometheus-stack-prometheus
+      to:
+        - operation:
+            ports: ["8081"]
 ---
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:
   name: order-service-connections
+  labels:
+    # Names callers in this namespace: the overlay fills in which one.
+    same-namespace-callers: "true"
 spec:
   selector:
     matchLabels:
@@ -118,9 +137,17 @@ spec:
   rules:
     - from:
         - source:
+            principals: ["*/sa/waypoint"]
+            namespaces: [development]
+    # Prometheus scrapes the pods directly, and only actuator's port: the
+    # API port is reachable only through the waypoint and its rules.
+    - from:
+        - source:
             principals:
-              - "*/sa/waypoint"
               - cluster.local/ns/monitoring/sa/kube-prometheus-stack-prometheus
+      to:
+        - operation:
+            ports: ["8081"]
 ---
 # notification-service only consumes from Kafka; nothing calls it.
 apiVersion: security.istio.io/v1
@@ -133,10 +160,15 @@ spec:
       app: notification-service
   action: ALLOW
   rules:
+    # Prometheus scrapes the pods directly, and only actuator's port: the
+    # API port is reachable only through the waypoint and its rules.
     - from:
         - source:
             principals:
               - cluster.local/ns/monitoring/sa/kube-prometheus-stack-prometheus
+      to:
+        - operation:
+            ports: ["8081"]
 ---
 # Layer 7, enforced by the waypoint for requests to each Service: who may
 # call what. Kong may call everything it routes; one service may call the
@@ -167,6 +199,9 @@ apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:
   name: user-service-callers
+  labels:
+    # Names callers in this namespace: the overlay fills in which one.
+    same-namespace-callers: "true"
 spec:
   targetRefs:
     - kind: Service
@@ -181,6 +216,7 @@ spec:
     - from:
         - source:
             principals: ["*/sa/order-service"]
+            namespaces: [development]
       to:
         - operation:
             methods: [GET]
@@ -197,6 +233,9 @@ apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:
   name: order-service-callers
+  labels:
+    # Names callers in this namespace: the overlay fills in which one.
+    same-namespace-callers: "true"
 spec:
   targetRefs:
     - kind: Service
@@ -211,6 +250,7 @@ spec:
     - from:
         - source:
             principals: ["*/sa/user-service"]
+            namespaces: [development]
       to:
         - operation:
             methods: [GET]

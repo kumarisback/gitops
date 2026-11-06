@@ -142,6 +142,6 @@ spec:
     - from:
         - source:
             principals:
-              - "*/sa/user-service"
-              - "*/sa/order-service"
-              - "*/sa/mongodb-init"
+              - cluster.local/ns/development/sa/user-service
+              - cluster.local/ns/development/sa/order-service
+              - cluster.local/ns/development/sa/mongodb-init

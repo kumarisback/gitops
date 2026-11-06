@@ -97,3 +97,19 @@ patches:
         value:
           name: MANAGEMENT_ENDPOINT_HEALTH_VALIDATE_GROUP_MEMBERSHIP
           value: "false"
+
+# The service mesh policies (apps/base/mesh.yaml) name callers in this
+# namespace as */sa/<name> plus namespaces: [<this namespace>]; this fills
+# in the namespace, so a ServiceAccount of the same name elsewhere doesn't
+# match.
+replacements:
+  - source:
+      kind: Namespace
+      fieldPath: metadata.name
+    targets:
+      - select:
+          group: security.istio.io
+          kind: AuthorizationPolicy
+          labelSelector: same-namespace-callers=true
+        fieldPaths:
+          - spec.rules.*.from.*.source.namespaces.*

@@ -44,17 +44,25 @@ tests:
           path: spec.template.spec.containers[0].image
           value: 602367507570.dkr.ecr.us-east-1.amazonaws.com/order-service:6d9dfdcb454b4596b14a6cc09e19d9fa5ead7e35
 
-  - it: puts the probes under the context path
+  - it: puts the probes on the management port, outside the context path
     asserts:
       - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.port
+          value: management
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content:
+            name: management
+            containerPort: 8081
+      - equal:
           path: spec.template.spec.containers[0].readinessProbe.httpGet.path
-          value: /api/orders/actuator/health/readiness
+          value: /actuator/health/readiness
       - equal:
           path: spec.template.spec.containers[0].livenessProbe.httpGet.path
-          value: /api/orders/actuator/health/liveness
+          value: /actuator/health/liveness
       - equal:
           path: spec.template.spec.containers[0].startupProbe.httpGet.path
-          value: /api/orders/actuator/health/liveness
+          value: /actuator/health/liveness
 
   - it: runs as a non-root user with a read-only root filesystem
     asserts:
