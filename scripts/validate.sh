@@ -86,15 +86,18 @@ render_kustomize() {  # SRC DEST
 
 pull_chart() {  # CHART REPO VERSION -> prints the chart directory
   local dir="${CACHE}/charts/$1-$3"
-  if [ ! -d "${dir}" ]; then
+  # Pull unless the chart itself is there: a pull that failed (no network,
+  # a registry hiccup) must not leave a directory that later runs trust.
+  if [ ! -d "${dir}/$1" ]; then
+    rm -rf "${dir}"
     mkdir -p "${dir}"
     case "$2" in
-      oci://*/"$1") helm pull "$2" --version "$3" --untar --untardir "${dir}" > /dev/null || return 1 ;;
-      oci://*) helm pull "$2/$1" --version "$3" --untar --untardir "${dir}" > /dev/null || return 1 ;;
-      http*) helm pull "$1" --repo "$2" --version "$3" --untar --untardir "${dir}" > /dev/null || return 1 ;;
+      oci://*/"$1") helm pull "$2" --version "$3" --untar --untardir "${dir}" > /dev/null ;;
+      oci://*) helm pull "$2/$1" --version "$3" --untar --untardir "${dir}" > /dev/null ;;
+      http*) helm pull "$1" --repo "$2" --version "$3" --untar --untardir "${dir}" > /dev/null ;;
       # ArgoCD's OCI form: registry/path without a scheme.
-      *) helm pull "oci://$2/$1" --version "$3" --untar --untardir "${dir}" > /dev/null || return 1 ;;
-    esac
+      *) helm pull "oci://$2/$1" --version "$3" --untar --untardir "${dir}" > /dev/null ;;
+    esac || { rm -rf "${dir}"; return 1; }
   fi
   echo "${dir}/$1"
 }
