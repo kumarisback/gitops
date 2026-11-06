@@ -545,6 +545,20 @@ something else.
 **Act:** fix or revert the resource it names (usually the last change to a route or plugin).
 The controller pushes again on its own.
 
+### KongRateLimitStoreUnavailable
+
+**Meaning:** the rate limits' counter store (`kong-redis`, Valkey) has had no ready pod for 5
+minutes. Kong lets every request through unlimited until it's back: nothing fails, but
+sign-in attempts and the partner tiers aren't limited.
+
+**Check:** `kubectl describe deploy kong-redis -n kong` and its pod's events: scheduling, the
+`kong-redis` Secret missing (`CreateContainerConfigError`; in the cloud, the ExternalSecret
+`kong-redis` in `kong`), or the memory limit (`OOMKilled`).
+
+**Act:** restore it; counters start from zero, which only resets the current windows. If the
+Secret was regenerated, restart Valkey too (`kubectl rollout restart deploy kong-redis -n kong`):
+it reads the password at start.
+
 ### KongResourcesRejected
 
 **Meaning:** some routes or plugins are left out of Kong's configuration: the controller

@@ -24,7 +24,8 @@ Kong Ingress Controller: watches HTTPRoutes, the Gateway, plugins ─► pushes 
 | The edge's Ingress | `addons/values/cloud/kong.yaml` (ALB), `addons/values/local/kong.yaml` (Traefik) | Everything from the edge to Kong; replaces the services' old `app-ingress` |
 | GatewayClass and Gateway | `platform/kong/gateway.yaml`, Application `kong-config` | What routes attach to: HTTP on port 80, from the application namespaces only |
 | Routes | `apps/base/routes.yaml` | One `HTTPRoute` per service, owned next to the services |
-| Global plugins | `platform/kong/plugins.yaml` | Prometheus metrics for every route |
+| Plugins | `platform/kong/plugins.yaml`, `apps/base/kong.yaml` | Metrics and security headers everywhere; sign-in limits, token checks, partner keys and tiers where routes name them (step 17) |
+| Rate-limit counters | `platform/kong/redis.yaml` | Valkey, shared by every gateway pod, reachable only from them |
 | Admin API protection | `platform/kong/network-policy.yaml` | Only the controller may reach Kong's admin API |
 | Observability | `observability/base/gateway-alerts.yaml`, `dashboards/kong.json`; Alloy | 3 tested alerts, the **Kong gateway** dashboard, Kong's access lines as `log_type="gateway"` |
 
@@ -85,6 +86,68 @@ Helm, which cert-manager (step 03's remainder) will do. Kong Manager, the admin 
 that header only from private addresses (where the ALB and Traefik are), so a client can't
 forge its address for rate limits (step 17) or logs.
 
+## What the gateway checks (step 17)
+
+Step 16 made Kong the way in; step 17 uses it for what a gateway is for. The rule for what
+belongs where: concerns that are the same for every service and that should stop a bad
+request before it costs anything (who is calling, how often, which headers a browser gets)
+go to the gateway; anything that needs the business data (may *this* user see *this* order?)
+stays in the service.
+
+| Path | Checks at the gateway | Why |
+|---|---|---|
+| `/api/auth/signin`, `/api/auth/signup` | at most 10 a minute per client address (`auth-attempts`) | Password guessing at speed is the attack on a sign-in form |
+| `/api/orders` (the browser's order API) | a valid sign-in token (`user-tokens`: RS256 against user-service's public key, not expired, at most 24 hours long, only in the `Authorization` header) | Forged and expired tokens are refused at the edge with 401. order-service still verifies every token: the gateway stops bad ones earlier, it doesn't replace the service's check |
+| `/api/orders/status` | none | The synthetic checks (and anyone) may ask whether it's up |
+| `/api/v1/orders` (the partner API) | an API key (`partner-keys`, removed before the request goes on), then the partner's tier: basic 60 a minute and 1,000 an hour, premium 600 and 20,000 (`partner-tier-*`); `X-Api-Version: 1` set for the service | Machine clients identify their *application* with a key; the user they act for still brings a sign-in token, which order-service checks |
+| everything | `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `X-Frame-Options: DENY` on responses (`security-headers`); per-route and per-consumer metrics | The same for every response; nobody has to remember them per service |
+
+The plugins: `platform/kong/plugins.yaml` (cluster-wide, attached by name) and
+`apps/base/kong.yaml` (the service-side ones and the consumers); routes name theirs in a
+`konghq.com/plugins` annotation (`apps/base/routes.yaml`).
+
+**Rate limits that add up across pods.** With two gateway pods, a limit counted in each pod
+("local") is really twice the limit, and a client hitting different pods sees inconsistent
+answers. The counters are in **Valkey** (the Linux Foundation's open-source fork of Redis;
+Kong speaks to it as Redis) in the `kong` namespace: in memory, password-protected, reachable
+only from the gateways. ElastiCache (tf `enable_elasticache`) would be the managed version.
+Kong's open-source limiter uses **fixed windows** (this minute, this hour): simple and cheap,
+but a client can send a burst at the end of one window and another at the start of the next.
+Sliding windows (Kong Enterprise's advanced limiter) or a token bucket smooth that out. If
+Valkey is down, Kong lets requests through unlimited rather than refusing them all
+(`fault_tolerant`), and `KongRateLimitStoreUnavailable` says so: an outage of the limiter
+shouldn't be an outage of the application.
+
+**Authentication, by audience.**
+
+| Callers | Mechanism | Here |
+|---|---|---|
+| Users in the browser | Sign-in tokens (JWT, OAuth2/OIDC) | user-service's RS256 tokens, checked by Kong and by order-service |
+| Partner applications | API keys per application, with tiers; OAuth2 client credentials for stronger needs | `/api/v1/orders` |
+| Services inside the cluster | Mutual TLS, identities from the platform | The service mesh, step 18 |
+
+**Ordering.** Kong runs a request's plugins in a fixed priority order, whatever order they are
+listed in: authentication (jwt, key-auth), then rate limits (which can then count per
+consumer), then request changes, then the proxying, then response changes. A plugin can be
+attached globally, to a route, to a consumer (the tiers), or to a route and consumer together;
+the most specific one wins.
+
+**Secrets that never touch Git.** The Valkey password and the partner keys are generated
+inside the cluster by External Secrets' Password generator (`platform/kong-redis-password.yaml`,
+`apps/<env>/kong-credentials.yaml`); user-service's public key comes from Secrets Manager,
+written by tf `scripts/set-secret.sh` with the signing key. In the lab, `scripts/start-lab.sh`
+makes all three, once, into git-ignored files under `apps/local`.
+
+**Not done here, on purpose.** *CORS*: the frontend calls its API from the same origin, so no
+CORS headers are needed, and adding permissive ones would only loosen what browsers enforce;
+the partner API is called from servers, where an API key in a browser would leak. *Weighted
+canary routes*: Argo Rollouts drives those with health checks in step 20.
+
+**Maintenance.** Naming the `maintenance` plugin on a route makes it answer 503 with a message
+instead of reaching its service, e.g. during a database migration:
+`kubectl annotate httproute order-service -n development konghq.com/plugins=user-tokens,maintenance --overwrite`,
+and back to `user-tokens` afterwards (in Git, for anything but a short test).
+
 ## Where it runs
 
 Every environment: Kong is how requests reach the services now. Two gateway pods across zones
@@ -115,7 +178,34 @@ curl -sI localhost/api/orders/status | grep -i via   # "kong/3.9.x": the request
    `ResolvedRefs: False`, the controller leaves it out, `KongResourcesRejected` fires after 10
    minutes, and the edge checks for `/api/orders` fail while the rest keeps working. Change it
    back.
-3. **Try the admin API from a pod.**
+3. **Refused at the gateway (step 17).** Without a token, the order API never reaches
+   order-service; with one, it does:
+
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}\n' localhost/api/orders/user/1     # 401, from Kong
+   TOKEN=$(curl -s localhost/api/auth/signin -H 'Content-Type: application/json' \
+     -d '{"username":"asha","password":"a-long-password"}' | jq -r .token)
+   curl -s -o /dev/null -w '%{http_code}\n' localhost/api/orders/user/1 -H "Authorization: Bearer ${TOKEN}"
+   #   now order-service answers: 200 if 1 is your ID, 403 if not; either way Kong let it through
+   for i in $(seq 1 12); do curl -s -o /dev/null -w '%{http_code} ' localhost/api/auth/signin \
+     -H 'Content-Type: application/json' -d '{"username":"asha","password":"wrong"}'; done; echo
+   ```
+
+   The loop answers 401 (wrong password, from user-service) until the tenth attempt of the
+   minute, the sign-in above included, then 429 from Kong: the sign-in limit. The response
+   headers say how many are left (`RateLimit-Remaining`).
+4. **The partner tiers.** The lab's keys are in `apps/local/partner-api-keys.env`:
+
+   ```bash
+   . apps/local/partner-api-keys.env
+   for i in $(seq 1 65); do curl -s -o /dev/null -w '%{http_code} ' localhost/api/v1/orders/status \
+     -H "apikey: ${PARTNER_BASIC_KEY}"; done; echo                 # 60 × 200, then 429
+   curl -s -o /dev/null -w '%{http_code}\n' localhost/api/v1/orders/status   # no key: 401
+   ```
+
+   The premium key still gets through. **Kong gateway** → "Requests by consumer" and "Refused
+   at the gateway" show both.
+5. **Try the admin API from a pod.**
    `kubectl run probe -n development --rm -it --image=busybox:1.37 --restart=Never -- wget -T 5 -qO- https://kong-gateway-admin.kong:8444/status`
    times out: only the controller is let through.
 
@@ -126,6 +216,13 @@ routes, and removes `app-ingress`. The ALB stays the same one as long as the `mi
 group keeps a member throughout (the `/otlp` Ingress does). Check its address afterwards
 (`kubectl get ingress kong-gateway-proxy -n kong`) and update tf's `synthetics_base_url` if it
 changed. Nothing changes in the app or in Terraform.
+
+Step 17 adds, in this order: tf apply `01-infra` (the empty `jwt-public-key` secret), then
+`scripts/set-secret.sh dev jwt-public-key` in the tf repo (derives it from the signing key
+already there, without signing anyone out); then merge gitops. External Secrets generates the
+Valkey password and the partner keys in the cluster; hand a partner its key with
+`kubectl get secret partner-basic-key -n development -o jsonpath='{.data.key}' | base64 -d`.
+In the lab, run `scripts/start-lab.sh` once more, which makes the new Secrets.
 
 ## Exercises
 
