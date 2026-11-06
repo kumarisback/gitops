@@ -1,0 +1,38 @@
+# The services' connections to Amazon MSK (roadmap step 19, apps/base/
+# network-policies.yaml). MSK's endpoints are in the VPC but their addresses
+# aren't fixed: the port is what's allowed here, and MSK's security group
+# (tf modules/msk) admits only the cluster's nodes. Signing in with IAM
+# first trades the pod's IRSA token for credentials at AWS STS (HTTPS). The
+# schema registry stays on Strimzi (docs/msk-vs-strimzi.md).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kafka-msk-clients
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [user-service, order-service, notification-service]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.169.254/32
+      ports:
+        - port: 9098
+          protocol: TCP
+        - port: 443
+          protocol: TCP
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kafka
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: schema-registry
+      ports:
+        - port: 8080
+          protocol: TCP

@@ -41,6 +41,10 @@ gateway:
     # No Kong Manager (below); without this Kong would still serve it on
     # 8002.
     admin_gui_listen: "off"
+    # No usage reports to Kong Inc. (on by default): the gateways may reach
+    # only the services and their rate-limiting store
+    # (platform/kong/network-policy.yaml).
+    anonymous_reports: "off"
   # Reached only through the edge: no load balancer of its own, and no
   # TLS port (TLS ends at the ALB, roadmap step 03).
   proxy:

@@ -1,9 +1,51 @@
+# Who may talk to whom in the kong namespace (roadmap step 19,
+# docs/NETWORK-POLICIES.md): nothing, then what each pod needs. Enforced in
+# the lab (KinD's network plugin) and in the cloud (the VPC CNI's policy
+# agent, tf enable_network_policy). The rate-limiting store's own policy is
+# in redis.yaml.
+#
+# The gateways face the internet, so they get the tightest egress: a
+# gateway taken over through a plugin bug can reach the services' waypoint
+# and its rate-limiting store, nothing else, not even the node's metadata
+# service. The controller talks to the Kubernetes API, whose address
+# differs per cluster (EKS's control plane, KinD's node), so it may go
+# anywhere but the metadata service.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: kong
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dns
+  namespace: kong
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
 # Kong's admin API (port 8444) can replace the whole configuration in
 # DB-less mode: with one request, a pod that reaches it could route every
 # user's traffic anywhere. Only the controller may. The proxy and status
 # ports stay open: the edge (ALB from its VPC addresses, Traefik in the
-# lab), health checks and Prometheus use them. Enforced in the lab and in
-# clouds with tf enable_network_policy (dev; all from roadmap step 19).
+# lab), health checks and Prometheus use them.
 #
 # The admin API speaks TLS but doesn't check the caller's certificate. The
 # chart can make it (mutual TLS), but generates the certificates with
@@ -20,7 +62,7 @@ spec:
     matchLabels:
       app.kubernetes.io/instance: kong
       app.kubernetes.io/name: gateway
-  policyTypes: [Ingress]
+  policyTypes: [Ingress, Egress]
   ingress:
     - ports:
         - port: proxy
@@ -49,3 +91,63 @@ spec:
       ports:
         - port: 15008
           protocol: TCP
+  egress:
+    # The services: Kong calls their Services, and in the mesh that means
+    # the application namespace's waypoint, on 15008.
+    - to:
+        - namespaceSelector:
+            matchExpressions:
+              - key: kubernetes.io/metadata.name
+                operator: In
+                values: [development, staging, production]
+          podSelector:
+            matchLabels:
+              gateway.networking.k8s.io/gateway-name: waypoint
+      ports:
+        - port: 15008
+          protocol: TCP
+    # The rate-limiting counters (redis.yaml), outside the mesh.
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong-redis
+      ports:
+        - port: 6379
+          protocol: TCP
+---
+# The controller: the Kubernetes API calls its admission webhook (from the
+# control plane, whose address differs per cluster, hence no `from`), and
+# Prometheus scrapes it. It is outside the mesh.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kong-controller
+  namespace: kong
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: kong
+      app.kubernetes.io/name: controller
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - ports:
+        - port: webhook
+          protocol: TCP
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - port: cmetrics
+          protocol: TCP
+        - port: cstatus
+          protocol: TCP
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.169.254/32

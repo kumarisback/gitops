@@ -88,8 +88,8 @@ extraVolumeMounts:
 # probes: not the node's metadata service, not the VPC, not the internet.
 # Probes of public URLs (the domain, roadmap step 03) need an egress rule
 # for them. Enforced in the lab (KinD's network plugin, v0.24 and later)
-# and in clouds with tf enable_network_policy (dev; every environment from
-# roadmap step 19).
+# and in the cloud (tf enable_network_policy, every environment; roadmap
+# step 19, docs/NETWORK-POLICIES.md).
 extraManifests:
   - apiVersion: networking.k8s.io/v1
     kind: NetworkPolicy

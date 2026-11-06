@@ -20,6 +20,9 @@
 #   - every PrometheusRule passes promtool check rules, and the rule unit
 #     tests in tests/prometheus pass
 #   - every Grafana dashboard ConfigMap holds valid JSON
+#   - each environment's NetworkPolicies allow the connections it needs and
+#     refuse the rest (tests/network-policies/flows.yaml, evaluated on the
+#     rendered manifests)
 #   - the Alloy log pipeline (redaction, multiline, log_type labels) turns
 #     the sample lines in tests/alloy into the expected entries
 #   - the lab scripts parse
@@ -224,6 +227,13 @@ done
 
 echo "Lab ingress controller"
 [ -s "${OUT}/helm/local-traefik.yaml" ] && check "local/traefik: schema" kubeconform_file "${OUT}/helm/local-traefik.yaml"
+
+# Who may talk to whom: each environment's rendered NetworkPolicies against
+# the connections it must allow and refuse (tests/network-policies).
+echo "Network policies"
+for env in "${RESOLVED_ENVS[@]}"; do
+  check "${env}: network policies" ruby tests/network-policies/check.rb "${OUT}" "${env}"
+done
 
 # Manifests applied by hand when a runbook needs them (not by ArgoCD).
 echo "Operator tools"

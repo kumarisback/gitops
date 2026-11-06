@@ -1,0 +1,319 @@
+# Who may talk to whom in the application namespace (roadmap step 19,
+# docs/NETWORK-POLICIES.md). Kubernetes lets every pod reach every other pod
+# and the internet until a NetworkPolicy selects it; from then on only what
+# some policy allows gets through, and policies only ever add. So: deny
+# everything, then allow each connection the services need, nothing else.
+# Enforced in the lab (KinD's network plugin) and in the cloud (the VPC
+# CNI's policy agent, tf enable_network_policy).
+#
+# The services are in the Istio mesh (roadmap step 18, docs/MESH.md), which
+# changes what these rules see:
+#   - Between two pods in the mesh, traffic travels on port 15008 (HBONE),
+#     whatever the application's port. These rules allow 15008 between the
+#     right pods; the mesh's own policies (mesh.yaml) say which identity may
+#     reach which port and path inside that tunnel.
+#   - Requests to a Service go to the namespace's waypoint first, and from
+#     the waypoint to a pod.
+#   - The kubelet's health checks arrive from 169.254.7.127 (ambient rewrites
+#     their source), so each pod lets that address in on its probe port.
+# Connections to pods outside the mesh (DNS, Kafka, the trace collector)
+# keep their own port.
+#
+# Nothing here allows the instance metadata service (169.254.169.254), which
+# hands out the node's AWS credentials; the services have their own (IRSA).
+#
+# Lab-only and per-environment additions: apps/local/mongodb.yaml,
+# apps/components/kafka-clients, apps/components/kafka-msk.
+
+# Everything in the namespace starts with nothing.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# Every pod may look up names.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dns
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+# The waypoint (mesh.yaml): every request to a Service in this namespace
+# passes through it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: waypoint
+spec:
+  podSelector:
+    matchLabels:
+      gateway.networking.k8s.io/gateway-name: waypoint
+  policyTypes: [Ingress, Egress]
+  ingress:
+    # Requests: from Kong's gateways, from the two services that call each
+    # other, and from the synthetic checks. Prometheus may reach its metrics
+    # port inside the tunnel too.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kong
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: kong
+              app.kubernetes.io/name: gateway
+        - podSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values: [user-service, order-service]
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus-blackbox-exporter
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - port: 15008
+          protocol: TCP
+    # Its metrics (platform/mesh's PodMonitor), when Prometheus scrapes them
+    # outside the tunnel.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - port: 15020
+          protocol: TCP
+  egress:
+    # On to the pods behind the Services; each pod's own policy says whether
+    # it takes requests.
+    - to:
+        - podSelector: {}
+      ports:
+        - port: 15008
+          protocol: TCP
+    # Its configuration and certificate, from istiod.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: istio-system
+          podSelector:
+            matchLabels:
+              app: istiod
+      ports:
+        - port: 15012
+          protocol: TCP
+---
+# frontend: static files. Requests from the waypoint; it calls nothing.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              gateway.networking.k8s.io/gateway-name: waypoint
+      ports:
+        - port: 15008
+          protocol: TCP
+    - from:
+        - ipBlock:
+            cidr: 169.254.7.127/32
+      ports:
+        - port: 80
+          protocol: TCP
+---
+# user-service: requests from the waypoint, scrapes from Prometheus; calls
+# order-service (through the waypoint), MongoDB and the trace collector.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: user-service
+spec:
+  podSelector:
+    matchLabels:
+      app: user-service
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              gateway.networking.k8s.io/gateway-name: waypoint
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - port: 15008
+          protocol: TCP
+    - from:
+        - ipBlock:
+            cidr: 169.254.7.127/32
+      ports:
+        - port: management
+          protocol: TCP
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              gateway.networking.k8s.io/gateway-name: waypoint
+      ports:
+        - port: 15008
+          protocol: TCP
+    # MongoDB Atlas: its addresses aren't fixed, its port is. With a private
+    # endpoint, name its subnet here instead. (The lab's own MongoDB is in
+    # the mesh: apps/local/mongodb.yaml.)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.169.254/32
+      ports:
+        - port: 27017
+          protocol: TCP
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: opentelemetry-collector
+              app.kubernetes.io/instance: otel-collector
+      ports:
+        - port: 4318
+          protocol: TCP
+---
+# order-service (charts/microservice): the same as user-service; it calls
+# user-service for its signing key.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: order-service
+spec:
+  podSelector:
+    matchLabels:
+      app: order-service
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              gateway.networking.k8s.io/gateway-name: waypoint
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - port: 15008
+          protocol: TCP
+    - from:
+        - ipBlock:
+            cidr: 169.254.7.127/32
+      ports:
+        - port: management
+          protocol: TCP
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              gateway.networking.k8s.io/gateway-name: waypoint
+      ports:
+        - port: 15008
+          protocol: TCP
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.169.254/32
+      ports:
+        - port: 27017
+          protocol: TCP
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: opentelemetry-collector
+              app.kubernetes.io/instance: otel-collector
+      ports:
+        - port: 4318
+          protocol: TCP
+---
+# notification-service (charts/microservice): no API, so nothing but
+# Prometheus comes in; its work comes from Kafka (kafka-clients component).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: notification-service
+spec:
+  podSelector:
+    matchLabels:
+      app: notification-service
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - port: 15008
+          protocol: TCP
+    - from:
+        - ipBlock:
+            cidr: 169.254.7.127/32
+      ports:
+        - port: management
+          protocol: TCP
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: opentelemetry-collector
+              app.kubernetes.io/instance: otel-collector
+      ports:
+        - port: 4318
+          protocol: TCP

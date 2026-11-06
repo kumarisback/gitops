@@ -1,8 +1,9 @@
 # Who may connect to the two HTTP services in this namespace that have no
 # login of their own. Enforced in the lab (KinD's network plugin enforces
 # NetworkPolicy since v0.24) and in the cloud once the VPC CNI's policy
-# agent is on (tf 01-infra, enable_network_policy). Roadmap step 19 adds a
-# default deny for every namespace; these two can't wait for it.
+# agent is on (tf 01-infra, enable_network_policy). The brokers' own
+# policy comes from the Kafka resource (kafka.yaml, networkPolicyPeers);
+# docs/NETWORK-POLICIES.md says what each namespace allows.
 #
 # Traffic from the pod's own node is always allowed (kubelet probes), and
 # kubectl port-forward enters the pod's network namespace directly, so

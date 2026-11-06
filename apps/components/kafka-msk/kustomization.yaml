@@ -11,6 +11,10 @@ kind: Component
 #   bootstrap.servers       tf output msk_bootstrap_brokers
 #   user-service-role-arn   tf output irsa_role_arns["msk_user_service"]
 
+# What these connections may reach (roadmap step 19).
+resources:
+  - network-policy.yaml
+
 # user-service signs in with its IRSA role.
 replacements:
   - source:

@@ -8,6 +8,8 @@ kind: Component
 # kafka.enabled, charts/microservice "microservice.kafkaEnv").
 resources:
   - kafka-access.yaml
+  # What these connections may reach (roadmap step 19).
+  - network-policy.yaml
 
 patches:
   - target:

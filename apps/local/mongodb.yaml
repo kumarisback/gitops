@@ -145,3 +145,75 @@ spec:
               - cluster.local/ns/development/sa/user-service
               - cluster.local/ns/development/sa/order-service
               - cluster.local/ns/development/sa/mongodb-init
+---
+# NetworkPolicies (roadmap step 19, apps/base/network-policies.yaml): the
+# database takes connections only from its clients, through the mesh
+# (15008), and the kubelet's checks on its own port.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mongodb
+spec:
+  podSelector:
+    matchLabels:
+      app: mongodb
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values: [user-service, order-service]
+        # The init Job's pod, by the label Kubernetes gives every Job's pods.
+        - podSelector:
+            matchLabels:
+              batch.kubernetes.io/job-name: mongodb-replica-set-init
+      ports:
+        - port: 15008
+          protocol: TCP
+    - from:
+        - ipBlock:
+            cidr: 169.254.7.127/32
+      ports:
+        - port: mongodb
+          protocol: TCP
+---
+# ...and the clients may connect to it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mongodb-clients
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [user-service, order-service]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: mongodb
+      ports:
+        - port: 15008
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mongodb-replica-set-init
+spec:
+  podSelector:
+    matchLabels:
+      batch.kubernetes.io/job-name: mongodb-replica-set-init
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: mongodb
+      ports:
+        - port: 15008
+          protocol: TCP

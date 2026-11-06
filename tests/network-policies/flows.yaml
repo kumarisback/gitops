@@ -1,0 +1,178 @@
+# The connections each environment must allow and must refuse, checked
+# against its rendered NetworkPolicies by check.rb (scripts/validate.sh runs
+# it). docs/NETWORK-POLICIES.md explains the rules behind them.
+#
+# A flow is "SOURCE -> DESTINATION:PORT[/UDP]". An endpoint is a pod,
+# named <namespace>/<workload> (APP is the environment's application
+# namespace), `node` (the pod's own node: the kubelet), or `ip:<address>`
+# for anything outside the cluster. Between two pods in the mesh the port
+# is 15008, where ztunnel carries everything (docs/MESH.md).
+
+app_namespaces:
+  local: development
+  dev: development
+  staging: staging
+  prod: production
+
+# Pods no rendered manifest describes, made by operators or by the cluster.
+# Their labels are the ones those set.
+pods:
+  - name: kube-system/coredns
+    labels: {k8s-app: kube-dns}
+    ports: [{port: 53, protocol: UDP}, {port: 53}]
+  # kube-prometheus-stack's Prometheus (the Prometheus operator makes the
+  # pods), in the mesh by its pod label.
+  - name: monitoring/prometheus
+    labels: {app.kubernetes.io/name: prometheus, istio.io/dataplane-mode: ambient}
+    ports: [{port: 9090}]
+  # The waypoint istiod makes from mesh.yaml's Gateway. Not itself captured
+  # by ztunnel: it speaks HBONE on 15008 on its own.
+  - name: APP/waypoint
+    labels:
+      gateway.networking.k8s.io/gateway-name: waypoint
+      gateway.istio.io/managed: istio.io-mesh-controller
+      istio.io/dataplane-mode: none
+    ports: [{port: 15008}, {port: 15020}, {port: 15021}]
+  # Strimzi's pods for the Kafka cluster (streaming/base/kafka.yaml).
+  - name: kafka/events-broker
+    labels: {strimzi.io/cluster: events, strimzi.io/kind: Kafka, strimzi.io/pool-name: broker, strimzi.io/broker-role: "true"}
+    ports: [{port: 9091}, {port: 9093}]
+  - name: kafka/events-controller
+    labels: {strimzi.io/cluster: events, strimzi.io/kind: Kafka, strimzi.io/pool-name: controller, strimzi.io/controller-role: "true"}
+    ports: [{port: 9090}]
+
+# Every pod in these namespaces must be selected by an ingress and an egress
+# policy: nothing gets in or out unless a rule says so.
+isolated_namespaces: [APP, kong]
+
+all:
+  allowed:
+    # Into the application: the edge to Kong, Kong to the waypoint, the
+    # waypoint to the pods.
+    - ip:10.10.1.25 -> kong/kong-gateway:8000                  # the ALB (or Traefik) to Kong's proxy
+    - kong/kong-gateway -> APP/waypoint:15008
+    - APP/waypoint -> APP/frontend:15008
+    - APP/waypoint -> APP/user-service:15008
+    - APP/waypoint -> APP/order-service:15008
+    # The services calling each other, through the waypoint.
+    - APP/user-service -> APP/waypoint:15008
+    - APP/order-service -> APP/waypoint:15008
+    # Monitoring: the synthetic checks through the waypoint, scrapes into
+    # the pods (actuator's port, inside the tunnel) and the waypoint.
+    - monitoring/blackbox-exporter -> APP/waypoint:15008
+    - monitoring/prometheus -> APP/user-service:15008
+    - monitoring/prometheus -> APP/order-service:15008
+    - monitoring/prometheus -> APP/waypoint:15020
+    - monitoring/prometheus -> kong/kong-gateway:15008
+    - monitoring/prometheus -> kong/kong-controller:10255
+    - monitoring/prometheus -> kong/kong-controller:10254
+    # The kubelet's checks: from ambient's probe address for pods in the
+    # mesh, from the node for the others.
+    - ip:169.254.7.127 -> APP/frontend:80
+    - ip:169.254.7.127 -> APP/user-service:8081
+    - ip:169.254.7.127 -> APP/order-service:8081
+    - node -> APP/waypoint:15021
+    - node -> kong/kong-controller:10254
+    - node -> kong/kong-redis:6379
+    # What the pods themselves call.
+    - APP/frontend -> kube-system/coredns:53/UDP
+    - APP/user-service -> kube-system/coredns:53
+    - kong/kong-gateway -> kube-system/coredns:53/UDP
+    - APP/waypoint -> istio-system/istiod:15012
+    - APP/user-service -> ip:203.0.113.10:27017                # MongoDB Atlas
+    - APP/order-service -> ip:203.0.113.10:27017
+    - APP/user-service -> monitoring/otel-collector-opentelemetry-collector:4318
+    - APP/order-service -> monitoring/otel-collector-opentelemetry-collector:4318
+    - kong/kong-gateway -> kong/kong-redis:6379
+    - kong/kong-controller -> kong/kong-gateway:8444
+    - kong/kong-controller -> ip:10.10.0.10:443                # the Kubernetes API (EKS)
+    - kong/kong-controller -> ip:172.18.0.3:6443               # the Kubernetes API (KinD)
+    - ip:10.10.0.10 -> kong/kong-controller:8080               # ...calling Kong's admission webhook
+  refused:
+    # The roadmap's check: the frontend can't reach a backend, directly or
+    # through the waypoint, nor anything else.
+    - APP/frontend -> APP/user-service:15008
+    - APP/frontend -> APP/waypoint:15008
+    - APP/frontend -> ip:203.0.113.10:443
+    # The node's credentials: no pod in these namespaces reaches the
+    # instance metadata service.
+    - APP/frontend -> ip:169.254.169.254:80
+    - APP/user-service -> ip:169.254.169.254:80
+    - APP/order-service -> ip:169.254.169.254:80
+    - APP/waypoint -> ip:169.254.169.254:80
+    - kong/kong-gateway -> ip:169.254.169.254:80
+    - kong/kong-controller -> ip:169.254.169.254:80
+    - kong/kong-redis -> ip:169.254.169.254:80
+    - monitoring/blackbox-exporter -> ip:169.254.169.254:80
+    # No internet for the services but their database's port.
+    - APP/user-service -> ip:203.0.113.10:443
+    - APP/order-service -> ip:203.0.113.10:80
+    # The services reach each other only through the waypoint.
+    - APP/user-service -> APP/order-service:15008
+    - APP/order-service -> APP/user-service:8080
+    # Kong only through the waypoint, and its gateways call nothing else.
+    - kong/kong-gateway -> APP/user-service:15008
+    - kong/kong-gateway -> APP/user-service:8080
+    - kong/kong-gateway -> ip:203.0.113.10:443
+    - kong/kong-gateway -> istio-system/istiod:15012
+    # Other pods in the cluster: not into the namespace, not to Kong's
+    # admin API or its counters.
+    - monitoring/otel-collector-opentelemetry-collector -> APP/waypoint:15008
+    - monitoring/prometheus -> APP/user-service:8080
+    - monitoring/prometheus -> APP/frontend:15008
+    - monitoring/blackbox-exporter -> APP/user-service:15008
+    - APP/user-service -> kong/kong-gateway:8444
+    - APP/user-service -> kong/kong-redis:6379
+    - monitoring/prometheus -> kong/kong-redis:6379
+    - ip:10.10.1.25 -> kong/kong-gateway:8444
+    - ip:10.10.1.25 -> kong/kong-controller:10255
+
+local:
+  allowed:
+    - traefik/traefik -> kong/kong-gateway:8000
+    # The lab's MongoDB, in the mesh.
+    - APP/user-service -> APP/mongodb:15008
+    - APP/order-service -> APP/mongodb:15008
+    - APP/mongodb-replica-set-init -> APP/mongodb:15008
+    - ip:169.254.7.127 -> APP/mongodb:27017
+    # Kafka and its schema registry, outside the mesh.
+    - APP/user-service -> kafka/events-broker:9093
+    - APP/order-service -> kafka/events-broker:9093
+    - APP/notification-service -> kafka/events-broker:9093
+    - APP/order-service -> kafka/schema-registry:8080
+    - APP/notification-service -> kafka/schema-registry:8080
+    - monitoring/prometheus -> APP/notification-service:15008
+    - ip:169.254.7.127 -> APP/notification-service:8081
+  refused:
+    - APP/frontend -> APP/mongodb:15008
+    - APP/waypoint -> APP/mongodb:27017
+    - kong/kong-gateway -> APP/mongodb:15008
+    - APP/frontend -> kafka/events-broker:9093
+    - APP/order-service -> kafka/events-broker:9091
+    - APP/order-service -> kafka/kafka-ui:8080
+    # notification-service calls nothing in the namespace.
+    - APP/notification-service -> APP/waypoint:15008
+    - APP/notification-service -> APP/order-service:15008
+
+dev:
+  allowed:
+    - APP/user-service -> kafka/events-broker:9093
+    - APP/order-service -> kafka/events-broker:9093
+    - APP/notification-service -> kafka/events-broker:9093
+    - APP/order-service -> kafka/schema-registry:8080
+    - monitoring/prometheus -> APP/notification-service:15008
+  refused:
+    - APP/frontend -> kafka/events-broker:9093
+    - APP/order-service -> kafka/kafka-ui:8080
+    - APP/notification-service -> APP/waypoint:15008
+
+# No Kafka for the services in staging and production yet.
+staging:
+  refused:
+    - APP/order-service -> kafka/events-broker:9093
+    - APP/user-service -> kafka/schema-registry:8080
+
+prod:
+  refused:
+    - APP/order-service -> kafka/events-broker:9093
+    - APP/user-service -> kafka/schema-registry:8080

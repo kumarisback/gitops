@@ -6,3 +6,4 @@ resources:
   - routes.yaml
   - kong.yaml
   - mesh.yaml
+  - network-policies.yaml
