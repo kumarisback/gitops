@@ -45,7 +45,12 @@ spec:
           port: 80
 ---
 # Sign-in and sign-up: at most 10 attempts a minute per client address, so
-# passwords can't be guessed at speed.
+# passwords can't be guessed at speed. The whole of /api/auth (sign-in,
+# sign-up and the public key, which order-service fetches directly, not
+# through here), not two exact paths: a spelling such as
+# /api/auth/signin/ would otherwise take the /api route, without the limit.
+# Spellings Kong can't group here (path parameters, ;x=1) never reach the
+# handler: user-service refuses them (app AuthPathVariantsTest).
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -60,11 +65,8 @@ spec:
   rules:
     - matches:
         - path:
-            type: Exact
-            value: /api/auth/signin
-        - path:
-            type: Exact
-            value: /api/auth/signup
+            type: PathPrefix
+            value: /api/auth
       backendRefs:
         - name: user-service
           port: 80

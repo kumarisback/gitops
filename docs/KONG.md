@@ -96,7 +96,7 @@ stays in the service.
 
 | Path | Checks at the gateway | Why |
 |---|---|---|
-| `/api/auth/signin`, `/api/auth/signup` | at most 10 a minute per client address (`auth-attempts`) | Password guessing at speed is the attack on a sign-in form |
+| `/api/auth/*` (sign-in, sign-up) | at most 10 a minute per client address (`auth-attempts`) | Password guessing at speed is the attack on a sign-in form. The whole prefix, so `/api/auth/signin/` can't slip past by taking the `/api` route; user-service refuses spellings Kong can't group (path parameters, tested) |
 | `/api/orders` (the browser's order API) | a valid sign-in token (`user-tokens`: RS256 against user-service's public key, not expired, at most 24 hours long, only in the `Authorization` header) | Forged and expired tokens are refused at the edge with 401. order-service still verifies every token: the gateway stops bad ones earlier, it doesn't replace the service's check |
 | `/api/orders/status` | none | The synthetic checks (and anyone) may ask whether it's up |
 | `/api/v1/orders` (the partner API) | an API key (`partner-keys`, removed before the request goes on), then the partner's tier: basic 60 a minute and 1,000 an hour, premium 600 and 20,000 (`partner-tier-*`); `X-Api-Version: 1` set for the service | Machine clients identify their *application* with a key; the user they act for still brings a sign-in token, which order-service checks |
