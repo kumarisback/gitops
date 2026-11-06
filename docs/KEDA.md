@@ -9,7 +9,7 @@ length) and can scale to zero, which an HPA can't.
 
 ```
 Kafka (lag of group notification-service) ─┐
-Prometheus (order-service requests/s) ─────┼─► KEDA operator ──► HPA it creates ──► Deployment replicas
+Prometheus (order-service requests/s) ─────┼─► KEDA operator ──► HPA it creates ──► Deployment (or Rollout) replicas
                                            │      │                ▲
                                            │      └─ 0 ↔ 1 itself   └─ external metrics API (KEDA metrics server)
 ```

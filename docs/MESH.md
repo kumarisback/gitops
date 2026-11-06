@@ -91,8 +91,10 @@ mesh would have let it reach their admin API too, which in DB-less mode replaces
 configuration. An Istio policy on the gateways (`platform/kong/mesh-policy.yaml`) refuses every
 mesh identity on the admin port; the controller, outside the mesh, still reaches it.
 
-**Not done here.** *Traffic splitting* needs two versions of a service; Argo Rollouts does
-weighted canaries with the mesh in step 20. *The schema registry's admin API* (open since
+**Traffic splitting** came with step 20: Argo Rollouts sets the weights of order-service's
+VirtualService during a canary release (`docs/ROLLOUTS.md`).
+
+**Not done here.** *The schema registry's admin API* (open since
 step 13) is in the `kafka` namespace, which isn't in the mesh: putting Strimzi's brokers into
 it is a project of its own, and the registry's own authentication (step 30) is the better fix.
 
@@ -129,8 +131,8 @@ After `scripts/sync-local-stack.rb`:
 from it:
 
    ```bash
-   kubectl exec -n development deploy/order-service -- wget -qO- http://user-service/api/auth/jwks.json   # allowed
-   kubectl exec -n development deploy/order-service -- wget -qO- http://user-service/api/tasks           # 403, "RBAC: access denied"
+   kubectl exec -n development svc/order-service -- wget -qO- http://user-service/api/auth/jwks.json   # allowed
+   kubectl exec -n development svc/order-service -- wget -qO- http://user-service/api/tasks           # 403, "RBAC: access denied"
    ```
 
    A pod of your own in the namespace would be in the mesh with an identity no policy names,

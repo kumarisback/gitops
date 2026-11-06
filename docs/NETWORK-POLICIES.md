@@ -157,8 +157,8 @@ After `scripts/sync-local-stack.rb`:
 2. **The frontend can't reach a backend.** nginx's image has busybox's `wget`:
 
    ```bash
-   kubectl exec -n development deploy/frontend -- wget -T 3 -qO- http://user-service/api/auth/jwks.json   # no answer, then fails
-   kubectl exec -n development deploy/frontend -- nslookup user-service                                  # DNS still answers
+   kubectl exec -n development svc/frontend -- wget -T 3 -qO- http://user-service/api/auth/jwks.json   # no answer, then fails
+   kubectl exec -n development svc/frontend -- nslookup user-service                                  # DNS still answers
    ```
 
 3. **Two layers.** user-service may reach the waypoint, so this gets through the network,
@@ -187,7 +187,7 @@ There is no metadata service in KinD; try that one in dev.
 2. **Then gitops.** The policies apply as ArgoCD syncs; Kong's gateways restart once (usage
    reports off) and Strimzi updates the brokers' policy.
 3. **Check** with the commands above, and the metadata service from a service's pod:
-   `kubectl exec -n development deploy/order-service -- wget -T 3 -qO- http://169.254.169.254/`
+   `kubectl exec -n development svc/order-service -- wget -T 3 -qO- http://169.254.169.254/`
    times out. On EKS, policies are enforced reliably only for pods a controller created
    (AWS's documentation): test from the services' own pods, not a `kubectl run` pod.
 

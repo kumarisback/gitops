@@ -214,7 +214,8 @@ kubectl create secret generic app-secrets \
   --namespace development \
   --from-env-file=apps/local/app-secrets.env \
   --dry-run=client -o yaml | kubectl apply -f -
-kubectl rollout restart deploy/order-service deploy/user-service -n development
+kubectl rollout restart deploy/user-service -n development
+kubectl argo rollouts restart order-service -n development   # an Argo Rollout since step 20
 ```
 
 Look inside the lab database with
@@ -439,7 +440,7 @@ the alert to clear (about 4 minutes; works the same on EKS):
 
 | Step | Topic | Local KinD Execution |
 |---|---|---|
-| **20** | `20-argo-rollouts` | Install Argo Rollouts controller + kubectl plugin. Replace `Deployment` with `Rollout`. Configure canary release (10% → 25% → 50% → 100%) with `AnalysisTemplate` querying Prometheus. Simulate bad deployment; watch auto-rollback. |
+| **20** | `20-argo-rollouts` | **Done** (`docs/ROLLOUTS.md`): Argo Rollouts in the lab (about 128 MiB) and the kubectl plugin. order-service is a canary (20% → 50% → 100% in the lab), weighted by the mesh's VirtualService and measured on its own errors and latency; frontend is blue/green with a preview and manual promotion. order-service's `APP_FAULT_ERROR_RATE` makes a bad version on demand. Once after the first sync: `kubectl delete deployment frontend -n development`. "Try it in the lab": a good canary, a bad one rolled back on its own, a blue/green promotion. |
 | **21** | `21-argo-workflows-events` | Deploy Argo Workflows. Build a DAG pipeline (build → test → scan). Set up MinIO in KinD for artifact storage. |
 | **22** | `22-feature-flags` | Deploy Unleash in KinD. Toggle features dynamically in `frontend` without redeployment. |
 

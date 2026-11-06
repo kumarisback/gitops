@@ -12,13 +12,14 @@ charts/
 │   └── templates/_names.tpl,     helpers for names and the standard labels
 │       _labels.tpl                (app.kubernetes.io/name, version, part-of, ...)
 └── microservice/                 the application chart
-    ├── Chart.yaml                name, version 0.1.0, depends on common (file://../common)
+    ├── Chart.yaml                name, version (0.9.0), depends on common (file://../common)
     ├── Chart.lock                the resolved dependency (CI and ArgoCD rebuild charts/ from it)
     ├── values.yaml               every setting with its default (what order-service needs)
     ├── values.schema.json        what values may contain: a typo is an error, not ignored
-    ├── templates/                Deployment, Service, ServiceAccount, HPA, PDB, VPA,
+    ├── templates/                Deployment (or an Argo Rollout, below), Service,
+    │                             ServiceAccount, HPA or KEDA ScaledObject, PDB, VPA,
     │                             ServiceMonitor, each switchable in values
-    └── tests/                    helm-unittest suites (17 tests)
+    └── tests/                    helm-unittest suites (45 tests)
 
 apps/<env>/order-service.values.yaml   only what differs in that environment:
                                        image tag, environment name, payload logging
@@ -30,6 +31,19 @@ The chart renders the same order-service the Kustomize files did: the same
 probes, resources, security settings, shutdown, spreading, HPA, PDB, VPA and
 ServiceMonitor. The Deployment's selector is unchanged (`app: order-service`),
 so ArgoCD takes over the running Deployment instead of replacing it.
+
+## Released as a canary (`rollout:`)
+
+With `rollout.enabled` (roadmap step 20, `docs/ROLLOUTS.md`) the chart renders an Argo
+Rollout instead of the Deployment, with the same pod template: a canary that goes through
+`rollout.steps` (weight, pause, ...), weighted by the mesh's VirtualService named in
+`rollout.virtualService`, and measured by an AnalysisTemplate (`<name>-canary`) on the new
+version's own errors and latency. It also renders Service `<name>-canary` (without the `app`
+label, so its pods aren't scraped twice), points the HPA, ScaledObject and VPA at the
+Rollout, and has the ServiceMonitor copy each pod's `rollouts-pod-template-hash` onto its
+metrics. `rollout.analysis.withoutRequests` decides what a measurement with no requests
+counts as: `wait` (inconclusive, the release pauses for a person) or `pass`. order-service
+has it on in every environment.
 
 ## Kustomize or Helm?
 

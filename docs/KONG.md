@@ -141,7 +141,8 @@ makes all three, once, into git-ignored files under `apps/local`.
 **Not done here, on purpose.** *CORS*: the frontend calls its API from the same origin, so no
 CORS headers are needed, and adding permissive ones would only loosen what browsers enforce;
 the partner API is called from servers, where an API key in a browser would leak. *Weighted
-canary routes*: Argo Rollouts drives those with health checks in step 20.
+canary routes*: since step 20 Argo Rollouts weights order-service's canaries in the mesh,
+where every caller's requests are split, not only those through Kong (`docs/ROLLOUTS.md`).
 
 **Maintenance.** Naming the `maintenance` plugin on a route makes it answer 503 with a message
 instead of reaching its service, e.g. during a database migration:

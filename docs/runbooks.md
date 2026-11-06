@@ -23,8 +23,8 @@ Severity decides where an alert goes (see Alertmanager in
 
 ### ServiceUnavailable
 
-**Meaning:** no pod of the Deployment has been ready for 2 minutes although
-some are wanted, so every request to the service fails (for notification-service:
+**Meaning:** no pod of the Deployment (for frontend and order-service, the
+Argo Rollout) has been ready for 2 minutes although some are wanted, so every request to the service fails (for notification-service:
 its Kafka backlog grows). Users are affected now. A Deployment scaled to zero on
 purpose (KEDA, or by hand) doesn't fire it. While it fires,
 Alertmanager holds back that service's `ServiceDown`, `ServiceMetricsMissing`
@@ -33,8 +33,9 @@ and SLO alerts, which would only repeat it.
 **Check:**
 
 ```bash
-kubectl get deploy,pods -n <namespace> -l app=<service>
+kubectl get deploy,rollout,pods -n <namespace> -l app=<service>
 kubectl describe deploy <service> -n <namespace>      # conditions; replicas 0 on purpose?
+kubectl argo rollouts get rollout <service> -n <namespace>   # frontend, order-service
 kubectl get events -n <namespace> --sort-by=.lastTimestamp | tail -20
 ```
 
@@ -46,7 +47,8 @@ zero, the same causes show up as the first pod after a quiet period never
 becoming ready.
 
 **Act:** roll back a bad release first (`git revert` the image-tag commit and
-let ArgoCD sync). For the other causes, fix that cause.
+let ArgoCD sync; for a Rollout mid-release, `kubectl argo rollouts abort <service>`
+puts the stable version back at once). For the other causes, fix that cause.
 
 ### ServiceDown
 
@@ -631,6 +633,55 @@ renewed.
 
 **Act:** restore it within hours, before certificates expire; roll back the `istiod`
 application's last change if it began with one.
+
+---
+
+## Releases (Argo Rollouts)
+
+frontend and order-service are released with Argo Rollouts (`docs/ROLLOUTS.md`):
+order-service as a canary that is measured and rolled back on its own, frontend
+blue/green, waiting in preview for a person to promote it. Their state:
+
+```bash
+kubectl argo rollouts list rollouts -n <namespace>
+kubectl argo rollouts get rollout order-service -n <namespace>   # steps, weights, analysis runs
+kubectl get analysisrun -n <namespace>                           # each canary's measurements
+kubectl argo rollouts dashboard                                  # the same in a browser, on localhost:3100
+```
+
+### RolloutFailed
+
+**Meaning:** a release stopped: its analysis failed (errors or latency of the new
+version's own requests), its pods didn't become ready within 10 minutes, or the
+Rollout itself is invalid. The previous version has all the traffic again, so
+users aren't affected; the change just isn't running.
+
+**Check:** `kubectl argo rollouts get rollout <name> -n <namespace>` shows which step
+and which analysis run failed; `kubectl describe analysisrun <run> -n <namespace>`
+shows each measurement and the query's result. Compare the new version's
+errors with the old one's in Grafana (Microservices dashboard), or in Prometheus
+by `rollouts_pod_template_hash`.
+
+**Act:** fix the cause in a new commit (the release then starts over), or revert
+the change in Git. To retry the same version (a measurement failed for a reason
+outside it, say a dependency that was down), `kubectl argo rollouts retry rollout
+<name> -n <namespace>`. Leave the VirtualService's weights to Argo Rollouts while
+its controller runs: it sets them back.
+
+### ArgoRolloutsControllerUnavailable
+
+**Meaning:** Argo Rollouts' controller has had no ready pod for 10 minutes.
+Running versions keep serving, but releases freeze where they are: a canary stays
+at its weight, a failing canary isn't rolled back, a promotion does nothing.
+
+**Check:** `kubectl get pods -n argo-rollouts` and the pod's events and log.
+
+**Act:** restore it (roll back the `argo-rollouts` application's last change if it
+began with one). If a canary was mid-release when it stopped and is misbehaving,
+only a person can take its traffic away now: `kubectl edit virtualservice
+order-service -n <namespace>` and set the weights to 100 and 0 (ArgoCD ignores
+those fields on purpose, so a sync won't). The controller resumes the release,
+and owns the weights again, when it is back.
 
 ---
 

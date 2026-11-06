@@ -48,7 +48,8 @@ gitops/
 │
 ├── addons/  ★               the "tools": Prometheus, Grafana, Loki, Tempo, collector, Alloy,
 │                            metrics-server, VPA (recommends container sizes), KEDA
-│                            (scales on events, KEDA.md), Kong (the API gateway, KONG.md)
+│                            (scales on events, KEDA.md), Kong (the API gateway, KONG.md),
+│                            Argo Rollouts (canary and blue/green releases, ROLLOUTS.md)
 │   ├── applications/          one ArgoCD app per tool
 │   ├── streaming/             Kafka: the Strimzi operators and the cluster's config app,
 │   │                            only in the environments that run Kafka (lab, dev)
