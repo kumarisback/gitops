@@ -35,7 +35,9 @@ gitops/
 ├── apps/                    the services: frontend and user-service with Kustomize,
 │   │                          order-service and notification-service with our own Helm
 │   │                          chart (charts/, docs/HELM.md)
-│   ├── base/                  shared YAML for all environments
+│   ├── base/                  shared YAML for all environments, with who may call what
+│   │                            (mesh.yaml, MESH.md) and who may connect at all
+│   │                            (network-policies.yaml, NETWORK-POLICIES.md)
 │   ├── components/  ★         shared settings used by all envs: tracing
 │   │                            (otel-instrumentation) and request payload
 │   │                            logging (request-logging), quotas and default
@@ -69,8 +71,10 @@ gitops/
 │                            Kong's Gateway, plugins and policy (kong/, KONG.md),
 │                            the service mesh's monitoring (mesh/, MESH.md)
 ├── msk/                     the topics Job for Amazon MSK, run by hand (msk-vs-strimzi.md)
-├── tests/  ★                tests for the alert rules and the log pipeline, and
-│                            kustomize/: overlays only validate.sh builds (apps-msk)
+├── tests/  ★                tests for the alert rules, the log pipeline and the
+│                            NetworkPolicies (network-policies/: connections each
+│                            environment must allow and refuse), and kustomize/:
+│                            overlays only validate.sh builds (apps-msk)
 ├── ci/  ★                   Docker image with all the checking tools (for Jenkins)
 ├── scripts/                 lab scripts, plus validate.sh ★ (checks everything) and
 │                            alert-drill.sh ★ (breaks a service, checks the alert fires)

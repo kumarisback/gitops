@@ -116,8 +116,9 @@ Kafka UI and the schema registry are plain HTTP services without a login,
 so NetworkPolicies (`streaming/base/network-policies.yaml`) decide who reaches
 them: nobody reaches Kafka UI except through `kubectl port-forward`; only the
 services' namespace and three tools reach the registry's API. The lab enforces
-NetworkPolicies already (KinD 0.24 and later); dev does with tf's
-`enable_network_policy`. What remains open: a service may call the registry's
+NetworkPolicies already (KinD 0.24 and later); the cloud does with tf's
+`enable_network_policy`, on in every environment since step 19, which also
+limits who may reach the brokers (`docs/NETWORK-POLICIES.md`). What remains open: a service may call the registry's
 admin endpoints (it could change the compatibility rule). Telling callers
 apart takes their identity, which the service mesh (step 18) brings.
 

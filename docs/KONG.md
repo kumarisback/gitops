@@ -206,8 +206,9 @@ curl -sI localhost/api/orders/status | grep -i via   # "kong/3.9.x": the request
    The premium key still gets through. **Kong gateway** → "Requests by consumer" and "Refused
    at the gateway" show both.
 5. **Try the admin API from a pod.**
-   `kubectl run probe -n development --rm -it --image=busybox:1.37 --restart=Never -- wget -T 5 -qO- https://kong-gateway-admin.kong:8444/status`
-   times out: only the controller is let through.
+   `kubectl run probe -n default --rm -it --image=busybox:1.37 --restart=Never -- wget -T 5 -qO- https://kong-gateway-admin.kong:8444/status`
+   times out: only the controller is let through. (From namespace `default`: since step 19 a
+   pod of your own in the application namespace can't reach anything outside it.)
 
 ## Deploying to dev
 

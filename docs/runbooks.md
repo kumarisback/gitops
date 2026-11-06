@@ -588,7 +588,9 @@ kubectl logs -n istio-system -l app=ztunnel --tail=50     # connections, with bo
 **A request refused by the mesh** shows up as a 403 with `RBAC: access denied` (refused by
 the waypoint: the caller's identity or the path isn't in that Service's `*-callers` policy)
 or as a connection reset (refused by ztunnel: the caller isn't the waypoint or Prometheus,
-or isn't in the mesh at all while the namespace demands mutual TLS). The waypoint's metrics
+or isn't in the mesh at all while the namespace demands mutual TLS). A connection that
+hangs and then fails was dropped by a NetworkPolicy before the mesh saw it
+(`docs/NETWORK-POLICIES.md`, "When something can't connect"). The waypoint's metrics
 say who was refused:
 `sum by (source_workload, destination_service_name) (rate(istio_requests_total{reporter="waypoint", response_code="403"}[5m]))`.
 A new caller needs a rule in `apps/base/mesh.yaml`, and a caller outside the mesh needs to

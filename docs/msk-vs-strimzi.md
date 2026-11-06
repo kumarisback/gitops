@@ -9,7 +9,7 @@ compares the two with numbers. Learning notes: tf repo `learning-topics/14-msk-m
 
 | Piece | Where | What it does |
 |---|---|---|
-| MSK Serverless cluster | tf `modules/msk`, `01-infra/msk.tf` | Created only with `enable_msk = true`. IAM authentication only, reachable on port 9098 from the pod subnets |
+| MSK Serverless cluster | tf `modules/msk`, `01-infra/msk.tf` | Created only with `enable_msk = true`. IAM authentication only, reachable on port 9098 from the cluster's nodes and pods (the EKS cluster security group; their NetworkPolicy, `apps/components/kafka-msk`, allows that port) |
 | IAM roles (IRSA) | tf `01-infra/msk.tf` | One per service, allowed exactly what its `KafkaUser` is allowed on Strimzi, and `msk_admin` for creating topics |
 | Module test | tf `modules/msk/tests` | `terraform test` with a mocked AWS provider: IAM on, ARN prefixes, one port in |
 | Chart MSK mode | `charts/microservice` 0.3.0 | `kafka.msk.bootstrapServers` switches a service to IAM sign-in; `serviceAccount.annotations` carries its role |

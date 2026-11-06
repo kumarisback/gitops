@@ -125,15 +125,17 @@ After `scripts/sync-local-stack.rb`:
    per node); `kubectl get gateway waypoint -n development` (Programmed);
    `kubectl logs -n istio-system -l app=ztunnel --tail=20` shows connections with the
    identity at each end (`src.identity=spiffe://cluster.local/ns/kong/sa/kong-gateway`).
-2. **What the policies refuse.** A pod of your own in the namespace is in the mesh, with an
-   identity no policy names:
+2. **What the policies refuse.** order-service may fetch user-service's key and nothing else
+from it:
 
    ```bash
-   kubectl run probe -n development --rm -it --image=busybox:1.37 --restart=Never -- \
-     wget -qO- http://order-service/api/orders/status      # 403, "RBAC: access denied"
    kubectl exec -n development deploy/order-service -- wget -qO- http://user-service/api/auth/jwks.json   # allowed
-   kubectl exec -n development deploy/order-service -- wget -qO- http://user-service/api/tasks           # 403
+   kubectl exec -n development deploy/order-service -- wget -qO- http://user-service/api/tasks           # 403, "RBAC: access denied"
    ```
+
+   A pod of your own in the namespace would be in the mesh with an identity no policy names,
+   but since step 19 it gets no further than DNS: the namespace's NetworkPolicies drop its
+   connections before the mesh sees them (`docs/NETWORK-POLICIES.md`).
 
 3. **Golden signals without instrumentation.** In Grafana → Explore → Prometheus:
    `sum by (source_workload, destination_workload, response_code) (rate(istio_requests_total{reporter="waypoint"}[5m]))`:
