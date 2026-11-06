@@ -1,0 +1,52 @@
+# Argo Rollouts' controller (roadmap step 20, docs/ROLLOUTS.md). It turns
+# Rollout objects into ReplicaSets step by step, moves traffic through the
+# service mesh's VirtualServices, and runs the analyses that decide whether
+# a new version goes on or back.
+controller:
+  # Two in the cloud (cloud/argo-rollouts.yaml), one leading; one is
+  # enough in the lab. While none runs, releases simply wait: the running
+  # versions keep serving.
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        release: kube-prometheus-stack
+      # The metrics carry the namespace of the Rollout they describe; the
+      # scrape's own namespace label (argo-rollouts) would push it aside as
+      # exported_namespace. Put it back, so rollout_info{namespace=...}
+      # means the application's namespace, as kube-state-metrics' do.
+      metricRelabelings:
+        - sourceLabels: [exported_namespace]
+          regex: (.+)
+          targetLabel: namespace
+        - regex: exported_namespace
+          action: labeldrop
+
+# Permissions for the traffic routers this repo uses only: Istio's
+# VirtualServices. The chart grants those of ten integrations by default.
+providerRBAC:
+  providers:
+    istio: true
+    smi: false
+    ambassador: false
+    awsLoadBalancerController: false
+    awsAppMesh: false
+    traefik: false
+    apisix: false
+    contour: false
+    glooPlatform: false
+    gatewayAPI: false
+
+# The web dashboard has no login, and anyone who reaches it can promote or
+# abort any release. `kubectl argo rollouts dashboard` serves the same page
+# on your own machine with your own Kubernetes permissions instead.
+dashboard:
+  enabled: false

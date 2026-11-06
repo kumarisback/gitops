@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Rebuild one or more service images after a code change, load them into the
 # running KinD cluster, and restart the matching Deployment so the new code
-# actually takes effect.
+# actually takes effect. frontend and order-service are Argo Rollouts (roadmap
+# step 20, docs/ROLLOUTS.md): for them the change is a new revision, released
+# the way production releases it (order-service as a canary that is measured,
+# frontend blue/green, waiting in preview until promoted).
 #
 # Rebuilding alone isn't enough: Deployments use imagePullPolicy: IfNotPresent
 # with a :latest tag (see apps/local/kustomization.yaml), so a running pod
@@ -65,10 +68,25 @@ for svc in "${SERVICES[@]}"; do
   kind load image-archive "${tmpfile}" --name "${CLUSTER_NAME}"
   rm -f "${tmpfile}"
 
-  echo "🔄 Restarting ${svc} deployment..."
-  kubectl rollout restart "deployment/${svc}" -n "${NAMESPACE}"
-  kubectl rollout status "deployment/${svc}" -n "${NAMESPACE}" --timeout=120s
+  if kubectl get rollout "${svc}" -n "${NAMESPACE}" > /dev/null 2>&1; then
+    # Same tag, so nothing in the pod template changed: an annotation makes
+    # the new revision (as kubectl rollout restart does for a Deployment).
+    echo "🚀 Releasing ${svc} as a new revision of its Rollout..."
+    kubectl patch rollout "${svc}" -n "${NAMESPACE}" --type merge \
+      -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"lab-rebuilt-at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}}}}}"
+    if [ -n "$(kubectl get rollout "${svc}" -n "${NAMESPACE}" -o jsonpath='{.spec.strategy.blueGreen.activeService}')" ]; then
+      echo "🔵 ${svc} waits in preview: kubectl port-forward -n ${NAMESPACE} svc/${svc}-preview 8080:80"
+      echo "   then: kubectl argo rollouts promote ${svc} -n ${NAMESPACE}"
+    else
+      echo "🐤 ${svc} is released as a canary; follow it with:"
+      echo "   kubectl argo rollouts get rollout ${svc} -n ${NAMESPACE} --watch"
+    fi
+  else
+    echo "🔄 Restarting ${svc} deployment..."
+    kubectl rollout restart "deployment/${svc}" -n "${NAMESPACE}"
+    kubectl rollout status "deployment/${svc}" -n "${NAMESPACE}" --timeout=120s
+  fi
 
-  echo "✅ ${svc} updated and redeployed."
+  echo "✅ ${svc} updated."
   echo ""
 done

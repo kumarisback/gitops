@@ -7,8 +7,9 @@
 #   ./scripts/alert-drill.sh                          # order-service in development
 #   ./scripts/alert-drill.sh user-service staging
 #
-# 1. Scales the Deployment to 0. Its HPA stops scaling while the count is 0,
-#    and ArgoCD leaves the count alone (the HPA owns it, not Git).
+# 1. Scales the service's Deployment, or its Argo Rollout (frontend and
+#    order-service since roadmap step 20), to 0. Its HPA stops scaling while
+#    the count is 0, and ArgoCD leaves the count alone (the HPA owns it).
 # 2. Waits until Alertmanager has an active ServiceUnavailable alert for it
 #    (observability/base/service-alerts.yaml: 2 minutes, plus evaluation).
 # 3. Restores the previous replica count, waits for the rollout, and waits
@@ -34,7 +35,14 @@ esac
 
 echo "🎯 Alert drill: ${SERVICE} in ${NAMESPACE} (context $(kubectl config current-context))"
 
-REPLICAS="$(kubectl get deployment "${SERVICE}" -n "${NAMESPACE}" -o jsonpath='{.spec.replicas}')"
+# Both have a scale subresource, so kubectl scale works on either.
+if kubectl get rollout "${SERVICE}" -n "${NAMESPACE}" > /dev/null 2>&1; then
+  KIND=rollout
+else
+  KIND=deployment
+fi
+
+REPLICAS="$(kubectl get "${KIND}" "${SERVICE}" -n "${NAMESPACE}" -o jsonpath='{.spec.replicas}')"
 if [ "${REPLICAS:-0}" -eq 0 ]; then
   echo "❌ ${SERVICE} already has 0 replicas; nothing to drill."
   exit 1
@@ -69,7 +77,7 @@ restore() {
   [ "${restored}" -eq 1 ] && return 0
   restored=1
   echo "🔧 Restoring ${SERVICE} to ${REPLICAS} replicas..."
-  kubectl scale deployment "${SERVICE}" -n "${NAMESPACE}" --replicas="${REPLICAS}" > /dev/null
+  kubectl scale "${KIND}" "${SERVICE}" -n "${NAMESPACE}" --replicas="${REPLICAS}" > /dev/null
 }
 trap restore EXIT
 
@@ -78,12 +86,17 @@ if alert_active; then
   exit 1
 fi
 
-echo "💥 Scaling ${SERVICE} from ${REPLICAS} to 0 replicas..."
-kubectl scale deployment "${SERVICE}" -n "${NAMESPACE}" --replicas=0 > /dev/null
+echo "💥 Scaling ${KIND} ${SERVICE} from ${REPLICAS} to 0 replicas..."
+kubectl scale "${KIND}" "${SERVICE}" -n "${NAMESPACE}" --replicas=0 > /dev/null
 wait_for "ServiceUnavailable firing for ${SERVICE}" alert_active
 
 restore
-kubectl rollout status deployment "${SERVICE}" -n "${NAMESPACE}" --timeout="${TIMEOUT}s"
+if [ "${KIND}" = rollout ]; then
+  # kubectl rollout status knows only built-in kinds.
+  kubectl wait rollout "${SERVICE}" -n "${NAMESPACE}" --for=jsonpath='{.status.availableReplicas}'="${REPLICAS}" --timeout="${TIMEOUT}s"
+else
+  kubectl rollout status deployment "${SERVICE}" -n "${NAMESPACE}" --timeout="${TIMEOUT}s"
+fi
 wait_for "ServiceUnavailable cleared for ${SERVICE}" alert_cleared
 
 echo "✅ Drill passed: the outage was detected and the alert cleared after recovery."

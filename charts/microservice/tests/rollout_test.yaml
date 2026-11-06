@@ -1,0 +1,192 @@
+suite: rollout
+templates:
+  - templates/deployment.yaml
+  - templates/service-canary.yaml
+  - templates/analysistemplate.yaml
+  - templates/hpa.yaml
+  - templates/scaledobject.yaml
+  - templates/verticalpodautoscaler.yaml
+  - templates/servicemonitor.yaml
+release:
+  name: order-service
+  namespace: development
+set:
+  image.tag: 6d9dfdcb454b4596b14a6cc09e19d9fa5ead7e35
+  openTelemetry.environment: dev
+  rollout.enabled: true
+  rollout.virtualService: order-service
+tests:
+  - it: is a Deployment unless rollout.enabled
+    template: templates/deployment.yaml
+    set:
+      rollout.enabled: false
+    asserts:
+      - isKind:
+          of: Deployment
+      - notExists:
+          path: spec.strategy
+
+  - it: renders nothing for Argo Rollouts unless rollout.enabled
+    templates:
+      - templates/service-canary.yaml
+      - templates/analysistemplate.yaml
+    set:
+      rollout.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: becomes a canary Rollout weighted through the mesh's VirtualService
+    template: templates/deployment.yaml
+    asserts:
+      - isKind:
+          of: Rollout
+      - equal:
+          path: apiVersion
+          value: argoproj.io/v1alpha1
+      - equal:
+          path: spec.strategy.canary.stableService
+          value: order-service
+      - equal:
+          path: spec.strategy.canary.canaryService
+          value: order-service-canary
+      - equal:
+          path: spec.strategy.canary.trafficRouting.istio.virtualService
+          value:
+            name: order-service
+            routes: [primary]
+      - equal:
+          path: spec.progressDeadlineAbort
+          value: true
+      - equal:
+          path: spec.strategy.canary.steps[0].setWeight
+          value: 10
+
+  - it: weights by pods when there is no VirtualService
+    template: templates/deployment.yaml
+    set:
+      rollout.virtualService: ""
+    asserts:
+      - notExists:
+          path: spec.strategy.canary.trafficRouting
+
+  - it: measures the canary from the first pause, by its pod template hash
+    template: templates/deployment.yaml
+    asserts:
+      - equal:
+          path: spec.strategy.canary.analysis.startingStep
+          value: 1
+      - equal:
+          path: spec.strategy.canary.analysis.args[0]
+          value:
+            name: canary-hash
+            valueFrom:
+              podTemplateHashValue: Latest
+
+  - it: gives the canary Service no app label, so its pods aren't scraped twice
+    template: templates/service-canary.yaml
+    asserts:
+      - equal:
+          path: metadata.name
+          value: order-service-canary
+      - notExists:
+          path: metadata.labels.app
+      - equal:
+          path: spec.selector.app
+          value: order-service
+
+  - it: judges the canary's own requests on errors and latency
+    template: templates/analysistemplate.yaml
+    asserts:
+      - equal:
+          path: metadata.name
+          value: order-service-canary
+      - matchRegex:
+          path: spec.metrics[0].provider.prometheus.query
+          pattern: 'job="order-service", rollouts_pod_template_hash="\{\{args.canary-hash\}\}".*status=~"5\.\."'
+      - equal:
+          path: spec.metrics[0].failureCondition
+          value: len(result) > 0 && result[0] > 0.05
+      - matchRegex:
+          path: spec.metrics[1].provider.prometheus.query
+          pattern: 'le="0.5"'
+      - equal:
+          path: spec.metrics[1].successCondition
+          value: len(result) > 0 && result[0] >= 0.9
+
+  - it: leaves out the analysis when it is off
+    templates:
+      - templates/deployment.yaml
+      - templates/analysistemplate.yaml
+    set:
+      rollout.analysis.enabled: false
+    asserts:
+      - notExists:
+          path: spec.strategy.canary.analysis
+        template: templates/deployment.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/analysistemplate.yaml
+
+  - it: points the autoscalers at the Rollout
+    templates:
+      - templates/hpa.yaml
+      - templates/verticalpodautoscaler.yaml
+    asserts:
+      - equal:
+          path: spec.scaleTargetRef.kind
+          value: Rollout
+        template: templates/hpa.yaml
+      - equal:
+          path: spec.targetRef.kind
+          value: Rollout
+        template: templates/verticalpodautoscaler.yaml
+
+  - it: points KEDA at the Rollout
+    template: templates/scaledobject.yaml
+    set:
+      autoscaling.keda.enabled: true
+      autoscaling.keda.triggers:
+        - type: cpu
+          metricType: Utilization
+          metadata: {value: "70"}
+    asserts:
+      - equal:
+          path: spec.scaleTargetRef
+          value:
+            apiVersion: argoproj.io/v1alpha1
+            kind: Rollout
+            name: order-service
+
+  - it: copies the pod template hash onto the metrics
+    template: templates/servicemonitor.yaml
+    asserts:
+      - equal:
+          path: spec.podTargetLabels
+          value: [rollouts-pod-template-hash]
+
+  - it: waits for a person when there are no requests to judge, by default
+    template: templates/analysistemplate.yaml
+    asserts:
+      - equal:
+          path: spec.metrics[0].successCondition
+          value: len(result) > 0 && result[0] <= 0.05
+
+  - it: lets a canary without requests through with withoutRequests pass
+    template: templates/analysistemplate.yaml
+    set:
+      rollout.analysis.withoutRequests: pass
+    asserts:
+      - equal:
+          path: spec.metrics[0].successCondition
+          value: len(result) == 0 || isNaN(result[0]) || result[0] <= 0.05
+      - equal:
+          path: spec.metrics[0].failureCondition
+          value: len(result) > 0 && result[0] > 0.05
+
+  - it: refuses an unknown withoutRequests
+    template: templates/analysistemplate.yaml
+    set:
+      rollout.analysis.withoutRequests: maybe
+    asserts:
+      - failedTemplate: {}

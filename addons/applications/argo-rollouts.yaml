@@ -1,0 +1,43 @@
+# Argo Rollouts (roadmap step 20, docs/ROLLOUTS.md): canary and blue/green
+# releases that check the new version's health before giving it all the
+# traffic, and roll it back on their own when it fails.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argo-rollouts
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: cluster-addons
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - chart: argo-rollouts
+      repoURL: https://argoproj.github.io/argo-helm
+      # Argo Rollouts v1.10.2: v1.10.1 rebuilt with a Go toolchain that no
+      # longer trusts a compromised certificate authority's keys.
+      targetRevision: 2.43.9
+      helm:
+        # TIER and ENV are filled in by addons/select-env (see
+        # kustomization.yaml); missing files are skipped.
+        ignoreMissingValueFiles: true
+        valueFiles:
+          - $values/addons/values/common/argo-rollouts.yaml
+          - $values/addons/values/TIER/argo-rollouts.yaml
+          - $values/addons/values/ENV/argo-rollouts.yaml
+    - repoURL: https://github.com/kumarisback/gitops.git
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argo-rollouts
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # The Rollout CRD is too large for client-side apply's
+      # last-applied annotation.
+      - ServerSideApply=true

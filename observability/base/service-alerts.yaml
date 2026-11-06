@@ -16,23 +16,45 @@ spec:
         # fails. ServiceDown can't see this: with no pod there's no scrape
         # target and no `up` series to be 0. The SLO alerts can't either:
         # the services' own request metrics disappear with their pods. So
-        # it's read from the Deployment (kube-state-metrics). job is set to
-        # the deployment so Alertmanager can inhibit the alerts it implies.
+        # it's read from the Deployment (kube-state-metrics), or for a
+        # service released with Argo Rollouts (roadmap step 20: frontend,
+        # order-service) from the Rollout (Argo Rollouts' own metrics, its
+        # name copied to the deployment label). job is set to the workload
+        # so Alertmanager can inhibit the alerts it implies.
         # Only while pods are wanted: KEDA scales notification-service to
         # zero on purpose when Kafka is drained (roadmap step 15).
         - alert: ServiceUnavailable
           expr: |
             label_replace(
               (
-                max by (namespace, deployment) (
-                  kube_deployment_status_replicas_available{deployment=~"frontend|order-service|user-service|notification-service"}
-                ) == 0
+                (
+                  max by (namespace, deployment) (
+                    kube_deployment_status_replicas_available{deployment=~"frontend|order-service|user-service|notification-service"}
+                  ) == 0
+                )
+                and on (namespace, deployment)
+                (
+                  max by (namespace, deployment) (
+                    kube_deployment_spec_replicas{deployment=~"frontend|order-service|user-service|notification-service"}
+                  ) > 0
+                )
               )
-              and on (namespace, deployment)
-              (
-                max by (namespace, deployment) (
-                  kube_deployment_spec_replicas{deployment=~"frontend|order-service|user-service|notification-service"}
-                ) > 0
+              or
+              max by (namespace, deployment) (
+                label_replace(
+                  (
+                    max by (namespace, name) (
+                      rollout_info_replicas_available{name=~"frontend|order-service|user-service|notification-service"}
+                    ) == 0
+                  )
+                  and on (namespace, name)
+                  (
+                    max by (namespace, name) (
+                      rollout_info_replicas_desired{name=~"frontend|order-service|user-service|notification-service"}
+                    ) > 0
+                  ),
+                  "deployment", "$1", "name", "(.+)"
+                )
               ),
               "job", "$1", "deployment", "(.+)"
             )

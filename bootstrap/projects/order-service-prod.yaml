@@ -31,6 +31,11 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      # Remove what Git no longer has only once the rest is healthy: when
+      # order-service became a Rollout (roadmap step 20), its old Deployment
+      # kept serving until the Rollout's pods were ready.
+      - PruneLast=true
     # The namespace and the app-secrets Secret come from the prod app set;
     # retry until they exist.
     retry:

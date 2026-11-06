@@ -18,7 +18,22 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: development
+  # Argo Rollouts moves these weights during a canary release (roadmap step
+  # 20, apps/base/mesh.yaml): not drift to report, and not to be reset
+  # halfway through a release.
+  ignoreDifferences:
+    - group: networking.istio.io
+      kind: VirtualService
+      name: order-service
+      jqPathExpressions:
+        - .spec.http[].route[].weight
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - RespectIgnoreDifferences=true
+      # Remove what Git no longer has only once the rest is healthy: when
+      # frontend became a Rollout (roadmap step 20), its old Deployment kept
+      # serving until the Rollout's pods were ready.
+      - PruneLast=true

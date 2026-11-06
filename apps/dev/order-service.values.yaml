@@ -37,3 +37,14 @@ autoscaling:
         metricType: Utilization
         metadata:
           value: "70"
+# Released as a canary with Argo Rollouts (roadmap step 20,
+# docs/ROLLOUTS.md): 10%, 25%, 50% of the requests through the mesh's
+# VirtualService, three minutes each, measured all along; rolled back on
+# its own if its errors or latency fail the analysis.
+rollout:
+  enabled: true
+  virtualService: order-service
+  # With little or no traffic here, a canary with no requests to judge
+  # goes on rather than waiting for a person (production waits).
+  analysis:
+    withoutRequests: pass

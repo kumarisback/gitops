@@ -11,3 +11,10 @@ openTelemetry:
 # Request payloads in the API log: payloads of failed requests only: enough to debug a failure, without storing customer data for every successful call.
 requestLogging:
   requestBody: ERRORS
+# Released as a canary with Argo Rollouts (roadmap step 20,
+# docs/ROLLOUTS.md): 10%, 25%, 50% of the requests through the mesh's
+# VirtualService, three minutes each, measured all along; rolled back on
+# its own if its errors or latency fail the analysis.
+rollout:
+  enabled: true
+  virtualService: order-service

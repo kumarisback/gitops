@@ -10,8 +10,8 @@ metadata:
     {{- include "microservice.labels" . | nindent 4 }}
 spec:
   scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
+    apiVersion: {{ include "microservice.workloadApiVersion" . }}
+    kind: {{ include "microservice.workloadKind" . }}
     name: {{ include "microservice.name" . }}
   minReplicas: {{ .Values.autoscaling.minReplicas }}
   maxReplicas: {{ .Values.autoscaling.maxReplicas }}

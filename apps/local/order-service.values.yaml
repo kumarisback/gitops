@@ -41,3 +41,18 @@ extraEnv:
 kafka:
   enabled: true
   accessSecret: order-service-kafka
+# Released as a canary with Argo Rollouts (roadmap step 20,
+# docs/ROLLOUTS.md), weighted by the mesh's VirtualService. Two steps of a
+# minute each in the lab, enough to watch it work.
+rollout:
+  enabled: true
+  virtualService: order-service
+  # With little or no traffic here, a canary with no requests to judge
+  # goes on rather than waiting for a person (production waits).
+  analysis:
+    withoutRequests: pass
+  steps:
+    - setWeight: 20
+    - pause: {duration: 1m}
+    - setWeight: 50
+    - pause: {duration: 1m}

@@ -1,9 +1,21 @@
-apiVersion: apps/v1
-kind: Deployment
+# frontend as an Argo Rollout (roadmap step 20, docs/ROLLOUTS.md), released
+# blue/green: a new version starts next to the current one, reachable only
+# through Service frontend-preview, and takes over Service frontend (and so
+# every user) at once when someone promotes it:
+#
+#   kubectl argo rollouts promote frontend -n <namespace>
+#
+# Until then users see the current version; `abort` drops the new one.
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
 
 metadata:
   name: frontend
   namespace: production
+  annotations:
+    # The kind exists once the argo-rollouts add-on has installed its
+    # CRDs; until then ArgoCD skips the dry run for this object.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 
 spec:
   # No replicas here: the HorizontalPodAutoscaler (hpa.yaml) owns the count.
@@ -13,6 +25,20 @@ spec:
   selector:
     matchLabels:
       app: frontend
+
+  strategy:
+    blueGreen:
+      # Argo Rollouts points each Service at its version's pods.
+      activeService: frontend
+      previewService: frontend-preview
+      # A person decides: the new version waits in preview until promoted.
+      autoPromotionEnabled: false
+      # One pod is enough to look at; it grows to the full count when
+      # promoted, before it takes the traffic.
+      previewReplicaCount: 1
+      # The old version stays up 30 s after the switch, for requests in
+      # flight and for proxies still on the old endpoints.
+      scaleDownDelaySeconds: 30
 
   template:
     metadata:

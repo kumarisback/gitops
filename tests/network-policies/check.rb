@@ -74,7 +74,8 @@ end
 objects.each do |o|
   template =
     case o['kind']
-    when 'Deployment', 'StatefulSet', 'DaemonSet', 'Job' then o.dig('spec', 'template')
+    # Rollout: Argo Rollouts (roadmap step 20), a Deployment's pod template.
+    when 'Deployment', 'StatefulSet', 'DaemonSet', 'Job', 'Rollout' then o.dig('spec', 'template')
     when 'CronJob' then o.dig('spec', 'jobTemplate', 'spec', 'template')
     end
   next unless template

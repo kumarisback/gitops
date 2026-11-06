@@ -1,0 +1,44 @@
+# Releases with Argo Rollouts (roadmap step 20, docs/ROLLOUTS.md). A release
+# that fails leaves the previous version serving, so these are warnings:
+# nobody's request is failing, but a change didn't go out and someone
+# should find out why.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rollout-alerts
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: rollouts
+      rules:
+        # Aborted: the analysis failed, or the new pods never became ready
+        # in time; the stable version has all the traffic again. Error and
+        # InvalidSpec: the Rollout can't be acted on at all.
+        - alert: RolloutFailed
+          expr: max by (namespace, name, strategy) (rollout_info{phase=~"Abort|Error|Timeout|InvalidSpec"}) == 1
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The release of {{ $labels.name }} in {{ $labels.namespace }} failed"
+            description: "The {{ $labels.strategy }} release stopped and the previous version still serves. Until the cause is fixed and the release retried or reverted in Git, that change isn't running."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#rolloutfailed
+        # No controller: releases stop where they are (a canary stays at its
+        # weight, a preview waits), running versions keep serving.
+        - alert: ArgoRolloutsControllerUnavailable
+          expr: |
+            (
+              max by (namespace, deployment) (kube_deployment_status_replicas_available{namespace="argo-rollouts", deployment="argo-rollouts"}) == 0
+            )
+            and on (namespace, deployment)
+            (
+              max by (namespace, deployment) (kube_deployment_spec_replicas{namespace="argo-rollouts", deployment="argo-rollouts"}) > 0
+            )
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Argo Rollouts' controller is down"
+            description: "Releases of frontend and order-service are frozen where they are; nothing new goes out, and a failing canary isn't rolled back."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#argorolloutscontrollerunavailable

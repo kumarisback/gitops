@@ -21,6 +21,7 @@ resources:
   - metrics-server.yaml
   - vertical-pod-autoscaler.yaml
   - keda.yaml
+  - argo-rollouts.yaml
   - gateway-api.yaml
   - istio-base.yaml
   - istiod.yaml

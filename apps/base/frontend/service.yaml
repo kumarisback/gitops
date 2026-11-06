@@ -23,3 +23,25 @@ spec:
     port: 80
     targetPort: 80
     protocol: TCP
+---
+# The next version during a blue/green release (rollout.yaml): Argo Rollouts
+# points it at the new pods while Service frontend keeps the current ones.
+# Nothing routes here; look at it with
+#   kubectl port-forward -n <namespace> svc/frontend-preview 8080:80
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-preview
+  namespace: production
+  labels:
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/component: preview
+spec:
+  type: ClusterIP
+  selector:
+    app: frontend
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+    protocol: TCP

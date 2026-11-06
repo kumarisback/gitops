@@ -1,0 +1,30 @@
+{{- if .Values.rollout.enabled }}
+{{- $name := include "microservice.name" . -}}
+{{- /*
+The canary's Service (roadmap step 20): during a release Argo Rollouts
+points it at the new version's pods and the main Service at the old, and
+the mesh's VirtualService splits requests between the two.
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-canary
+  # Not the `app` label: the ServiceMonitor picks Services by it, and
+  # scraping the pods through this Service as well would count every
+  # request twice.
+  labels:
+    app.kubernetes.io/name: {{ $name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: canary
+    app.kubernetes.io/part-of: microservices
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "microservice.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+{{- end }}

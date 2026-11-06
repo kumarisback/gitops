@@ -10,6 +10,12 @@ spec:
   selector:
     matchLabels:
       {{- include "microservice.selectorLabels" . | nindent 6 }}
+  {{- if .Values.rollout.enabled }}
+  # Each pod's version (Argo Rollouts' pod template hash) on its metrics,
+  # so the canary analysis can tell the new version's requests apart.
+  podTargetLabels:
+    - rollouts-pod-template-hash
+  {{- end }}
   endpoints:
     - port: management
       path: /actuator/prometheus

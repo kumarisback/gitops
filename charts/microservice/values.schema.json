@@ -68,6 +68,47 @@
         }
       }
     },
+    "rollout": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "virtualService": { "type": "string", "pattern": "^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$" },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 1,
+            "additionalProperties": false,
+            "properties": {
+              "setWeight": { "type": "integer", "minimum": 0, "maximum": 100 },
+              "pause": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": { "duration": { "type": "string", "pattern": "^[0-9]+[smh]$" } }
+              }
+            }
+          }
+        },
+        "progressDeadlineSeconds": { "type": "integer", "minimum": 60 },
+        "analysis": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "withoutRequests": { "enum": ["wait", "pass"] },
+            "prometheusAddress": { "type": "string", "pattern": "^https?://" },
+            "interval": { "type": "string", "pattern": "^[0-9]+[smh]$" },
+            "initialDelay": { "type": "string", "pattern": "^[0-9]+[smh]$" },
+            "failureLimit": { "type": "integer", "minimum": 0 },
+            "maxErrorRate": { "type": "number", "minimum": 0, "maximum": 1 },
+            "minShareWithin500ms": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        }
+      }
+    },
     "podDisruptionBudget": {
       "type": "object",
       "additionalProperties": false,

@@ -19,6 +19,8 @@ metadata:
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   scaleTargetRef:
+    apiVersion: {{ include "microservice.workloadApiVersion" . }}
+    kind: {{ include "microservice.workloadKind" . }}
     name: {{ include "microservice.name" . }}
   minReplicaCount: {{ .Values.autoscaling.minReplicas }}
   maxReplicaCount: {{ .Values.autoscaling.maxReplicas }}

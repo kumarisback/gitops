@@ -11,8 +11,8 @@ metadata:
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   targetRef:
-    apiVersion: apps/v1
-    kind: Deployment
+    apiVersion: {{ include "microservice.workloadApiVersion" . }}
+    kind: {{ include "microservice.workloadKind" . }}
     name: {{ include "microservice.name" . }}
   updatePolicy:
     updateMode: "Off"

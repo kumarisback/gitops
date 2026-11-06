@@ -1,0 +1,57 @@
+{{- if and .Values.rollout.enabled .Values.rollout.analysis.enabled }}
+{{- $name := include "microservice.name" . -}}
+{{- $a := .Values.rollout.analysis -}}
+{{- /*
+How a canary is judged (roadmap step 20, docs/ROLLOUTS.md): its own
+requests, picked out by its pod template hash (the ServiceMonitor copies
+it onto the metrics), against the same two measures as the SLOs, errors
+and latency. A measurement with no requests to judge (an empty result,
+or 0/0) passes with withoutRequests: pass; otherwise it is neither a
+pass nor a failure but inconclusive, and the rollout waits for a person.
+*/}}
+{{- $silence := eq $a.withoutRequests "pass" }}
+{{- $canary := printf "namespace=%q, job=%q, rollouts_pod_template_hash=%q, uri!~\".*actuator.*\"" .Release.Namespace $name "{{args.canary-hash}}" }}
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: {{ $name }}-canary
+  labels:
+    {{- include "microservice.labels" . | nindent 4 }}
+  annotations:
+    # The kind exists once the argo-rollouts add-on has installed its CRDs;
+    # until then ArgoCD skips the dry run for this object.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  args:
+    # Filled in by the Rollout: the new version's pod template hash.
+    - name: canary-hash
+  metrics:
+    # Share of the canary's answers that were server errors.
+    - name: error-rate
+      interval: {{ $a.interval }}
+      initialDelay: {{ $a.initialDelay }}
+      failureLimit: {{ $a.failureLimit }}
+      successCondition: {{ if $silence }}len(result) == 0 || isNaN(result[0]) || {{ else }}len(result) > 0 && {{ end }}result[0] <= {{ $a.maxErrorRate }}
+      failureCondition: len(result) > 0 && result[0] > {{ $a.maxErrorRate }}
+      provider:
+        prometheus:
+          address: {{ $a.prometheusAddress }}
+          query: |
+            (sum(rate(http_server_requests_seconds_count{ {{- $canary }}, status=~"5.."}[2m])) or vector(0))
+            /
+            sum(rate(http_server_requests_seconds_count{ {{- $canary }}}[2m]))
+    # Share of the canary's answers given within 500 ms.
+    - name: latency
+      interval: {{ $a.interval }}
+      initialDelay: {{ $a.initialDelay }}
+      failureLimit: {{ $a.failureLimit }}
+      successCondition: {{ if $silence }}len(result) == 0 || isNaN(result[0]) || {{ else }}len(result) > 0 && {{ end }}result[0] >= {{ $a.minShareWithin500ms }}
+      failureCondition: len(result) > 0 && result[0] < {{ $a.minShareWithin500ms }}
+      provider:
+        prometheus:
+          address: {{ $a.prometheusAddress }}
+          query: |
+            sum(rate(http_server_requests_seconds_bucket{ {{- $canary }}, le="0.5"}[2m]))
+            /
+            sum(rate(http_server_requests_seconds_count{ {{- $canary }}}[2m]))
+{{- end }}

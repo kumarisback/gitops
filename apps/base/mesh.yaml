@@ -178,10 +178,15 @@ kind: AuthorizationPolicy
 metadata:
   name: frontend-callers
 spec:
+  # frontend-preview: the next version during a blue/green release
+  # (roadmap step 20, apps/base/frontend/rollout.yaml), with the same rules.
   targetRefs:
     - kind: Service
       group: ""
       name: frontend
+    - kind: Service
+      group: ""
+      name: frontend-preview
   action: ALLOW
   rules:
     - from:
@@ -237,10 +242,16 @@ metadata:
     # Names callers in this namespace: the overlay fills in which one.
     same-namespace-callers: "true"
 spec:
+  # order-service-canary: the new version during a canary release (roadmap
+  # step 20); the VirtualService below sends part of the requests for
+  # order-service there, and a direct call must meet the same rules.
   targetRefs:
     - kind: Service
       group: ""
       name: order-service
+    - kind: Service
+      group: ""
+      name: order-service-canary
   action: ALLOW
   rules:
     - from:
@@ -281,6 +292,12 @@ spec:
 # service are retried: the connection failed, was refused, or was reset
 # before the request was sent. Retrying anything else could create an
 # order twice. 503s and timeouts are not retried; the caller decides.
+#
+# order-service is released as a canary (roadmap step 20, docs/ROLLOUTS.md):
+# Argo Rollouts moves the two weights of route `primary` during a release,
+# from the stable version (Service order-service) to the new one
+# (order-service-canary) and back to 100/0 at the end. ArgoCD leaves the
+# weights alone (ignoreDifferences in each environment's Application).
 apiVersion: networking.istio.io/v1
 kind: VirtualService
 metadata:
@@ -288,7 +305,8 @@ metadata:
 spec:
   hosts: [order-service]
   http:
-    - timeout: 10s
+    - name: primary
+      timeout: 10s
       retries:
         attempts: 2
         perTryTimeout: 4s
@@ -296,6 +314,10 @@ spec:
       route:
         - destination:
             host: order-service
+          weight: 100
+        - destination:
+            host: order-service-canary
+          weight: 0
 ---
 apiVersion: networking.istio.io/v1
 kind: VirtualService

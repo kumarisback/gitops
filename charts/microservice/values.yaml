@@ -61,6 +61,51 @@ autoscaling:
     # none. Not with cpu or memory triggers.
     fallbackReplicas: null
 
+# Progressive delivery with Argo Rollouts (roadmap step 20,
+# docs/ROLLOUTS.md). Off: a Deployment, replaced pod by pod as soon as new
+# pods are ready. On: an Argo Rollout that sends a growing share of the
+# traffic to the new version (a canary), measures it, and rolls it back
+# by itself if it errs or slows down. Needs the argo-rollouts add-on.
+rollout:
+  enabled: false
+  # The mesh's VirtualService for this Service (apps/base/mesh.yaml), whose
+  # route `primary` lists this Service and <name>-canary: the weights below
+  # are then shares of the requests. Empty: shares of the pods instead.
+  virtualService: ""
+  # Weight in percent, then wait; 100% after the last step. A pause without
+  # a duration waits for `kubectl argo rollouts promote`.
+  steps:
+    - setWeight: 10
+    - pause: {duration: 3m}
+    - setWeight: 25
+    - pause: {duration: 3m}
+    - setWeight: 50
+    - pause: {duration: 3m}
+  # A canary whose pods aren't ready this many seconds after it starts is
+  # rolled back (a crash at start, an image that can't be pulled).
+  progressDeadlineSeconds: 600
+  # Checks on the new version's own requests (its pods' metrics), every
+  # interval from the first step on, until the rollout ends.
+  analysis:
+    enabled: true
+    # A measurement with no requests to judge: `wait` counts it as
+    # inconclusive, which pauses the rollout for a person (where traffic
+    # never stops, silence means the metrics are broken); `pass` lets it
+    # through (where there may be no traffic at all: the lab, dev).
+    withoutRequests: wait
+    prometheusAddress: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
+    interval: 1m
+    # Wait this long after the first step before measuring: the canary
+    # needs requests first.
+    initialDelay: 1m
+    # Failed measurements tolerated per check; one more rolls back.
+    failureLimit: 1
+    # Highest share of 5xx answers.
+    maxErrorRate: 0.05
+    # Lowest share of requests answered within 500 ms (the latency SLO's
+    # threshold, observability/base/slo-rules.yaml).
+    minShareWithin500ms: 0.9
+
 podDisruptionBudget:
   enabled: true
   minAvailable: 1

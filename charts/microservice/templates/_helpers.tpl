@@ -3,6 +3,12 @@
 {{- define "microservice.labels" -}}{{ include "common.labels" . }}{{- end -}}
 {{- define "microservice.selectorLabels" -}}{{ include "common.selectorLabels" . }}{{- end -}}
 
+{{/* microservice.workload*: apiVersion and kind of what runs the pods, for the
+     objects that point at it (HPA, ScaledObject, VPA): an Argo Rollout with
+     rollout.enabled (roadmap step 20), else a Deployment. */}}
+{{- define "microservice.workloadApiVersion" -}}{{ if .Values.rollout.enabled }}argoproj.io/v1alpha1{{ else }}apps/v1{{ end }}{{- end -}}
+{{- define "microservice.workloadKind" -}}{{ if .Values.rollout.enabled }}Rollout{{ else }}Deployment{{ end }}{{- end -}}
+
 {{/* microservice.path PATH: PATH under the service's context path. */}}
 {{- define "microservice.path" -}}{{ .root.Values.contextPath }}{{ .path }}{{- end -}}
 

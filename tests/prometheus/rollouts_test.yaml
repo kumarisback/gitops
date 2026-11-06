@@ -1,0 +1,96 @@
+# Unit tests for observability/base/rollout-alerts.yaml and the Rollout half
+# of ServiceUnavailable (service-alerts.yaml); validate.sh extracts the rule
+# files first (see slo_test.yaml).
+rule_files:
+  - ../../.validate/rules/observability/rollout-alerts.yaml
+  - ../../.validate/rules/observability/service-alerts.yaml
+
+evaluation_interval: 30s
+
+tests:
+  # frontend is a Rollout: no kube_deployment series at all. Its pods all
+  # go at 2m while two are wanted: critical, named like a Deployment's.
+  - interval: 1m
+    input_series:
+      - series: 'rollout_info_replicas_available{namespace="development",name="frontend",job="argo-rollouts-metrics"}'
+        values: '2 2 0x10'
+      - series: 'rollout_info_replicas_desired{namespace="development",name="frontend",job="argo-rollouts-metrics"}'
+        values: '2x12'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ServiceUnavailable
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: ServiceUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: development
+              deployment: frontend
+              job: frontend
+            exp_annotations:
+              summary: "frontend has no ready pods in development"
+              description: "No pod of frontend has been ready for 2 minutes although some are wanted: requests to it fail, or for a consumer (notification-service) its Kafka backlog grows."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#serviceunavailable
+
+  # Scaled to zero on purpose (the alert drill restores it): no pods wanted,
+  # no alert.
+  - interval: 1m
+    input_series:
+      - series: 'rollout_info_replicas_available{namespace="development",name="order-service",job="argo-rollouts-metrics"}'
+        values: '0x10'
+      - series: 'rollout_info_replicas_desired{namespace="development",name="order-service",job="argo-rollouts-metrics"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: ServiceUnavailable
+        exp_alerts: []
+
+  # order-service's canary fails its analysis at 3m and is aborted; the
+  # previous version serves. A release in progress or paused isn't one.
+  - interval: 1m
+    input_series:
+      - series: 'rollout_info{namespace="staging",name="order-service",strategy="canary",traffic_router="Istio",phase="Progressing",job="argo-rollouts-metrics"}'
+        values: '1 1 1 _x8'
+      - series: 'rollout_info{namespace="staging",name="order-service",strategy="canary",traffic_router="Istio",phase="Abort",job="argo-rollouts-metrics"}'
+        values: '_ _ _ 1x8'
+      - series: 'rollout_info{namespace="staging",name="frontend",strategy="blueGreen",traffic_router="",phase="Paused",job="argo-rollouts-metrics"}'
+        values: '1x11'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: RolloutFailed
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: RolloutFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: staging
+              name: order-service
+              strategy: canary
+            exp_annotations:
+              summary: "The release of order-service in staging failed"
+              description: "The canary release stopped and the previous version still serves. Until the cause is fixed and the release retried or reverted in Git, that change isn't running."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#rolloutfailed
+
+  - interval: 1m
+    input_series:
+      - series: 'kube_deployment_status_replicas_available{namespace="argo-rollouts",deployment="argo-rollouts",job="kube-state-metrics"}'
+        values: '2 2 0x14'
+      - series: 'kube_deployment_spec_replicas{namespace="argo-rollouts",deployment="argo-rollouts",job="kube-state-metrics"}'
+        values: '2x16'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ArgoRolloutsControllerUnavailable
+        exp_alerts: []
+      - eval_time: 13m
+        alertname: ArgoRolloutsControllerUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: argo-rollouts
+              deployment: argo-rollouts
+            exp_annotations:
+              summary: "Argo Rollouts' controller is down"
+              description: "Releases of frontend and order-service are frozen where they are; nothing new goes out, and a failing canary isn't rolled back."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#argorolloutscontrollerunavailable

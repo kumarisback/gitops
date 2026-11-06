@@ -1,0 +1,4 @@
+# Two controllers in the cloud: one leads, the other takes over within
+# seconds, so a node drain doesn't stop a release halfway.
+controller:
+  replicas: 2

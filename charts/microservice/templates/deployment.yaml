@@ -1,10 +1,21 @@
 {{- $name := include "microservice.name" . -}}
-apiVersion: apps/v1
-kind: Deployment
+{{- /*
+A Deployment, or with rollout.enabled an Argo Rollout (roadmap step 20,
+docs/ROLLOUTS.md): the same pods, released as a canary that is measured
+and rolled back on its own if it misbehaves.
+*/}}
+apiVersion: {{ include "microservice.workloadApiVersion" . }}
+kind: {{ include "microservice.workloadKind" . }}
 metadata:
   name: {{ $name }}
   labels:
     {{- include "microservice.labels" . | nindent 4 }}
+  {{- if .Values.rollout.enabled }}
+  annotations:
+    # The kind exists once the argo-rollouts add-on has installed its CRDs;
+    # until then ArgoCD skips the dry run for this object.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+  {{- end }}
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
@@ -12,6 +23,40 @@ spec:
   selector:
     matchLabels:
       {{- include "microservice.selectorLabels" . | nindent 6 }}
+  {{- with .Values.rollout }}
+  {{- if .enabled }}
+  progressDeadlineSeconds: {{ .progressDeadlineSeconds }}
+  # A canary that doesn't become ready in time is rolled back, not left
+  # half-released.
+  progressDeadlineAbort: true
+  strategy:
+    canary:
+      # Argo Rollouts points each Service at its version's pods.
+      stableService: {{ $name }}
+      canaryService: {{ $name }}-canary
+      {{- with .virtualService }}
+      # It sets the two destinations' weights in this VirtualService.
+      trafficRouting:
+        istio:
+          virtualService:
+            name: {{ . }}
+            routes: [primary]
+      {{- end }}
+      {{- if .analysis.enabled }}
+      # From the first pause to the end (analysistemplate.yaml).
+      analysis:
+        templates:
+          - templateName: {{ $name }}-canary
+        startingStep: 1
+        args:
+          - name: canary-hash
+            valueFrom:
+              podTemplateHashValue: Latest
+      {{- end }}
+      steps:
+        {{- toYaml .steps | nindent 8 }}
+  {{- end }}
+  {{- end }}
   template:
     metadata:
       labels:
