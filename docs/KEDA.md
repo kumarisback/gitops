@@ -115,9 +115,13 @@ is drained for 5 minutes.
 5. **The Prometheus trigger.** Load order-service:
 
    ```bash
-   kubectl run load -n development --rm -it --image=busybox:1.37 --restart=Never -- \
-     sh -c 'while true; do wget -q -O /dev/null http://order-service/api/orders/status; done'
+   kubectl run load -n default --rm -it --image=busybox:1.37 --restart=Never -- \
+     sh -c 'while true; do wget -q -O /dev/null http://kong-gateway-proxy.kong/api/orders/status; done'
    ```
+
+   Through Kong, the way real traffic comes: since step 18 the services accept calls only
+   from identities the service mesh's policies name (`docs/MESH.md`), and a pod of your own
+   isn't one of them.
 
    Above 20 requests a second (`sum(rate(http_server_requests_seconds_count{job="order-service"}[2m]))`
    in Grafana) it goes to 2 replicas, CPU or not. Stop the load: back to 1 after the HPA's

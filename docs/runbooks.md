@@ -574,6 +574,64 @@ a namespace the Gateway doesn't allow); for plugins, the controller's log and th
 
 ---
 
+## Service mesh
+
+Istio in ambient mode carries every request between the services (`docs/MESH.md`). Its
+state:
+
+```bash
+kubectl get pods -n istio-system                          # istiod, ztunnel and istio-cni per node
+kubectl get gateway waypoint -n <namespace>               # PROGRAMMED True
+kubectl logs -n istio-system -l app=ztunnel --tail=50     # connections, with both identities
+```
+
+**A request refused by the mesh** shows up as a 403 with `RBAC: access denied` (refused by
+the waypoint: the caller's identity or the path isn't in that Service's `*-callers` policy)
+or as a connection reset (refused by ztunnel: the caller isn't the waypoint or Prometheus,
+or isn't in the mesh at all while the namespace demands mutual TLS). The waypoint's metrics
+say who was refused:
+`sum by (source_workload, destination_service_name) (rate(istio_requests_total{reporter="waypoint", response_code="403"}[5m]))`.
+A new caller needs a rule in `apps/base/mesh.yaml`, and a caller outside the mesh needs to
+join it (its pods labelled `istio.io/dataplane-mode: ambient`).
+
+### ZtunnelUnavailable
+
+**Meaning:** ztunnel isn't running on some nodes. Meshed pods on those nodes can neither send
+nor receive anything: for them, the network is down.
+
+**Check:** `kubectl get pods -n istio-system -l app=ztunnel -o wide` and the failing pod's
+events and log: an image that can't be pulled, the node's resources, or a bad upgrade.
+
+**Act:** restore it (roll back the `ztunnel` application's last change). As a stopgap,
+cordon and drain the node so the pods move to nodes with a ztunnel.
+
+### WaypointUnavailable
+
+**Meaning:** the namespace's waypoint has no ready pod. Every request to the namespace's
+Services fails: from Kong (the whole application), between the services, and from the
+synthetic checks. Prometheus's scrapes, which go to pods directly, still work.
+
+**Check:** `kubectl get deploy,pods -n <namespace> -l gateway.networking.k8s.io/gateway-name=waypoint`
+and `kubectl describe gateway waypoint -n <namespace>`; istiod creates and configures the
+waypoint, so `IstiodUnavailable` is often the cause.
+
+**Act:** restore istiod first if it's down; otherwise the waypoint pod's events. Roll back
+the last change to `apps/base/mesh.yaml` if it began with one.
+
+### IstiodUnavailable
+
+**Meaning:** Istio's control plane has no ready pod. Traffic keeps flowing on the
+configuration and certificates already handed out, but new pods get no identity (and so no
+traffic), policy changes don't apply, and workload certificates (valid a day) won't be
+renewed.
+
+**Check:** `kubectl describe deploy istiod -n istio-system` and its log.
+
+**Act:** restore it within hours, before certificates expire; roll back the `istiod`
+application's last change if it began with one.
+
+---
+
 ## Autoscaling (KEDA)
 
 KEDA (`docs/KEDA.md`) scales notification-service on its Kafka lag and order-service on

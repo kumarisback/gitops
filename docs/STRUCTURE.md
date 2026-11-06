@@ -66,7 +66,8 @@ gitops/
 │                            the AWS secret store, disk types (storage/), and
 │                            dev's Karpenter node pools (karpenter/dev); in every
 │                            environment, the Gateway API CRDs (gateway-api/) and
-│                            Kong's Gateway, plugins and policy (kong/, KONG.md)
+│                            Kong's Gateway, plugins and policy (kong/, KONG.md),
+│                            the service mesh's monitoring (mesh/, MESH.md)
 ├── msk/                     the topics Job for Amazon MSK, run by hand (msk-vs-strimzi.md)
 ├── tests/  ★                tests for the alert rules and the log pipeline, and
 │                            kustomize/: overlays only validate.sh builds (apps-msk)

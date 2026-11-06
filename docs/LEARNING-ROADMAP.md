@@ -118,7 +118,7 @@ without notes. If you can't do (c), don't move on.
 ## Progress tracker
 
 ✅ done · 🟡 partly done · ☐ not started. Last reviewed against the `tf`, `gitops` and
-app repos on 2026-10-05 (updated after completing steps 01–10; steps 06 and 11 on 2026-10-07, steps 12–13 on 2026-10-26, steps 14–15 on 2026-10-30, steps 16–17 on 2026-11-03); the `tf/learning-topics` notes cover the steps marked done or partly done.
+app repos on 2026-10-05 (updated after completing steps 01–10; steps 06 and 11 on 2026-10-07, steps 12–13 on 2026-10-26, steps 14–15 on 2026-10-30, steps 16–17 on 2026-11-03, step 18 on 2026-11-06); the `tf/learning-topics` notes cover the steps marked done or partly done.
 
 | # | Branch | Phase | 💰 | Done | Notes |
 |---|---|---|---|---|---|
@@ -139,7 +139,7 @@ app repos on 2026-10-05 (updated after completing steps 01–10; steps 06 and 11
 | 15 | `15-keda-autoscaling` | C |  | ✅ | KEDA 2.21 add-on; chart 0.5.0 `autoscaling.keda` (ScaledObject, scale to zero, fallback); KEDA's own describe-only Kafka user via `streaming/keda`, Secret access restricted to its namespace; notification-service on lag 0–6 (lab 0–3), order-service on Prometheus req/s + CPU in lab/dev; ServiceUnavailable aware of deliberate zero; KedaScalerErrors, KedaMetricsMissing. To run: the burst exercise (docs/KEDA.md) |
 | 16 | `16-kong-gateway` | D: Gateway/Mesh |  | ✅ | Kong 3.9 OSS + KIC 3.5 (DB-less) behind the ALB/Traefik in every env; Gateway API v1.3.0 CRDs vendored; `HTTPRoute`s in `apps/base/routes.yaml` (incl. `/api/v1/orders` rewrite) replace `app-ingress`; Prometheus plugin, Kong dashboard, 3 alerts; admin API limited by NetworkPolicy; validate.sh scope check. To run: the lab exercises (docs/KONG.md) |
 | 17 | `17-kong-plugins` | D |  | ✅ | rate-limiting on sign-in (10/min/IP) and per partner tier, Redis policy on in-cluster Valkey (password via ESO Password generator); jwt at the gateway for /api/orders (RS256, user-service public key via tf `jwt-public-key`); key-auth + 2 KongConsumers on /api/v1/orders; request/response-transformer; per-consumer Prometheus metrics; KongRateLimitStoreUnavailable. CORS and canary weights deliberately not (docs/KONG.md). To run: lab exercises 3–4 |
-| 18 | `18-service-mesh` | D | 💰 | ☐ | Also: restrict the schema registry's admin API to the rules Job (open since step 13) |
+| 18 | `18-service-mesh` | D | 💰 | ✅ | Istio 1.31.3 ambient (istiod, istio-cni, ztunnel; waypoint per app namespace); STRICT mTLS; L4 (ztunnel) + L7 (waypoint, targetRefs) AuthorizationPolicies; VirtualService retries only on never-sent failures + 10s timeouts; Kong `service-upstream`; Kong, Prometheus, blackbox in the mesh; 3 alerts. Linkerd compared, not installed (edge-only OSS builds, trust anchor to manage). Traffic split → step 20; registry admin → step 30 |
 | 19 | `19-network-policies` | D |  | ☐ | Enforcement already on in the lab (KinD ≥ 0.24) and dev (tf `enable_network_policy`, step 13): policies for Kafka UI, the registry, blackbox exporter |
 | 20 | `20-argo-rollouts` | E: Delivery |  | ☐ |  |
 | 21 | `21-argo-workflows-events` | E |  | ☐ |  |
@@ -151,7 +151,7 @@ app repos on 2026-10-05 (updated after completing steps 01–10; steps 06 and 11
 | 27 | `27-pod-security-policy` | G: Security |  | ☐ |  |
 | 28 | `28-supply-chain` | G |  | ☐ |  |
 | 29 | `29-runtime-security` | G |  | ☐ |  |
-| 30 | `30-vault` | G | 💰 | ☐ |  |
+| 30 | `30-vault` | G | 💰 | ☐ | Also: the schema registry's own authentication (admin API open since step 13) |
 | 31 | `31-aws-security-services` | G | 💰 | ☐ |  |
 | 32 | `32-compliance-benchmarks` | G |  | ☐ |  |
 | 33 | `33-github-actions-oidc` | H: CI/CD |  | ☐ |  |

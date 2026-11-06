@@ -430,7 +430,7 @@ the alert to clear (about 4 minutes; works the same on EKS):
 |---|---|---|
 | **16** | `16-kong-gateway` | **Done** (`docs/KONG.md`): the lab sync installs Kong (DB-less, about 400 MiB) behind Traefik and the Gateway API CRDs; the services are routed by `HTTPRoute`s (`apps/base/routes.yaml`), `/api/v1/orders` included. "Try it in the lab": the routes' status, a broken route and its alert, the admin API refusing a pod. |
 | **17** | `17-kong-plugins` | **Done** (`docs/KONG.md`, "What the gateway checks"): sign-in limited to 10 attempts a minute, sign-in tokens checked at the gateway for the order API, partner API keys with two tiers, security headers; counters in Valkey. `scripts/start-lab.sh` makes the credentials (partner keys in `apps/local/partner-api-keys.env`). Exercises 3–4 in "Try it in the lab": 401 and 429 at the gateway, the tiers. |
-| **18** | `18-service-mesh` | Install Linkerd or Istio in KinD. Mesh namespaces. Verify mTLS between services using `linkerd viz` or `istioctl`. Test 90/10 traffic splitting. |
+| **18** | `18-service-mesh` | **Done** (`docs/MESH.md`): Istio in ambient mode (no sidecars, about 0.8 GiB): mutual TLS between all services, policies for who may call what, safe retries and timeouts at the waypoint. "Try it in the lab": the identities in ztunnel's log, a pod the policies refuse, request metrics without instrumentation, a timeout at work. |
 | **19** | `19-network-policies` | Install Calico or Cilium in KinD. Create default-deny NetworkPolicies. Allow only legitimate microservice-to-microservice traffic. |
 
 ---
