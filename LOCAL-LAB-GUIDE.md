@@ -446,10 +446,11 @@ the alert to clear (about 4 minutes; works the same on EKS):
 
 ---
 
-### Phase F & G: Data & Security (Steps 24 – 32)
+### Phase F & G: Data & Security (Steps 23 – 32)
 
 | Step | Topic | Local KinD Execution |
 |---|---|---|
+| **23** | `23-rds-production` | **Cloud only, prepared** (`docs/DATABASE.md`): RDS is off by default; the lab keeps its in-cluster PostgreSQL, now with logical replication on. Everything for dev is in Git and tested: Unleash's switch to RDS, Reloader (installed in the lab too, restarting Unleash when its database password changes), Debezium change data capture, the CloudWatch dashboard. Run the failover, rotation and CDC drills on dev in a timeboxed session. |
 | **24** | `24-db-migrations` | Run Flyway as an ArgoCD PreSync hook Job against a PostgreSQL container in KinD. Practice expand-contract schema changes. |
 | **26** | `26-dynamodb-caching` | Run Redis in KinD. Test cache-aside, cache invalidation, and thundering herd mitigations. |
 | **27** | `27-pod-security-policy` | Enforce Pod Security Standards (`restricted`). Install Kyverno; write policies blocking `:latest` tags, requiring non-root, and auto-injecting NetworkPolicies. |

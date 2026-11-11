@@ -130,6 +130,12 @@ to it.
 | 14 Amazon MSK | An optional **MSK Serverless** cluster in Terraform (`enable_msk`, off: about $0.75 an hour), with one IAM role per service allowed exactly what its Kafka user is allowed on Strimzi. The services switch to it by configuration only: the chart's `kafka.msk` setting and a matching piece for user-service; the one code change is AWS's sign-in library, with a test per service. A Job creates the topics on MSK. `docs/msk-vs-strimzi.md` gives the switch-over steps and the comparison with numbers: about $95 a month for Strimzi in dev against about $570 for MSK Serverless, and what the difference buys. First `terraform test` in the repo (mocked AWS, no cost). Notes: tf topic 14. | ✅ |
 | 15 KEDA | **KEDA** installed as an add-on in every environment. notification-service now scales on its Kafka backlog instead of CPU: none at all when there's nothing to do, up to one per partition when events pile up, and one as a safety net if KEDA can't read the backlog. order-service, in the lab and dev, scales on requests per second as well as CPU (staging and prod keep CPU only, to compare). The "service unavailable" alert no longer fires for a service at zero on purpose; two new alerts for KEDA itself. KEDA reads lag with its own Kafka user that can't read events, and may read Kubernetes Secrets only in its own namespace (a security review of the first version found it could read every Secret in the cluster). A setting that slows notification-service down on purpose, for the exercise that shows why CPU-based scaling misses a backlog. Guide: `docs/KEDA.md`; notes: tf topic 15. | ✅ |
 
+**Fixed along the way in step 23:**
+
+- **The database module couldn't be used with a password of your own**: turning off the
+  AWS-managed password made Terraform refuse the plan (the two settings conflicted even when
+  one was "off"). Nobody had tried it; a new test did. Fixed.
+
 **Fixed along the way in step 22:**
 
 - **The frontend's router library had a known vulnerability** (a CSRF bypass in a mode this
@@ -233,7 +239,7 @@ endpoint, already in the code before this branch):
 
 | Step | What changes | Status |
 |---|---|---|
-| 23 RDS | A production-grade PostgreSQL (optional in Terraform): Multi-AZ, a read replica, TLS required, connection pooling, Performance Insights, password rotation, tighter security groups, and alerts. Plus change data capture, moved here from step 13: Debezium turns the database's changes into Kafka events. | ☐ |
+| 23 RDS | A **production-grade PostgreSQL on Amazon RDS** in Terraform, off by default (`enable_rds`; about $25 a month in dev): a standby in a second zone that takes over on its own, disks that grow and are encrypted, TLS required, slow queries logged, a password nobody types that AWS changes every week, backups to any second of the last week, Database Insights, and five alarms mailed to you (CPU, storage, connections, memory, a stuck change-data reader). Optional **read replica** and **RDS Proxy** (connection pooling) for the exercises. In gitops, a switch moves **Unleash** onto it: its in-cluster database goes, it connects with the server's certificate checked, it gets the rotated password within five minutes and **Reloader** restarts it then. **Change data capture**, moved here from step 13: **Debezium** (now in the Kafka Connect image) turns every change to Unleash's audit log into a Kafka event, archived to S3 with the others, ready to switch on once the image is rebuilt. Grafana reads **CloudWatch** (read-only role) and has an RDS dashboard. Every switch is a tested Kustomize overlay; the database module has 7 Terraform tests. Why each setting, the failover, rotation, pooling and CDC drills: `docs/DATABASE.md`; notes: tf topic 23. | ✅ |
 | 24 Database migrations | Versioned schema migrations run automatically before a release, a worked zero-downtime rename (expand and contract), and a check that blocks dangerous migrations. | ☐ |
 | 25 Backup and disaster recovery | Versioned Terraform state, AWS Backup for databases and volumes, Velero for whole namespaces, and a recovery runbook with measured restore times. | ☐ |
 | 26 DynamoDB and caching | A DynamoDB table with least-privilege access, a Redis cache in front of order lookups with protection against a cache stampede, and cache metrics and alerts. | ☐ |

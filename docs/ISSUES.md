@@ -191,6 +191,20 @@ staging/prod is whatever ran `terraform apply` — i.e., the Jenkins role from #
 has been granted access via Terraform.
 **Fix:** add real admin/on-call IAM principals to `eks_admin_users` for staging and prod.
 
+### 17. Unleash signs in to RDS as the master user (open, roadmap step 23)
+With `enable_rds` and gitops `feature-flags/components/rds`, Unleash (and Debezium, which
+shares its Secret) uses the RDS master user, whose password RDS keeps and rotates. The
+instance holds only Unleash's database, so its owner would already control all of that
+data; the master user adds creating roles, replication and session control. Found by an
+automated security review of step 23. The master secret itself is readable from namespace
+`feature-flags` only (its own SecretStore and IAM role), not through the cluster-wide store.
+**Fix:** a role `unleash` owning only database `unleash`, its own Secrets Manager secret,
+rotated by AWS's PostgreSQL rotation function with the **alternating users** strategy
+(rotation then has no window at all: the previous user keeps working until the next
+rotation). The rotation function needs the master secret; nothing in the cluster does. RDS
+Proxy's auth block then names the app secret, and Debezium gets its own role with
+`rds_replication` (learning topic 23, exercise 1).
+
 ---
 
 ## ⚪ Already fixed since the 2026-08-11 review (no action needed)
@@ -228,3 +242,4 @@ apply to current code:
    placeholders so the repo doesn't claim capabilities it doesn't have.
 6. #9, #10, #11, #12, #13 — cleanup items, low risk, quick wins.
 7. #14, #15, #16 — production-hardening backlog, not urgent for dev/learning use.
+8. #17 — before RDS holds anything but Unleash's flags.

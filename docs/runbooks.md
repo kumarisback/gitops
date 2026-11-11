@@ -694,13 +694,27 @@ saw (a pod started meanwhile uses the fallbacks: events keep going out, unreleas
 stay hidden), and no flag can be changed, the kill switch included.
 
 **Check:** `kubectl describe pod -n feature-flags -l app.kubernetes.io/name=unleash` and
-its log; most often PostgreSQL is the cause (`kubectl get pods -n feature-flags`), or a wrong
-password in Secret `unleash` after the secret was regenerated.
+its log; most often the database is the cause (`kubectl get pods -n feature-flags`, or RDS:
+`docs/DATABASE.md`), or a wrong password in Secret `unleash-db` after the secret was
+regenerated or rotated.
 
 **Act:** bring PostgreSQL back first, then Unleash. The kill switch works only through
 Unleash (without it, order-service publishes: that's its fallback), so if events must stop
 now, restoring Unleash is the quickest way. A regenerated `unleash` secret needs
 PostgreSQL's password changed to match it (or, in dev, a fresh database).
+
+### CredentialReloadFailed
+
+**Meaning:** a Secret changed (on RDS: Unleash's database password, rotated) and Reloader
+tried to restart the workload that uses it, and failed. The workload keeps its open
+connections; new ones fail with the old password.
+
+**Check:** `kubectl logs -n reloader deploy/reloader-reloader`: which workload, and why
+(most often RBAC: the namespace isn't in Reloader's `namespaces` list,
+`addons/values/common/reloader.yaml`).
+
+**Act:** restart it by hand (`kubectl -n feature-flags rollout restart deploy/unleash`),
+then fix the cause. Rotation runs weekly: unfixed, it fails again next week.
 
 ---
 

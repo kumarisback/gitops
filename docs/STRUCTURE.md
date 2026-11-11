@@ -51,19 +51,25 @@ gitops/
 │                            (scales on events, KEDA.md), Kong (the API gateway, KONG.md),
 │                            Argo Rollouts (canary and blue/green releases, ROLLOUTS.md)
 │   ├── automation/            Argo Workflows and Events, only in the lab and dev (WORKFLOWS.md)
+│   ├── feature-flags/         Unleash's config app and Reloader (restarts Unleash when its
+│   │                            database password rotates), only in the lab and dev
 │   ├── applications/          one ArgoCD app per tool
 │   ├── streaming/             Kafka: the Strimzi operators and the cluster's config app,
 │   │                            only in the environments that run Kafka (lab, dev)
 │   ├── values/                the tools' settings, in layers (section 3)
 │   └── select-env/            picks the right layers for each environment
 │
-├── observability/  ★        alerts, SLOs, dashboards, alerting secrets
+├── observability/  ★        alerts, SLOs, dashboards, alerting secrets; components/cloudwatch:
+│                            Grafana's CloudWatch data source and the RDS dashboard (dev)
 ├── streaming/  ★            the Kafka cluster "events": topics, users and ACLs, metrics,
 │                            alerts, the schema registry (base + one overlay per
-│                            environment), components/ (the S3 events archive, dev),
+│                            environment), components/ (the S3 events archive, dev;
+│                            flag-changes: Debezium change data capture, DATABASE.md),
 │                            keda/ (KEDA's Kafka credentials, in its own namespace),
 │                            and tools/ for the runbooks' admin and Avro pods; see KAFKA.md
-├── feature-flags/  ★        Unleash and its PostgreSQL (base + local, dev); see FEATURE-FLAGS.md
+├── feature-flags/  ★        Unleash and its PostgreSQL (base + local, dev); see FEATURE-FLAGS.md;
+│                            components/: rds (Unleash on Amazon RDS) and cdc (change data
+│                            capture's access), see DATABASE.md
 ├── automation/  ★           what Argo Workflows and Argo Events run (base + local, dev):
 │                            the CI pipeline, the nightly SLO report, the dead-letter
 │                            triage and (dev) the archive check; see WORKFLOWS.md
@@ -80,7 +86,9 @@ gitops/
 ├── tests/  ★                tests for the alert rules, the log pipeline and the
 │                            NetworkPolicies (network-policies/: connections each
 │                            environment must allow and refuse), and kustomize/:
-│                            overlays only validate.sh builds (apps-msk)
+│                            overlays only validate.sh builds (apps-msk, and the
+│                            database switches: feature-flags-rds, feature-flags-cdc,
+│                            streaming-flag-changes, streaming-flag-changes-rds)
 ├── ci/  ★                   Docker image with all the checking tools (for Jenkins)
 ├── scripts/                 lab scripts, plus validate.sh ★ (checks everything) and
 │                            alert-drill.sh ★ (breaks a service, checks the alert fires)

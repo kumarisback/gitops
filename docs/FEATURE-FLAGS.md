@@ -95,6 +95,9 @@ The lab and dev, each with its own Unleash: about 0.4 GiB (Unleash and PostgreSQ
 company would run one Unleash for every environment (OSS: development and production; more
 need Enterprise); with a cluster per environment here, each has its own.
 
+Step 23 can move Unleash's database to Amazon RDS (Multi-AZ, backups, a rotated password)
+and stream its audit log into Kafka: `docs/DATABASE.md`.
+
 ## Try it in the lab
 
 After `scripts/start-lab.sh` (it makes Unleash's secrets) and `scripts/sync-local-stack.rb`:
