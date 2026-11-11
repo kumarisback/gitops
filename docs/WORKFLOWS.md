@@ -90,9 +90,12 @@ event sources with no Kubernetes access; sensors may only create workflows. And 
 may start a workflow chooses only which WorkflowTemplate runs and with what parameter values:
 an admission policy (`automation/base/admission-policy.yaml`, built into Kubernetes) refuses
 a Workflow that says anything else about itself (its account, extra templates, pod patches,
-volumes, another entrypoint), and lets a running one only be stopped or suspended. The
-controller's own `templateReferencing: Strict` refuses workflows without a template, but
-alone wouldn't stop one overriding its template's fields. The policy is generated from the
+volumes, another entrypoint) or sets its own status (where the controller keeps the
+template's spec it runs), and lets a running one only be stopped or suspended: a failed run
+is resubmitted (`argo resubmit`), not retried in place. The controller's own
+`templateReferencing: Secure` refuses workflows without a template and errors out a run
+whose stored template no longer matches, but alone wouldn't stop one overriding its
+template's fields. The policy is generated from the
 Workflow CRD (`scripts/lib/workflow_admission_policy.rb`), field by field, so a field a new
 Argo version adds is refused until it's regenerated. The CI pipeline's repository is fixed in
 the template, not a parameter. The UI and API

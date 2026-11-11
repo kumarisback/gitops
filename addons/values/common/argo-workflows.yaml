@@ -5,11 +5,13 @@
 # default; ci-builder, archive-checker; automation/).
 controller:
   workflowNamespaces: [workflows]
-  # Only workflows that run a WorkflowTemplate. Alone this doesn't stop a
-  # Workflow overriding its template's fields (its account, its pods): the
-  # admission policy in automation/base/admission-policy.yaml does.
+  # Only workflows that run a WorkflowTemplate, and a run whose stored copy of
+  # its template no longer matches the template errors out (Secure). Alone
+  # this doesn't stop a Workflow overriding its template's fields or forging
+  # that copy in its status: the admission policy does
+  # (automation/base/admission-policy.yaml).
   workflowRestrictions:
-    templateReferencing: Strict
+    templateReferencing: Secure
   resources:
     requests:
       cpu: 50m

@@ -135,7 +135,8 @@ to it.
 - **A review of the workflows found three loose ends**, all closed: whoever could start a
   workflow could have run it with the workflow controller's own cluster-wide rights, or with
   any other account it chose (workflows now run in a namespace of their own, and an
-  admission policy lets them run only a template from Git, as written, with its parameters); every workflow
+  admission policy lets them run only a template from Git, as written, with its parameters,
+  and keeps their status, where Argo stores the template it runs, to the controller); every workflow
   could read the events archive (now only the archive check); and a CI build could have read
   or overwritten other workflows' logs (each kind of workflow now has its own corner of the
   bucket).

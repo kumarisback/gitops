@@ -16,7 +16,9 @@ crd_file, version = ARGV
 abort "usage: #{$PROGRAM_NAME} <workflows CRD file> <argo-workflows version>" unless crd_file && version
 
 crd = YAML.load_file(crd_file)
-spec = crd['spec']['versions'].find { |v| v['served'] }['schema']['openAPIV3Schema']['properties']['spec']
+schema = crd['spec']['versions'].find { |v| v['served'] }['schema']['openAPIV3Schema']
+spec = schema['properties']['spec']
+status_fields = schema['properties']['status']['properties'].keys.sort
 fields = spec['properties'].keys.sort
 param_fields = spec['properties']['arguments']['properties']['parameters']['items']['properties'].keys.sort
 
@@ -31,7 +33,14 @@ create_terms += (fields - ON_CREATE).map { |f| "!has(object.spec.#{f})" }
 create_terms << '!has(object.spec.arguments) || !has(object.spec.arguments.artifacts)'
 create_terms << '!has(object.spec.arguments) || !has(object.spec.arguments.parameters) || ' \
                 "object.spec.arguments.parameters.all(p, #{(param_fields - PARAM_ALLOWED).map { |f| "!has(p.#{f})" }.join(' && ')})"
-update_terms = (fields - ON_UPDATE).map do |f|
+# The controller keeps the referenced template's spec in status and runs
+# from it: a status set by anyone else could run anything. A client may send
+# an empty status; no field of it may be set, on creation or after.
+create_terms += status_fields.map { |f| "!has(object.status.#{f})" }
+update_terms = status_fields.map do |f|
+  "(has(object.status.#{f}) == has(oldObject.status.#{f}) && (!has(object.status.#{f}) || object.status.#{f} == oldObject.status.#{f}))"
+end
+update_terms += (fields - ON_UPDATE).map do |f|
   "(has(object.spec.#{f}) == has(oldObject.spec.#{f}) && (!has(object.spec.#{f}) || object.spec.#{f} == oldObject.spec.#{f}))"
 end
 
@@ -48,11 +57,13 @@ puts <<~YAML
   # docs/WORKFLOWS.md). Everything else a Workflow could say about itself
   # (the account its pods run as, extra templates, pod patches, volumes, the
   # entrypoint, an artifact repository) comes from the template in Git.
-  # And a workflow, once created, may only be stopped or suspended.
+  # Its status, where the controller keeps the template's spec it runs, is
+  # the controller's alone. And a workflow, once created, may only be
+  # stopped or suspended (so not retried: resubmit it instead).
   #
   # The controller's own updates, and the workflows its CronWorkflows start,
   # are exempt: those come from Git. The controller's "templateReferencing:
-  # Strict" alone doesn't stop a Workflow overriding its template's fields.
+  # Secure" alone doesn't stop a Workflow overriding its template's fields.
   apiVersion: admissionregistration.k8s.io/v1
   kind: ValidatingAdmissionPolicy
   metadata:
@@ -72,12 +83,12 @@ puts <<~YAML
       - name: not-the-workflow-controller
         expression: request.userInfo.username != "system:serviceaccount:argo:argo-workflows-workflow-controller"
     validations:
-      - message: "A workflow here may only name a WorkflowTemplate (workflowTemplateRef.name) and set its parameters' values."
+      - message: "A workflow here may only name a WorkflowTemplate (workflowTemplateRef.name) and set its parameters' values; its status is the controller's."
         expression: |
           request.operation != "CREATE" || (
             #{wrap(create_terms).gsub("\n", "\n        ")}
           )
-      - message: "A workflow, once created, may only be stopped or suspended (spec.shutdown, spec.suspend)."
+      - message: "A workflow, once created, may only be stopped or suspended (spec.shutdown, spec.suspend); resubmit it rather than retry."
         expression: |
           request.operation != "UPDATE" || (
             #{wrap(update_terms).gsub("\n", "\n        ")}

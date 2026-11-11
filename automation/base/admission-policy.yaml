@@ -6,11 +6,13 @@
 # docs/WORKFLOWS.md). Everything else a Workflow could say about itself
 # (the account its pods run as, extra templates, pod patches, volumes, the
 # entrypoint, an artifact repository) comes from the template in Git.
-# And a workflow, once created, may only be stopped or suspended.
+# Its status, where the controller keeps the template's spec it runs, is
+# the controller's alone. And a workflow, once created, may only be
+# stopped or suspended (so not retried: resubmit it instead).
 #
 # The controller's own updates, and the workflows its CronWorkflows start,
 # are exempt: those come from Git. The controller's "templateReferencing:
-# Strict" alone doesn't stop a Workflow overriding its template's fields.
+# Secure" alone doesn't stop a Workflow overriding its template's fields.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
@@ -30,7 +32,7 @@ spec:
     - name: not-the-workflow-controller
       expression: request.userInfo.username != "system:serviceaccount:argo:argo-workflows-workflow-controller"
   validations:
-    - message: "A workflow here may only name a WorkflowTemplate (workflowTemplateRef.name) and set its parameters' values."
+    - message: "A workflow here may only name a WorkflowTemplate (workflowTemplateRef.name) and set its parameters' values; its status is the controller's."
       expression: |
         request.operation != "CREATE" || (
           (has(object.spec.workflowTemplateRef)) &&
@@ -78,11 +80,49 @@ spec:
           (!has(object.spec.volumes)) &&
           (!has(object.spec.workflowMetadata)) &&
           (!has(object.spec.arguments) || !has(object.spec.arguments.artifacts)) &&
-          (!has(object.spec.arguments) || !has(object.spec.arguments.parameters) || object.spec.arguments.parameters.all(p, !has(p.default) && !has(p.enum) && !has(p.globalName) && !has(p.valueFrom)))
+          (!has(object.spec.arguments) || !has(object.spec.arguments.parameters) || object.spec.arguments.parameters.all(p, !has(p.default) && !has(p.enum) && !has(p.globalName) && !has(p.valueFrom))) &&
+          (!has(object.status.artifactGCStatus)) &&
+          (!has(object.status.artifactRepositoryRef)) &&
+          (!has(object.status.compressedNodes)) &&
+          (!has(object.status.conditions)) &&
+          (!has(object.status.estimatedDuration)) &&
+          (!has(object.status.finishedAt)) &&
+          (!has(object.status.message)) &&
+          (!has(object.status.nodes)) &&
+          (!has(object.status.offloadNodeStatusVersion)) &&
+          (!has(object.status.outputs)) &&
+          (!has(object.status.persistentVolumeClaims)) &&
+          (!has(object.status.phase)) &&
+          (!has(object.status.progress)) &&
+          (!has(object.status.resourcesDuration)) &&
+          (!has(object.status.startedAt)) &&
+          (!has(object.status.storedTemplates)) &&
+          (!has(object.status.storedWorkflowTemplateSpec)) &&
+          (!has(object.status.synchronization)) &&
+          (!has(object.status.taskResultsCompletionStatus))
         )
-    - message: "A workflow, once created, may only be stopped or suspended (spec.shutdown, spec.suspend)."
+    - message: "A workflow, once created, may only be stopped or suspended (spec.shutdown, spec.suspend); resubmit it rather than retry."
       expression: |
         request.operation != "UPDATE" || (
+          ((has(object.status.artifactGCStatus) == has(oldObject.status.artifactGCStatus) && (!has(object.status.artifactGCStatus) || object.status.artifactGCStatus == oldObject.status.artifactGCStatus))) &&
+          ((has(object.status.artifactRepositoryRef) == has(oldObject.status.artifactRepositoryRef) && (!has(object.status.artifactRepositoryRef) || object.status.artifactRepositoryRef == oldObject.status.artifactRepositoryRef))) &&
+          ((has(object.status.compressedNodes) == has(oldObject.status.compressedNodes) && (!has(object.status.compressedNodes) || object.status.compressedNodes == oldObject.status.compressedNodes))) &&
+          ((has(object.status.conditions) == has(oldObject.status.conditions) && (!has(object.status.conditions) || object.status.conditions == oldObject.status.conditions))) &&
+          ((has(object.status.estimatedDuration) == has(oldObject.status.estimatedDuration) && (!has(object.status.estimatedDuration) || object.status.estimatedDuration == oldObject.status.estimatedDuration))) &&
+          ((has(object.status.finishedAt) == has(oldObject.status.finishedAt) && (!has(object.status.finishedAt) || object.status.finishedAt == oldObject.status.finishedAt))) &&
+          ((has(object.status.message) == has(oldObject.status.message) && (!has(object.status.message) || object.status.message == oldObject.status.message))) &&
+          ((has(object.status.nodes) == has(oldObject.status.nodes) && (!has(object.status.nodes) || object.status.nodes == oldObject.status.nodes))) &&
+          ((has(object.status.offloadNodeStatusVersion) == has(oldObject.status.offloadNodeStatusVersion) && (!has(object.status.offloadNodeStatusVersion) || object.status.offloadNodeStatusVersion == oldObject.status.offloadNodeStatusVersion))) &&
+          ((has(object.status.outputs) == has(oldObject.status.outputs) && (!has(object.status.outputs) || object.status.outputs == oldObject.status.outputs))) &&
+          ((has(object.status.persistentVolumeClaims) == has(oldObject.status.persistentVolumeClaims) && (!has(object.status.persistentVolumeClaims) || object.status.persistentVolumeClaims == oldObject.status.persistentVolumeClaims))) &&
+          ((has(object.status.phase) == has(oldObject.status.phase) && (!has(object.status.phase) || object.status.phase == oldObject.status.phase))) &&
+          ((has(object.status.progress) == has(oldObject.status.progress) && (!has(object.status.progress) || object.status.progress == oldObject.status.progress))) &&
+          ((has(object.status.resourcesDuration) == has(oldObject.status.resourcesDuration) && (!has(object.status.resourcesDuration) || object.status.resourcesDuration == oldObject.status.resourcesDuration))) &&
+          ((has(object.status.startedAt) == has(oldObject.status.startedAt) && (!has(object.status.startedAt) || object.status.startedAt == oldObject.status.startedAt))) &&
+          ((has(object.status.storedTemplates) == has(oldObject.status.storedTemplates) && (!has(object.status.storedTemplates) || object.status.storedTemplates == oldObject.status.storedTemplates))) &&
+          ((has(object.status.storedWorkflowTemplateSpec) == has(oldObject.status.storedWorkflowTemplateSpec) && (!has(object.status.storedWorkflowTemplateSpec) || object.status.storedWorkflowTemplateSpec == oldObject.status.storedWorkflowTemplateSpec))) &&
+          ((has(object.status.synchronization) == has(oldObject.status.synchronization) && (!has(object.status.synchronization) || object.status.synchronization == oldObject.status.synchronization))) &&
+          ((has(object.status.taskResultsCompletionStatus) == has(oldObject.status.taskResultsCompletionStatus) && (!has(object.status.taskResultsCompletionStatus) || object.status.taskResultsCompletionStatus == oldObject.status.taskResultsCompletionStatus))) &&
           ((has(object.spec.activeDeadlineSeconds) == has(oldObject.spec.activeDeadlineSeconds) && (!has(object.spec.activeDeadlineSeconds) || object.spec.activeDeadlineSeconds == oldObject.spec.activeDeadlineSeconds))) &&
           ((has(object.spec.affinity) == has(oldObject.spec.affinity) && (!has(object.spec.affinity) || object.spec.affinity == oldObject.spec.affinity))) &&
           ((has(object.spec.archiveLogs) == has(oldObject.spec.archiveLogs) && (!has(object.spec.archiveLogs) || object.spec.archiveLogs == oldObject.spec.archiveLogs))) &&
