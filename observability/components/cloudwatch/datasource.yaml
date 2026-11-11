@@ -1,0 +1,25 @@
+# CloudWatch as a Grafana data source (roadmap step 23, docs/DATABASE.md).
+# Grafana's sidecar provisions every ConfigMap labelled grafana_datasource
+# in namespace monitoring. It signs in with the SDK's default chain: the
+# IRSA role on Grafana's ServiceAccount (addons/values/<env>/
+# kube-prometheus-stack.yaml; tf 01-infra grafana_cloudwatch), read-only.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasource-cloudwatch
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+data:
+  cloudwatch.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: CloudWatch
+        type: cloudwatch
+        uid: CloudWatch
+        access: proxy
+        isDefault: false
+        editable: false
+        jsonData:
+          authType: default
+          defaultRegion: us-east-1

@@ -8,6 +8,7 @@ components:
   - ../components/cloud-secrets
   - ../components/browser-otlp-alb
   - ../components/synthetic-probes
+  - ../components/cloudwatch
 
 # env picks microservices/dev/... in AWS Secrets Manager; app_namespace is
 # where the synthetic probes find the services (not deployed).

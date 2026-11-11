@@ -1,0 +1,529 @@
+{
+  "title": "RDS PostgreSQL",
+  "uid": "rds",
+  "tags": [
+    "rds",
+    "database",
+    "cloudwatch"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "description": "Amazon RDS for PostgreSQL from CloudWatch (roadmap step 23, docs/DATABASE.md): load, the four alarmed metrics, replica lag and disk. CloudWatch has these at one-minute resolution at best; Database Insights in the RDS console goes down to the query.",
+  "templating": {
+    "list": [
+      {
+        "name": "instance",
+        "label": "Instance",
+        "type": "query",
+        "datasource": {
+          "type": "cloudwatch",
+          "uid": "CloudWatch"
+        },
+        "query": {
+          "queryType": "dimensionValues",
+          "region": "default",
+          "namespace": "AWS/RDS",
+          "metricName": "CPUUtilization",
+          "dimensionKey": "DBInstanceIdentifier",
+          "refId": "instance"
+        },
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "current": {
+        },
+        "options": [
+
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Database load (average active sessions)",
+      "description": "DBLoad from Database Insights: sessions running or waiting. Above the instance's vCPUs (2 on db.t4g.micro), queries queue. Database Insights in the RDS console shows which SQL and which wait.",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "CloudWatch"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "CloudWatch"
+          },
+          "refId": "A",
+          "region": "default",
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "DBLoad",
+          "dimensions": {
+            "DBInstanceIdentifier": [
+              "$instance"
+            ]
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "period": "",
+          "label": "${PROP('Dim.DBInstanceIdentifier')}",
+          "id": "",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "CloudWatch"
+          },
+          "refId": "B",
+          "region": "default",
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "DBLoadCPU",
+          "dimensions": {
+            "DBInstanceIdentifier": [
+              "$instance"
+            ]
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "period": "",
+          "label": "CPU: ${PROP('Dim.DBInstanceIdentifier')}",
+          "id": "",
+          "expression": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": [
+
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "CPU",
+      "description": "Alarm at 80% for 15 minutes (tf modules/database).",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "CloudWatch"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "CloudWatch"
+          },
+          "refId": "A",
+          "region": "default",
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "CPUUtilization",
+          "dimensions": {
+            "DBInstanceIdentifier": [
+              "$instance"
+            ]
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "period": "",
+          "label": "${PROP('Dim.DBInstanceIdentifier')}",
+          "id": "",
+          "expression": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": [
+
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Connections",
+      "description": "Each is a PostgreSQL process. db.t4g.micro allows about 80; the alarm fires at 60. With RDS Proxy, its clients' connections don't show here, only the proxy's few.",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "CloudWatch"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "CloudWatch"
+          },
+          "refId": "A",
+          "region": "default",
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "DatabaseConnections",
+          "dimensions": {
+            "DBInstanceIdentifier": [
+              "$instance"
+            ]
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "period": "",
+          "label": "${PROP('Dim.DBInstanceIdentifier')}",
+          "id": "",
+          "expression": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": [
+
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Replica lag",
+      "description": "How far the read replica is behind (tf rds_read_replica). Alarm above a minute.",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "CloudWatch"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "CloudWatch"
+          },
+          "refId": "A",
+          "region": "default",
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "ReplicaLag",
+          "dimensions": {
+            "DBInstanceIdentifier": [
+              "$instance"
+            ]
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "period": "",
+          "label": "${PROP('Dim.DBInstanceIdentifier')}",
+          "id": "",
+          "expression": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0
+        },
+        "overrides": [
+
+        ]
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Free memory",
+      "description": "FreeableMemory. Alarm under 64 MiB.",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "CloudWatch"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "CloudWatch"
+          },
+          "refId": "A",
+          "region": "default",
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "FreeableMemory",
+          "dimensions": {
+            "DBInstanceIdentifier": [
+              "$instance"
+            ]
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "period": "",
+          "label": "${PROP('Dim.DBInstanceIdentifier')}",
+          "id": "",
+          "expression": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0
+        },
+        "overrides": [
+
+        ]
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Free storage",
+      "description": "Grows on its own up to max_allocated_storage; alarm under 2 GiB.",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "CloudWatch"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "CloudWatch"
+          },
+          "refId": "A",
+          "region": "default",
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "FreeStorageSpace",
+          "dimensions": {
+            "DBInstanceIdentifier": [
+              "$instance"
+            ]
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "period": "",
+          "label": "${PROP('Dim.DBInstanceIdentifier')}",
+          "id": "",
+          "expression": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0
+        },
+        "overrides": [
+
+        ]
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Read and write latency",
+      "description": "Per disk operation.",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "CloudWatch"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "CloudWatch"
+          },
+          "refId": "A",
+          "region": "default",
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "ReadLatency",
+          "dimensions": {
+            "DBInstanceIdentifier": [
+              "$instance"
+            ]
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "period": "",
+          "label": "read: ${PROP('Dim.DBInstanceIdentifier')}",
+          "id": "",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "CloudWatch"
+          },
+          "refId": "B",
+          "region": "default",
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "WriteLatency",
+          "dimensions": {
+            "DBInstanceIdentifier": [
+              "$instance"
+            ]
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "period": "",
+          "label": "write: ${PROP('Dim.DBInstanceIdentifier')}",
+          "id": "",
+          "expression": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0
+        },
+        "overrides": [
+
+        ]
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Disk operations",
+      "description": "IOPS: gp3 gives 3,000 without paying for more.",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "CloudWatch"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "CloudWatch"
+          },
+          "refId": "A",
+          "region": "default",
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "ReadIOPS",
+          "dimensions": {
+            "DBInstanceIdentifier": [
+              "$instance"
+            ]
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "period": "",
+          "label": "read: ${PROP('Dim.DBInstanceIdentifier')}",
+          "id": "",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "CloudWatch"
+          },
+          "refId": "B",
+          "region": "default",
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "WriteIOPS",
+          "dimensions": {
+            "DBInstanceIdentifier": [
+              "$instance"
+            ]
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "period": "",
+          "label": "write: ${PROP('Dim.DBInstanceIdentifier')}",
+          "id": "",
+          "expression": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "iops",
+          "min": 0
+        },
+        "overrides": [
+
+        ]
+      }
+    }
+  ]
+}

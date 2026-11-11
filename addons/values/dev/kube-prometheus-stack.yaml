@@ -1,12 +1,20 @@
-# TODO: placeholder host; set the real one (with a matching ACM certificate)
-# before dev goes live, and use it as root_url in the grafana-oauth secret.
 grafana:
+  # TODO: placeholder host; set the real one (with a matching ACM
+  # certificate) before dev goes live, and use it as root_url in the
+  # grafana-oauth secret.
   ingress:
     hosts:
       - grafana.dev.example.com
     tls:
       - hosts:
           - grafana.dev.example.com
+  # The role Grafana reads CloudWatch with (roadmap step 23): tf 01-infra
+  # grafana_cloudwatch, read-only. The data source and the RDS dashboard
+  # are in observability/components/cloudwatch. Another environment adds
+  # both with its own role.
+  serviceAccount:
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::602367507570:role/microservices-dev-irsa-grafana_cloudwatch
 prometheus:
   prometheusSpec:
     # Identifies this cluster's series once they're remote-written or

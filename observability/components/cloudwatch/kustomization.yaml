@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# AWS's managed services in Grafana (roadmap step 23): CloudWatch as a data
+# source and the RDS dashboard. For environments in AWS whose Grafana has
+# the role to read CloudWatch (addons/values/<env>/kube-prometheus-stack.yaml).
+# The dashboard is empty while the environment has no RDS instance (tf
+# enable_rds).
+resources:
+  - datasource.yaml
+
+configMapGenerator:
+  - name: dashboard-rds
+    namespace: monitoring
+    files:
+      - dashboards/rds.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
