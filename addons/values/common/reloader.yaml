@@ -1,0 +1,29 @@
+# Reloader (roadmap step 23, docs/DATABASE.md): only workloads that ask for
+# it (an annotation naming the Secret or ConfigMap) are restarted, and only
+# when that object changes, not when it is first created.
+reloader:
+  autoReloadAll: false
+  reloadOnCreate: false
+  readOnlyRootFileSystem: true
+  # Reading Secrets is the whole job, so it is kept to the namespaces that
+  # need it: a Role in each, no ClusterRole that could read every Secret in
+  # the cluster. A namespace whose workloads rotate credentials is added here.
+  watchGlobally: false
+  namespaces:
+    - feature-flags
+  deployment:
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: [ALL]
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        memory: 128Mi
+  # Scraped by feature-flags/base/servicemonitor.yaml's PodMonitor: the
+  # chart's own carries release: reloader, which this Prometheus doesn't
+  # select, and adding ours would repeat the key.
+  podMonitor:
+    enabled: false

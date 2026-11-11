@@ -1,0 +1,152 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Unleash on Amazon RDS for PostgreSQL instead of the in-cluster database
+# (roadmap step 23, docs/DATABASE.md). tf 01-infra with enable_rds = true
+# creates the instance, its database unleash and its master user unleash,
+# whose password RDS keeps in Secrets Manager and rotates.
+#
+# The environment adds ConfigMap unleash-rds as a resource (not a generator,
+# which would run after this component), marked local-config so it isn't
+# deployed:
+#   host                    tf output rds_address (or rds_proxy_address)
+#   secret-arn              tf output rds_master_secret_arn
+#   secret-reader-role-arn  tf output irsa_role_arns["unleash_rds_secret"]
+#   vpc-cidr                tf output vpc_cidr_block
+# tests/kustomize/feature-flags-rds shows it.
+resources:
+  - network-policy.yaml
+  - secret-store.yaml
+
+# The certificates Unleash checks the database's against: RDS's CAs and,
+# for RDS Proxy, Amazon's roots. scripts/update-rds-ca.sh rebuilds the file.
+# The name gets a hash: a new bundle restarts Unleash.
+configMapGenerator:
+  - name: rds-ca
+    namespace: feature-flags
+    files:
+      - ca-bundle.pem
+
+patches:
+  # No in-cluster database. Its volume stays until deleted by hand
+  # (docs/DATABASE.md, moving the data).
+  - patch: |-
+      $patch: delete
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: postgres
+        namespace: feature-flags
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: postgres
+        namespace: feature-flags
+  - patch: |-
+      $patch: delete
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: postgres
+        namespace: feature-flags
+  # TLS, verified: the server's certificate must chain to the bundle and
+  # name the host (Unleash's DATABASE_SSL_CA_FILE; DATABASE_SSL would
+  # override it, so it goes). RDS refuses unencrypted connections anyway
+  # (rds.force_ssl). Reloader restarts Unleash when Secret unleash-db
+  # changes: a pod reads its environment once, and RDS rotates the password.
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: unleash
+        namespace: feature-flags
+        annotations:
+          secret.reloader.stakater.com/reload: unleash-db
+      spec:
+        template:
+          spec:
+            containers:
+              - name: unleash
+                env:
+                  - name: DATABASE_SSL
+                    $patch: delete
+                  - name: DATABASE_SSL_CA_FILE
+                    value: /etc/rds-ca/ca-bundle.pem
+                  # The default with a CA file; said so here.
+                  - name: DATABASE_SSL_REJECT_UNAUTHORIZED
+                    value: "true"
+                volumeMounts:
+                  - name: rds-ca
+                    mountPath: /etc/rds-ca
+                    readOnly: true
+            volumes:
+              - name: rds-ca
+                configMap:
+                  name: rds-ca
+  # The credentials: RDS's own secret (JSON with username and password),
+  # through this namespace's own store (secret-store.yaml), read every 5
+  # minutes, so a rotation reaches Unleash within that and a restart
+  # (docs/DATABASE.md, rotation).
+  - patch: |-
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: unleash-db
+        namespace: feature-flags
+      spec:
+        refreshInterval: 5m
+        secretStoreRef:
+          name: rds-master-secret
+          kind: SecretStore
+        target:
+          template:
+            data:
+              username: "{{ .username }}"
+              password: "{{ .password }}"
+        dataFrom:
+          - extract:
+              key: RDS_SECRET_ARN
+
+replacements:
+  - source:
+      kind: ConfigMap
+      name: unleash-rds
+      fieldPath: data.host
+    targets:
+      - select:
+          kind: Deployment
+          name: unleash
+        fieldPaths:
+          - spec.template.spec.containers.[name=unleash].env.[name=DATABASE_HOST].value
+  - source:
+      kind: ConfigMap
+      name: unleash-rds
+      fieldPath: data.secret-arn
+    targets:
+      - select:
+          kind: ExternalSecret
+          name: unleash-db
+        fieldPaths:
+          - spec.dataFrom.0.extract.key
+  - source:
+      kind: ConfigMap
+      name: unleash-rds
+      fieldPath: data.vpc-cidr
+    targets:
+      - select:
+          kind: NetworkPolicy
+          name: unleash-rds
+        fieldPaths:
+          - spec.egress.0.to.0.ipBlock.cidr
+  - source:
+      kind: ConfigMap
+      name: unleash-rds
+      fieldPath: data.secret-reader-role-arn
+    targets:
+      - select:
+          kind: ServiceAccount
+          name: unleash-db-reader
+        fieldPaths:
+          - metadata.annotations.[eks.amazonaws.com/role-arn]

@@ -182,9 +182,13 @@ unleash_value() { sed -n "s/^$1=//p" "${UNLEASH_FILE}"; }
 BACKEND_TOKEN="default:development.$(unleash_value BACKEND_TOKEN_SECRET)"
 FRONTEND_TOKEN="default:development.$(unleash_value FRONTEND_TOKEN_SECRET)"
 kubectl create namespace feature-flags --dry-run=client -o yaml | kubectl apply -f - > /dev/null
+kubectl create secret generic unleash-db \
+  --namespace feature-flags \
+  --from-literal=username=unleash \
+  --from-literal=password="$(unleash_value DATABASE_PASSWORD)" \
+  --dry-run=client -o yaml | kubectl apply -f - > /dev/null
 kubectl create secret generic unleash \
   --namespace feature-flags \
-  --from-literal=DATABASE_PASSWORD="$(unleash_value DATABASE_PASSWORD)" \
   --from-literal=UNLEASH_DEFAULT_ADMIN_PASSWORD="$(unleash_value ADMIN_PASSWORD)" \
   --from-literal=INIT_BACKEND_API_TOKENS="${BACKEND_TOKEN}" \
   --from-literal=INIT_FRONTEND_API_TOKENS="${FRONTEND_TOKEN}" \

@@ -3,6 +3,10 @@
 # flags as they last saw them (a new pod: the fallbacks) and nobody can
 # change a flag, including the kill switch. A warning: nothing fails yet,
 # but the off switch is out of reach.
+#
+# And Reloader (roadmap step 23), which restarts Unleash when its database
+# password rotates: if that restart fails, Unleash keeps its open
+# connections but can't make new ones.
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -29,3 +33,11 @@ spec:
             summary: "Unleash, the feature flag service, is down"
             description: "Services keep the flags they last saw, new pods start with the fallbacks, and no flag (the kill switch included) can be changed until it is back."
             runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#featureflagserviceunavailable
+        - alert: CredentialReloadFailed
+          expr: sum(increase(reloader_reload_executed_total{success="false"}[15m])) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "Reloader failed to restart a workload after its Secret changed"
+            description: "A rotated credential (Unleash's database password on RDS) may not have reached the workload using it: it keeps its open connections but new ones fail until it restarts."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#credentialreloadfailed

@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Validation only (scripts/validate.sh renders and schema-checks it): dev's
+# feature flags as they are with Unleash on RDS (docs/DATABASE.md), so
+# feature-flags/components/rds is tested before anyone switches. Never
+# deployed.
+resources:
+  - ../../../feature-flags/dev
+  - unleash-rds.yaml
+
+components:
+  - ../../../feature-flags/components/rds

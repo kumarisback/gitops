@@ -1,0 +1,21 @@
+# Unleash to its database on RDS (or RDS Proxy): outside the cluster, so an
+# address range rather than pods; the environment's ConfigMap unleash-rds
+# gives the VPC's (kustomization.yaml). RDS's security group admits the
+# cluster's nodes only, on this port only (tf modules/database).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: unleash-rds
+  namespace: feature-flags
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: unleash
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: VPC_CIDR
+      ports:
+        - port: 5432
+          protocol: TCP

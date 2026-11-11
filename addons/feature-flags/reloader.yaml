@@ -1,0 +1,48 @@
+# Reloader (roadmap step 23, docs/DATABASE.md): restarts a workload when a
+# Secret or ConfigMap it is annotated with changes. Kubernetes doesn't: a
+# pod reads its environment once, so a rotated password in a Secret reaches
+# it only on its next start. Used where credentials rotate: Unleash on RDS.
+# Installed with feature flags (addons/feature-flags), the namespace it
+# watches; it needs the namespace to exist, hence the retry.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: reloader
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: cluster-addons
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - chart: reloader
+      repoURL: https://stakater.github.io/stakater-charts
+      # Reloader v1.4.23.
+      targetRevision: 2.2.19
+      helm:
+        # TIER and ENV are filled in by addons/select-env (see
+        # kustomization.yaml); missing files are skipped.
+        ignoreMissingValueFiles: true
+        valueFiles:
+          - $values/addons/values/common/reloader.yaml
+          - $values/addons/values/TIER/reloader.yaml
+          - $values/addons/values/ENV/reloader.yaml
+    - repoURL: https://github.com/kumarisback/gitops.git
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: reloader
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      - CreateNamespace=true

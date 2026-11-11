@@ -28,3 +28,28 @@ tests:
               summary: "Unleash, the feature flag service, is down"
               description: "Services keep the flags they last saw, new pods start with the fallbacks, and no flag (the kill switch included) can be changed until it is back."
               runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#featureflagserviceunavailable
+
+  # Reloader fails to restart Unleash after a rotation at 3m; nothing more.
+  - interval: 1m
+    input_series:
+      - series: 'reloader_reload_executed_total{success="false",namespace="reloader",job="reloader/reloader"}'
+        values: '0 0 0 1x20'
+      - series: 'reloader_reload_executed_total{success="true",namespace="reloader",job="reloader/reloader"}'
+        values: '0 1 1 1x20'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: CredentialReloadFailed
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: CredentialReloadFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Reloader failed to restart a workload after its Secret changed"
+              description: "A rotated credential (Unleash's database password on RDS) may not have reached the workload using it: it keeps its open connections but new ones fail until it restarts."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#credentialreloadfailed
+      # Fifteen minutes on, the failure has left the window.
+      - eval_time: 20m
+        alertname: CredentialReloadFailed
+        exp_alerts: []

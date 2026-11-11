@@ -17,3 +17,26 @@ spec:
     - port: http
       path: /flags/internal-backstage/prometheus
       interval: 30s
+---
+# Reloader's metrics (roadmap step 23, addons/feature-flags/reloader.yaml):
+# reloader_reload_executed_total{success="false"} means a Secret changed
+# (a rotated database password) and the restart that should follow failed;
+# alert CredentialReloadFailed. Reloader is installed wherever this is.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: reloader
+  labels:
+    release: kube-prometheus-stack
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  namespaceSelector:
+    matchNames: [reloader]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: reloader
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics
+      interval: 30s

@@ -8,5 +8,10 @@ kind: Kustomization
 #   - ../../../addons/feature-flags
 #
 # and a feature-flags/<env> overlay with its Secret unleash.
+#
+# Reloader restarts Unleash when its database password changes (on RDS,
+# where the password rotates; docs/DATABASE.md). It is installed only where
+# Unleash runs, and may read Secrets only in namespace feature-flags.
 resources:
+  - reloader.yaml
   - feature-flags-config.yaml

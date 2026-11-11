@@ -4,9 +4,11 @@
 # port-forward only, its frontend API (what browsers ask) through Kong
 # (route.yaml).
 #
-# Secret unleash holds what must not be in Git: the database password, the
-# first admin's password, and the two API tokens the services use, which
-# Unleash creates on its first start.
+# What must not be in Git comes from two Secrets: unleash-db, the database
+# credentials (in the cloud, RDS's own rotating secret once Unleash moves
+# there, feature-flags/components/rds), and unleash, the first admin's
+# password and the two API tokens the services use, which Unleash creates
+# on its first start.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -43,7 +45,16 @@ spec:
             - {name: DATABASE_HOST, value: postgres}
             - {name: DATABASE_PORT, value: "5432"}
             - {name: DATABASE_NAME, value: unleash}
-            - {name: DATABASE_USERNAME, value: unleash}
+            - name: DATABASE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: unleash-db
+                  key: username
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: unleash-db
+                  key: password
             # Inside the namespace, which only Unleash may reach.
             - {name: DATABASE_SSL, value: "false"}
             - {name: BASE_URI_PATH, value: /flags}
@@ -52,8 +63,8 @@ spec:
             # No calls home to Unleash's own servers.
             - {name: CHECK_VERSION, value: "false"}
             - {name: SEND_TELEMETRY, value: "false"}
-          # DATABASE_PASSWORD, UNLEASH_DEFAULT_ADMIN_PASSWORD,
-          # INIT_BACKEND_API_TOKENS, INIT_FRONTEND_API_TOKENS.
+          # UNLEASH_DEFAULT_ADMIN_PASSWORD, INIT_BACKEND_API_TOKENS,
+          # INIT_FRONTEND_API_TOKENS.
           envFrom:
             - secretRef:
                 name: unleash
