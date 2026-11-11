@@ -10,6 +10,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: EventSource
 metadata:
   name: dead-letters
+  namespace: workflows
 spec:
   template:
     serviceAccountName: event-source
@@ -53,6 +54,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Sensor
 metadata:
   name: dead-letters
+  namespace: workflows
 spec:
   template:
     serviceAccountName: sensor
@@ -143,6 +145,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: dead-letter-triage
+  namespace: workflows
 spec:
   entrypoint: triage
   arguments:

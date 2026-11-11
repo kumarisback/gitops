@@ -12,6 +12,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: archive-checker
+  namespace: workflows
   annotations:
     eks.amazonaws.com/role-arn: arn:aws:iam::602367507570:role/microservices-dev-irsa-archive_checker
 ---
@@ -19,6 +20,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: archive-uploads-reader
+  namespace: workflows
   annotations:
     # tf output irsa_role_arns["archive_uploads_reader"]: read and delete
     # this queue's messages, nothing else.
@@ -29,6 +31,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: EventSource
 metadata:
   name: archive-uploads
+  namespace: workflows
 spec:
   template:
     serviceAccountName: archive-uploads-reader
@@ -51,6 +54,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Sensor
 metadata:
   name: archive-uploads
+  namespace: workflows
 spec:
   template:
     serviceAccountName: sensor
@@ -105,6 +109,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: verify-archive-object
+  namespace: workflows
 spec:
   serviceAccountName: archive-checker
   artifactRepositoryRef:

@@ -5,8 +5,9 @@
 # default; ci-builder, archive-checker; automation/).
 controller:
   workflowNamespaces: [workflows]
-  # Only workflows that run a WorkflowTemplate: whoever may start one picks
-  # among the templates in Git (and their parameters), not arbitrary pods.
+  # Only workflows that run a WorkflowTemplate. Alone this doesn't stop a
+  # Workflow overriding its template's fields (its account, its pods): the
+  # admission policy in automation/base/admission-policy.yaml does.
   workflowRestrictions:
     templateReferencing: Strict
   resources:

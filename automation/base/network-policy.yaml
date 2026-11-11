@@ -10,6 +10,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: no-instance-metadata
+  namespace: workflows
 spec:
   podSelector: {}
   policyTypes: [Egress]
@@ -26,6 +27,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: workflow-pods-take-no-connections
+  namespace: workflows
 spec:
   podSelector:
     matchExpressions:

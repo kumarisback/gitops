@@ -4,11 +4,13 @@ kind: Kustomization
 # What Argo Workflows and Argo Events run, in every environment that has
 # them (roadmap step 21, docs/WORKFLOWS.md). automation/<env> adds what is
 # particular to one (dev: the archive check, the AWS roles).
-# Workflows, and the event sources and sensors that start them, run here;
-# Argo's controllers run in argo and argo-events.
-namespace: workflows
+# Workflows, and the event sources and sensors that start them, run in
+# namespace workflows (Argo's controllers in argo and argo-events). Each
+# object names it: a kustomization-wide namespace: would also stamp the
+# admission policy, which is cluster-scoped.
 
 resources:
+  - admission-policy.yaml
   - rbac.yaml
   - network-policy.yaml
   - eventbus.yaml

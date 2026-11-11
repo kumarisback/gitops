@@ -8,12 +8,14 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: ci-builder
+  namespace: workflows
 ---
 # The event sources' pods talk to Kafka (or SQS), never to Kubernetes.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: event-source
+  namespace: workflows
 automountServiceAccountToken: false
 ---
 # Sensors start workflows, and may do nothing else.
@@ -21,11 +23,13 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: sensor
+  namespace: workflows
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: sensor-submits-workflows
+  namespace: workflows
 rules:
   - apiGroups: [argoproj.io]
     resources: [workflows]
@@ -35,6 +39,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: sensor-submits-workflows
+  namespace: workflows
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -46,22 +51,24 @@ subjects:
 ---
 # For a person using the Argo UI (docs/WORKFLOWS.md): the server asks for a
 # Kubernetes token and acts with its permissions. A short-lived one from
-# `kubectl create token workflow-operator -n argo` may see everything here,
-# and start, stop, retry and delete workflows; it can't change templates or
-# schedules. Starting a workflow means running pods as any account in this
-# namespace (but only through a WorkflowTemplate: the controller is Strict),
-# ci-builder included: give it to people who may push images.
-# (The argo CLI uses your kubeconfig instead.)
+# `kubectl create token workflow-operator -n workflows` may see everything
+# here, and start, stop, retry and delete workflows; it can't change
+# templates or schedules. Starting one means choosing a WorkflowTemplate
+# and its parameter values, nothing more (admission-policy.yaml); for
+# ci-build that still means building and, in dev, pushing an image: give
+# it to people who may do that. (The argo CLI uses your kubeconfig.)
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: workflow-operator
+  namespace: workflows
 automountServiceAccountToken: false
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: workflow-operator
+  namespace: workflows
 rules:
   - apiGroups: [argoproj.io]
     resources: [workflows]
@@ -78,6 +85,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: workflow-operator
+  namespace: workflows
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role

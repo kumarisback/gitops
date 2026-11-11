@@ -15,16 +15,12 @@ apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: ci-build
+  namespace: workflows
 spec:
   serviceAccountName: ci-builder
   entrypoint: pipeline
   arguments:
     parameters:
-      # This project's repository only: a build runs a commit's code with
-      # ci-builder's rights (in dev: pushing images).
-      - name: repo
-        value: https://github.com/kumarisback/app.git
-        enum: ["https://github.com/kumarisback/app.git"]
       # A full commit SHA, as Jenkins tags images (ECR tags are immutable).
       - name: revision
       # Any of the Spring services: order-service, user-service,
@@ -100,7 +96,10 @@ spec:
             [ -f "/workspace/src/$SERVICE/Dockerfile" ] || { echo "no service '$SERVICE' at $REVISION"; exit 1; }
             git -C /workspace/src log -1 --format='%H %s'
         env:
-          - {name: REPO, value: "{{workflow.parameters.repo}}"}
+          # This project's repository, fixed here rather than a parameter: a
+          # build runs a commit's code with ci-builder's rights (in dev:
+          # pushing images).
+          - {name: REPO, value: "https://github.com/kumarisback/app.git"}
           - {name: REVISION, value: "{{workflow.parameters.revision}}"}
           - {name: SERVICE, value: "{{workflow.parameters.service}}"}
           - {name: HOME, value: /tmp}

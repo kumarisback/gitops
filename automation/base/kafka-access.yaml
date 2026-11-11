@@ -6,6 +6,7 @@ apiVersion: access.strimzi.io/v1alpha1
 kind: KafkaAccess
 metadata:
   name: argo-events-kafka
+  namespace: workflows
 spec:
   secretName: argo-events-kafka
   kafka:

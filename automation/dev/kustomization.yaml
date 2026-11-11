@@ -6,8 +6,6 @@ kind: Kustomization
 # and the AWS roles from tf 01-infra workflows.tf (enable_argo_workflows):
 # tf output irsa_role_arns["ci_builder"], ["archive_checker"] and
 # ["archive_uploads_reader"].
-namespace: workflows
-
 resources:
   - ../base
   - artifact-repositories.yaml

@@ -6,6 +6,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: artifact-repositories
+  namespace: workflows
 data:
   ci: |
     archiveLogs: true
