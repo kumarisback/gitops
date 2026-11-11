@@ -1,0 +1,19 @@
+# Unleash's own metrics: requests per API, flag evaluations reported by the
+# SDKs, database pool (roadmap step 22).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: unleash
+  labels:
+    release: kube-prometheus-stack
+  annotations:
+    # The kind exists once kube-prometheus-stack has installed its CRDs.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: unleash
+  endpoints:
+    - port: http
+      path: /flags/internal-backstage/prometheus
+      interval: 30s

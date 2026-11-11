@@ -1,0 +1,94 @@
+# Unleash 8 (open source): flags, their rollout strategies, an audit log of
+# every change, and the APIs the services ask (roadmap step 22,
+# docs/FEATURE-FLAGS.md). Served under /flags: its UI and admin API by
+# port-forward only, its frontend API (what browsers ask) through Kong
+# (route.yaml).
+#
+# Secret unleash holds what must not be in Git: the database password, the
+# first admin's password, and the two API tokens the services use, which
+# Unleash creates on its first start.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unleash
+  labels:
+    app.kubernetes.io/name: unleash
+spec:
+  # One instance: the open-source edition's frontend API isn't meant to be
+  # scaled out, and the services keep their last answers while it restarts.
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: unleash
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: unleash
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        # The image's node user.
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: unleash
+          image: unleashorg/unleash-server:8.3.1
+          ports:
+            - name: http
+              containerPort: 4242
+          env:
+            - {name: DATABASE_HOST, value: postgres}
+            - {name: DATABASE_PORT, value: "5432"}
+            - {name: DATABASE_NAME, value: unleash}
+            - {name: DATABASE_USERNAME, value: unleash}
+            # Inside the namespace, which only Unleash may reach.
+            - {name: DATABASE_SSL, value: "false"}
+            - {name: BASE_URI_PATH, value: /flags}
+            - {name: UNLEASH_URL, value: http://localhost:4242/flags}
+            - {name: UNLEASH_DEFAULT_ADMIN_USERNAME, value: admin}
+            # No calls home to Unleash's own servers.
+            - {name: CHECK_VERSION, value: "false"}
+            - {name: SEND_TELEMETRY, value: "false"}
+          # DATABASE_PASSWORD, UNLEASH_DEFAULT_ADMIN_PASSWORD,
+          # INIT_BACKEND_API_TOKENS, INIT_FRONTEND_API_TOKENS.
+          envFrom:
+            - secretRef:
+                name: unleash
+          readinessProbe:
+            httpGet:
+              path: /flags/health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /flags/health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: unleash
+  labels:
+    app.kubernetes.io/name: unleash
+spec:
+  selector:
+    app.kubernetes.io/name: unleash
+  ports:
+    - name: http
+      port: 4242
+      targetPort: http

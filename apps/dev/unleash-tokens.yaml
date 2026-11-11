@@ -1,0 +1,48 @@
+# The services' Unleash tokens (roadmap step 22, docs/FEATURE-FLAGS.md),
+# from the secret feature-flags/dev/unleash-secret.yaml reads too.
+
+# order-service's backend token: reads every flag's rules for this
+# environment. Secret, unlike the frontend token.
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: unleash-backend-token
+  namespace: development
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secretsmanager
+    kind: ClusterSecretStore
+  target:
+    name: unleash-backend-token
+    template:
+      engineVersion: v2
+      data:
+        token: "default:development.{{ .BACKEND_TOKEN_SECRET }}"
+  dataFrom:
+    - extract:
+        key: microservices/dev/unleash
+---
+# The frontend's runtime config, served by its nginx at
+# /config/runtime-config.json: where the frontend API is, and the frontend
+# token, which every browser gets anyway (it only answers which flags are on
+# for a given user in this environment).
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: frontend-runtime-config
+  namespace: development
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secretsmanager
+    kind: ClusterSecretStore
+  target:
+    name: frontend-runtime-config
+    template:
+      engineVersion: v2
+      data:
+        runtime-config.json: '{"unleash":{"url":"/flags/api/frontend","clientKey":"default:development.{{ .FRONTEND_TOKEN_SECRET }}"}}'
+  dataFrom:
+    - extract:
+        key: microservices/dev/unleash

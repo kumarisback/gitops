@@ -1,0 +1,30 @@
+# Unit tests for observability/base/feature-flag-alerts.yaml (validate.sh
+# extracts the rule file first; see slo_test.yaml).
+rule_files:
+  - ../../.validate/rules/observability/feature-flag-alerts.yaml
+
+evaluation_interval: 30s
+
+tests:
+  # Unleash's pod is gone from 2m (its database refuses it, a bad upgrade).
+  - interval: 1m
+    input_series:
+      - series: 'kube_deployment_status_replicas_available{namespace="feature-flags",deployment="unleash",job="kube-state-metrics"}'
+        values: '1 1 0x10'
+      - series: 'kube_deployment_spec_replicas{namespace="feature-flags",deployment="unleash",job="kube-state-metrics"}'
+        values: '1x12'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: FeatureFlagServiceUnavailable
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: FeatureFlagServiceUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: feature-flags
+              deployment: unleash
+            exp_annotations:
+              summary: "Unleash, the feature flag service, is down"
+              description: "Services keep the flags they last saw, new pods start with the fallbacks, and no flag (the kill switch included) can be changed until it is back."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#featureflagserviceunavailable

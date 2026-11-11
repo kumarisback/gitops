@@ -48,3 +48,17 @@ rollout:
   # goes on rather than waiting for a person (production waits).
   analysis:
     withoutRequests: pass
+extraEnv:
+  # The kill switch around order events (roadmap step 22,
+  # docs/FEATURE-FLAGS.md): Unleash's client API and this environment's
+  # backend token.
+  - name: UNLEASH_URL
+    value: http://unleash.feature-flags:4242/flags/api/
+  - name: UNLEASH_API_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: unleash-backend-token
+        key: token
+        # Without it (not made yet), the client is refused and every flag
+        # keeps its fallback: events keep going out.
+        optional: true

@@ -1,0 +1,31 @@
+# Unleash, the feature flag service (roadmap step 22, docs/FEATURE-FLAGS.md),
+# where it runs (the lab, dev). While it is down the services keep the
+# flags as they last saw them (a new pod: the fallbacks) and nobody can
+# change a flag, including the kill switch. A warning: nothing fails yet,
+# but the off switch is out of reach.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: feature-flag-alerts
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: feature-flags
+      rules:
+        - alert: FeatureFlagServiceUnavailable
+          expr: |
+            (
+              max by (namespace, deployment) (kube_deployment_status_replicas_available{namespace="feature-flags", deployment="unleash"}) == 0
+            )
+            and on (namespace, deployment)
+            (
+              max by (namespace, deployment) (kube_deployment_spec_replicas{namespace="feature-flags", deployment="unleash"}) > 0
+            )
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Unleash, the feature flag service, is down"
+            description: "Services keep the flags they last saw, new pods start with the fallbacks, and no flag (the kill switch included) can be changed until it is back."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#featureflagserviceunavailable

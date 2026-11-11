@@ -106,6 +106,18 @@ spec:
       ports:
         - port: 15008
           protocol: TCP
+    # Unleash's frontend API (roadmap step 22, feature-flags/base/route.yaml),
+    # outside the mesh.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: feature-flags
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: unleash
+      ports:
+        - port: 4242
+          protocol: TCP
     # The rate-limiting counters (redis.yaml), outside the mesh.
     - to:
         - podSelector:

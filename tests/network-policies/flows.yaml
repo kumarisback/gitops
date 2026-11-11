@@ -49,7 +49,7 @@ pods:
 
 # Every pod in these namespaces must be selected by an ingress and an egress
 # policy: nothing gets in or out unless a rule says so.
-isolated_namespaces: [APP, kong]
+isolated_namespaces: [APP, kong, feature-flags]
 
 all:
   allowed:
@@ -135,6 +135,13 @@ all:
 
 local:
   allowed:
+    # Unleash (roadmap step 22): browsers' flag questions through Kong,
+    # order-service's kill switch, Prometheus; its database for Unleash only.
+    - kong/kong-gateway -> feature-flags/unleash:4242
+    - APP/order-service -> feature-flags/unleash:4242
+    - monitoring/prometheus -> feature-flags/unleash:4242
+    - feature-flags/unleash -> feature-flags/postgres:5432
+    - feature-flags/unleash -> kube-system/coredns:53/UDP
     # Workflows fetch dependencies and images from the internet...
     - workflows/workflow-step -> ip:203.0.113.10:443
     - traefik/traefik -> kong/kong-gateway:8000
@@ -152,6 +159,15 @@ local:
     - monitoring/prometheus -> APP/notification-service:15008
     - ip:169.254.7.127 -> APP/notification-service:8081
   refused:
+    # Unleash only through Kong from outside, and nothing else reaches it or
+    # its database; it calls nothing outside (no telemetry).
+    - ip:10.10.1.25 -> feature-flags/unleash:4242
+    - APP/user-service -> feature-flags/unleash:4242
+    - APP/order-service -> feature-flags/postgres:5432
+    - kong/kong-gateway -> feature-flags/postgres:5432
+    - feature-flags/unleash -> ip:203.0.113.10:443
+    - feature-flags/unleash -> ip:169.254.169.254:80
+    - feature-flags/postgres -> ip:203.0.113.10:443
     # ...but not the node's credentials, and nothing connects to them.
     - workflows/workflow-step -> ip:169.254.169.254:80
     - monitoring/prometheus -> workflows/workflow-step:8080
@@ -167,6 +183,13 @@ local:
 
 dev:
   allowed:
+    # Unleash (roadmap step 22): browsers' flag questions through Kong,
+    # order-service's kill switch, Prometheus; its database for Unleash only.
+    - kong/kong-gateway -> feature-flags/unleash:4242
+    - APP/order-service -> feature-flags/unleash:4242
+    - monitoring/prometheus -> feature-flags/unleash:4242
+    - feature-flags/unleash -> feature-flags/postgres:5432
+    - feature-flags/unleash -> kube-system/coredns:53/UDP
     - workflows/workflow-step -> ip:203.0.113.10:443
     - APP/user-service -> kafka/events-broker:9093
     - APP/order-service -> kafka/events-broker:9093
@@ -174,6 +197,15 @@ dev:
     - APP/order-service -> kafka/schema-registry:8080
     - monitoring/prometheus -> APP/notification-service:15008
   refused:
+    # Unleash only through Kong from outside, and nothing else reaches it or
+    # its database; it calls nothing outside (no telemetry).
+    - ip:10.10.1.25 -> feature-flags/unleash:4242
+    - APP/user-service -> feature-flags/unleash:4242
+    - APP/order-service -> feature-flags/postgres:5432
+    - kong/kong-gateway -> feature-flags/postgres:5432
+    - feature-flags/unleash -> ip:203.0.113.10:443
+    - feature-flags/unleash -> ip:169.254.169.254:80
+    - feature-flags/postgres -> ip:203.0.113.10:443
     - workflows/workflow-step -> ip:169.254.169.254:80
     - monitoring/prometheus -> workflows/workflow-step:8080
     - APP/frontend -> kafka/events-broker:9093

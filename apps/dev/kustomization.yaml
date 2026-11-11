@@ -7,6 +7,9 @@ resources:
   - app-secrets.yaml
   - jwt-signing-key.yaml
   - kong-credentials.yaml
+  # Feature flags (roadmap step 22): order-service's and the frontend's
+  # Unleash tokens.
+  - unleash-tokens.yaml
 
 namespace: development
 

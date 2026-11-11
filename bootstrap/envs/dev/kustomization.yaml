@@ -22,6 +22,8 @@ resources:
   - ../../../addons/streaming
   # Argo Workflows and Argo Events (roadmap step 21, docs/WORKFLOWS.md).
   - ../../../addons/automation
+  # Unleash, the feature flag service (roadmap step 22, docs/FEATURE-FLAGS.md).
+  - ../../../addons/feature-flags
   - ../../projects/karpenter-dev.yaml
   - ../../projects/karpenter-nodepools-dev.yaml
 

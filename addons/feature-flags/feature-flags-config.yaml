@@ -1,0 +1,35 @@
+# Unleash and its PostgreSQL (roadmap step 22, docs/FEATURE-FLAGS.md).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: feature-flags-config
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: feature-flags-config
+    # Git-sourced: follows the root app's revision.
+    app.kubernetes.io/part-of: gitops-config
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/kumarisback/gitops.git
+    targetRevision: HEAD
+    path: feature-flags/ENV
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: feature-flags
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    # The ExternalSecret and ServiceMonitor CRDs come from other
+    # applications; retry until they exist.
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      - SkipDryRunOnMissingResource=true

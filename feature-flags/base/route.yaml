@@ -1,0 +1,22 @@
+# What browsers may reach (roadmap step 22): Unleash's frontend API only,
+# where the frontend's flag client asks which flags are on for its user
+# (with the environment's frontend token, public by design). The UI and the
+# admin and client APIs aren't routed: people reach them by port-forward,
+# the services from inside the cluster.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: unleash-frontend-api
+spec:
+  parentRefs:
+    - name: kong
+      namespace: kong
+      sectionName: http
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /flags/api/frontend
+      backendRefs:
+        - name: unleash
+          port: 4242

@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Unleash, the feature flag service (roadmap step 22, docs/FEATURE-FLAGS.md),
+# and its PostgreSQL. Its Secret unleash comes from the environment:
+# feature-flags/dev (External Secrets), scripts/start-lab.sh in the lab.
+namespace: feature-flags
+
+resources:
+  - namespace.yaml
+  - postgres.yaml
+  - unleash.yaml
+  - route.yaml
+  - network-policy.yaml
+  - servicemonitor.yaml

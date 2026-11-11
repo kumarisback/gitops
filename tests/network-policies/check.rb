@@ -36,9 +36,12 @@ File.foreach(releases) { |l| r = JSON.parse(l); release_ns[r['name']] = r['names
 release_ns['traefik'] ||= 'traefik' # the lab's edge, rendered on its own
 
 sources = %W[apps_#{env} streaming_#{env} platform_kong].map { |n| [File.join(out_dir, 'kustomize', "#{n}.yaml"), nil] }
-# Argo Workflows and Events (roadmap step 21) run only in some environments.
-automation = File.join(out_dir, 'kustomize', "automation_#{env}.yaml")
-sources << [automation, nil] if File.exist?(automation)
+# Argo Workflows and Events (roadmap step 21) and Unleash (step 22) run only
+# in some environments.
+%W[automation_#{env} feature-flags_#{env}].each do |n|
+  file = File.join(out_dir, 'kustomize', "#{n}.yaml")
+  sources << [file, nil] if File.exist?(file)
+end
 Dir[File.join(out_dir, 'helm', "#{env}-*.yaml")].sort.each do |f|
   next if f.end_with?('.inline-values.yaml')
   sources << [f, release_ns[File.basename(f, '.yaml').sub("#{env}-", '')]]

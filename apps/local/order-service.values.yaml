@@ -35,6 +35,19 @@ extraEnv:
   # As for user-service in kustomization.yaml.
   - name: MANAGEMENT_ENDPOINT_HEALTH_VALIDATE_GROUP_MEMBERSHIP
     value: "false"
+  # The kill switch around order events (roadmap step 22,
+  # docs/FEATURE-FLAGS.md): Unleash's client API and this environment's
+  # backend token.
+  - name: UNLEASH_URL
+    value: http://unleash.feature-flags:4242/flags/api/
+  - name: UNLEASH_API_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: unleash-backend-token
+        key: token
+        # Without it (not made yet), the client is refused and every flag
+        # keeps its fallback: events keep going out.
+        optional: true
 # Publishes OrderCreated events to Kafka (roadmap step 12) with the
 # connection from the order-service-kafka KafkaAccess Secret
 # (apps/components/kafka-clients).

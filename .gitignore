@@ -6,3 +6,4 @@ charts/*/charts/
 apps/local/jwt-signing-key.pem
 apps/local/kong-redis-password
 apps/local/partner-api-keys.env
+apps/local/unleash.env

@@ -129,6 +129,12 @@ spec:
           mountPath: /var/run
         - name: tmp
           mountPath: /tmp
+        # Feature flags (roadmap step 22, docs/FEATURE-FLAGS.md): served as
+        # /config/runtime-config.json; where Unleash's frontend API is, and
+        # this environment's frontend token.
+        - name: runtime-config
+          mountPath: /usr/share/nginx/html/config
+          readOnly: true
 
       volumes:
       - name: nginx-cache
@@ -137,3 +143,9 @@ spec:
         emptyDir: {}
       - name: tmp
         emptyDir: {}
+      # Optional: where an environment has no Unleash, the file is missing
+      # and the frontend runs with every flag off.
+      - name: runtime-config
+        secret:
+          secretName: frontend-runtime-config
+          optional: true

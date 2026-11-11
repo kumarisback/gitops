@@ -167,6 +167,37 @@ kubectl create secret generic user-service-jwt \
 | kubectl label --local -f - -o yaml konghq.com/credential=jwt \
 | kubectl apply -f - > /dev/null
 
+#    Unleash's secrets (roadmap step 22, docs/FEATURE-FLAGS.md): its database
+#    and admin passwords and the two API tokens, generated once into a
+#    git-ignored file. Unleash makes the tokens on its first start; the same
+#    values go to order-service (backend token) and to the frontend's runtime
+#    config (frontend token, public by design).
+UNLEASH_FILE="${REPO_ROOT}/apps/local/unleash.env"
+if [ ! -f "${UNLEASH_FILE}" ]; then
+  echo "🔑 Generating the lab's Unleash secrets (apps/local/unleash.env)..."
+  (umask 077 && printf 'DATABASE_PASSWORD=%s\nADMIN_PASSWORD=%s\nBACKEND_TOKEN_SECRET=%s\nFRONTEND_TOKEN_SECRET=%s\n' \
+    "$(openssl rand -hex 24)" "$(openssl rand -hex 16)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > "${UNLEASH_FILE}")
+fi
+unleash_value() { sed -n "s/^$1=//p" "${UNLEASH_FILE}"; }
+BACKEND_TOKEN="default:development.$(unleash_value BACKEND_TOKEN_SECRET)"
+FRONTEND_TOKEN="default:development.$(unleash_value FRONTEND_TOKEN_SECRET)"
+kubectl create namespace feature-flags --dry-run=client -o yaml | kubectl apply -f - > /dev/null
+kubectl create secret generic unleash \
+  --namespace feature-flags \
+  --from-literal=DATABASE_PASSWORD="$(unleash_value DATABASE_PASSWORD)" \
+  --from-literal=UNLEASH_DEFAULT_ADMIN_PASSWORD="$(unleash_value ADMIN_PASSWORD)" \
+  --from-literal=INIT_BACKEND_API_TOKENS="${BACKEND_TOKEN}" \
+  --from-literal=INIT_FRONTEND_API_TOKENS="${FRONTEND_TOKEN}" \
+  --dry-run=client -o yaml | kubectl apply -f - > /dev/null
+kubectl create secret generic unleash-backend-token \
+  --namespace development \
+  --from-literal=token="${BACKEND_TOKEN}" \
+  --dry-run=client -o yaml | kubectl apply -f - > /dev/null
+kubectl create secret generic frontend-runtime-config \
+  --namespace development \
+  --from-literal=runtime-config.json="{\"unleash\":{\"url\":\"/flags/api/frontend\",\"clientKey\":\"${FRONTEND_TOKEN}\"}}" \
+  --dry-run=client -o yaml | kubectl apply -f - > /dev/null
+
 # 8. Restore the local Argo app-of-apps. start-lab-podman.sh sets
 #    SKIP_ROOT_APP=1 because it deploys with sync-local-stack.rb instead,
 #    and an auto-syncing root app would fight that script.

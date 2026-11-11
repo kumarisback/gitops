@@ -219,7 +219,8 @@ spec:
           protocol: TCP
 ---
 # order-service (charts/microservice): the same as user-service; it calls
-# user-service for its signing key.
+# user-service for its signing key, and Unleash for its kill switch where an
+# environment has it (roadmap step 22).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -275,6 +276,16 @@ spec:
               app.kubernetes.io/instance: otel-collector
       ports:
         - port: 4318
+          protocol: TCP
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: feature-flags
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: unleash
+      ports:
+        - port: 4242
           protocol: TCP
 ---
 # notification-service (charts/microservice): no API, so nothing but
