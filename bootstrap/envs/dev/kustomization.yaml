@@ -20,6 +20,8 @@ resources:
   # Kafka (roadmap step 12): Strimzi, the cluster, its topics and users.
   # Not in staging/prod yet; addons/streaming/kustomization.yaml says how.
   - ../../../addons/streaming
+  # Argo Workflows and Argo Events (roadmap step 21, docs/WORKFLOWS.md).
+  - ../../../addons/automation
   - ../../projects/karpenter-dev.yaml
   - ../../projects/karpenter-nodepools-dev.yaml
 

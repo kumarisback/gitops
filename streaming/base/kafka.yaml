@@ -109,15 +109,16 @@ spec:
         # Who may connect at all (roadmap step 19, docs/NETWORK-POLICIES.md);
         # Strimzi writes the brokers' NetworkPolicy from this. Without it,
         # every pod in the cluster may try. The services' namespace, KEDA
-        # (it reads consumer lag), and this namespace (Kafka Connect, the
-        # schema registry, Kafka UI, the tools). Strimzi's own components
+        # (it reads consumer lag), Argo Events (namespace argo, roadmap step
+        # 21: it reads the dead-letter topics), and this namespace (Kafka
+        # Connect, the schema registry, Kafka UI, the tools). Strimzi's own components
         # use the internal port 9091, which Strimzi restricts itself.
         networkPolicyPeers:
           - namespaceSelector:
               matchExpressions:
                 - key: kubernetes.io/metadata.name
                   operator: In
-                  values: [development, staging, production, keda]
+                  values: [development, staging, production, keda, argo]
           - podSelector: {}
     # Each user may do only what its ACLs (users.yaml) allow; kafka-admin
     # (for people, streaming/tools/kafka-admin.yaml) may do anything.

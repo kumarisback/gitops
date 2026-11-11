@@ -1,0 +1,42 @@
+# Unit tests for observability/base/automation-alerts.yaml (validate.sh
+# extracts the rule file first; see slo_test.yaml).
+rule_files:
+  - ../../.validate/rules/observability/automation-alerts.yaml
+
+evaluation_interval: 30s
+
+tests:
+  # The controller's pod is gone from 2m (a node lost, a bad upgrade).
+  - interval: 1m
+    input_series:
+      - series: 'kube_deployment_status_replicas_available{namespace="argo",deployment="argo-workflows-workflow-controller",job="kube-state-metrics"}'
+        values: '1 1 0x14'
+      - series: 'kube_deployment_spec_replicas{namespace="argo",deployment="argo-workflows-workflow-controller",job="kube-state-metrics"}'
+        values: '1x16'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ArgoWorkflowsControllerUnavailable
+        exp_alerts: []
+      - eval_time: 13m
+        alertname: ArgoWorkflowsControllerUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: argo
+              deployment: argo-workflows-workflow-controller
+            exp_annotations:
+              summary: "Argo Workflows' controller is down"
+              description: "No workflow starts or progresses: the nightly report, dead-letter triage, archive checks and CI builds wait until it is back."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#argoworkflowscontrollerunavailable
+
+  # Scaled to zero on purpose: nothing wanted, no alert.
+  - interval: 1m
+    input_series:
+      - series: 'kube_deployment_status_replicas_available{namespace="argo",deployment="argo-workflows-workflow-controller",job="kube-state-metrics"}'
+        values: '0x15'
+      - series: 'kube_deployment_spec_replicas{namespace="argo",deployment="argo-workflows-workflow-controller",job="kube-state-metrics"}'
+        values: '0x15'
+    alert_rule_test:
+      - eval_time: 14m
+        alertname: ArgoWorkflowsControllerUnavailable
+        exp_alerts: []

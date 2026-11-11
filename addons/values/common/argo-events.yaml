@@ -1,0 +1,16 @@
+# Argo Events' controller (roadmap step 21, docs/WORKFLOWS.md). It runs the
+# EventBus, EventSources and Sensors defined in automation/<env>, each as
+# pods of their own in namespace argo.
+controller:
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        release: kube-prometheus-stack

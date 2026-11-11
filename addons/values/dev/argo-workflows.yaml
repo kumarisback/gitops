@@ -1,0 +1,20 @@
+# dev keeps workflows' logs and artifacts in S3 (tf 01-infra workflows.tf,
+# enable_argo_workflows): bucket and role names from its outputs
+# (workflow_artifacts_bucket, irsa_role_arns["argo_workflow"]). The lab has
+# no object store: its workflows report through their results and logs.
+useStaticCredentials: false
+artifactRepository:
+  # Each step's log, kept with the workflow's artifacts after its pod is
+  # gone.
+  archiveLogs: true
+  s3:
+    bucket: microservices-dev-workflow-artifacts-602367507570
+    endpoint: s3.amazonaws.com
+    region: us-east-1
+    # Credentials from the workflow pod's own role (IRSA), no keys.
+    useSDKCreds: true
+
+workflow:
+  serviceAccount:
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::602367507570:role/microservices-dev-irsa-argo_workflow

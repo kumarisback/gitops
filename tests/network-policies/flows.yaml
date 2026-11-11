@@ -41,6 +41,12 @@ pods:
     labels: {strimzi.io/cluster: events, strimzi.io/kind: Kafka, strimzi.io/pool-name: controller, strimzi.io/controller-role: "true"}
     ports: [{port: 9090}]
 
+  # A step of a workflow (Argo Workflows makes the pods; roadmap step 21).
+  - name: argo/workflow-step
+    labels: {workflows.argoproj.io/workflow: ci-build-x7k2p}
+    ports: [{port: 8080}]
+    envs: [local, dev]
+
 # Every pod in these namespaces must be selected by an ingress and an egress
 # policy: nothing gets in or out unless a rule says so.
 isolated_namespaces: [APP, kong]
@@ -129,6 +135,8 @@ all:
 
 local:
   allowed:
+    # Workflows fetch dependencies and images from the internet...
+    - argo/workflow-step -> ip:203.0.113.10:443
     - traefik/traefik -> kong/kong-gateway:8000
     # The lab's MongoDB, in the mesh.
     - APP/user-service -> APP/mongodb:15008
@@ -144,6 +152,9 @@ local:
     - monitoring/prometheus -> APP/notification-service:15008
     - ip:169.254.7.127 -> APP/notification-service:8081
   refused:
+    # ...but not the node's credentials, and nothing connects to them.
+    - argo/workflow-step -> ip:169.254.169.254:80
+    - monitoring/prometheus -> argo/workflow-step:8080
     - APP/frontend -> APP/mongodb:15008
     - APP/waypoint -> APP/mongodb:27017
     - kong/kong-gateway -> APP/mongodb:15008
@@ -156,12 +167,15 @@ local:
 
 dev:
   allowed:
+    - argo/workflow-step -> ip:203.0.113.10:443
     - APP/user-service -> kafka/events-broker:9093
     - APP/order-service -> kafka/events-broker:9093
     - APP/notification-service -> kafka/events-broker:9093
     - APP/order-service -> kafka/schema-registry:8080
     - monitoring/prometheus -> APP/notification-service:15008
   refused:
+    - argo/workflow-step -> ip:169.254.169.254:80
+    - monitoring/prometheus -> argo/workflow-step:8080
     - APP/frontend -> kafka/events-broker:9093
     - APP/order-service -> kafka/kafka-ui:8080
     - APP/notification-service -> APP/waypoint:15008

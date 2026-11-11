@@ -1,0 +1,211 @@
+# A Kafka message starts a workflow (roadmap step 21, docs/WORKFLOWS.md):
+# every record notification-service parks in a dead-letter topic
+# (orders-dlq, users-dlq, step 12) starts a triage workflow that writes down
+# what failed, where the record is, and how to replay it. The
+# KafkaDeadLetterRecords alert says that records are piling up; this says
+# which ones, and why.
+#
+#   Kafka *-dlq ─► EventSource dead-letters ─► EventBus ─► Sensor ─► Workflow dead-letter-triage
+apiVersion: argoproj.io/v1alpha1
+kind: EventSource
+metadata:
+  name: dead-letters
+spec:
+  template:
+    serviceAccountName: event-source
+    container:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 128Mi
+  # One consumer group for both topics; it starts from the newest record,
+  # so a first deployment doesn't triage the topics' whole history.
+  kafka:
+    orders-dlq:
+      url: events-kafka-bootstrap.kafka.svc:9093
+      topic: orders-dlq
+      # Kafka 4 dropped the protocol versions this client defaults to.
+      version: "3.6.0"
+      jsonBody: false
+      consumerGroup:
+        groupName: argo-events-dead-letters
+        oldest: false
+      tls:
+        caCertSecret: {name: argo-events-kafka, key: ssl.truststore.crt}
+        clientCertSecret: {name: argo-events-kafka, key: ssl.keystore.crt}
+        clientKeySecret: {name: argo-events-kafka, key: ssl.keystore.key}
+    users-dlq:
+      url: events-kafka-bootstrap.kafka.svc:9093
+      topic: users-dlq
+      version: "3.6.0"
+      jsonBody: false
+      consumerGroup:
+        groupName: argo-events-dead-letters
+        oldest: false
+      tls:
+        caCertSecret: {name: argo-events-kafka, key: ssl.truststore.crt}
+        clientCertSecret: {name: argo-events-kafka, key: ssl.keystore.crt}
+        clientKeySecret: {name: argo-events-kafka, key: ssl.keystore.key}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: dead-letters
+spec:
+  template:
+    serviceAccountName: sensor
+    container:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 128Mi
+  dependencies:
+    - name: orders
+      eventSourceName: dead-letters
+      eventName: orders-dlq
+    - name: users
+      eventSourceName: dead-letters
+      eventName: users-dlq
+  # One trigger per topic: each takes its parameters from its own event.
+  triggers:
+    - template:
+        name: triage-orders
+        conditions: orders
+        argoWorkflow:
+          operation: submit
+          source:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Workflow
+              metadata:
+                generateName: dead-letter-triage-
+              spec:
+                workflowTemplateRef:
+                  name: dead-letter-triage
+                arguments:
+                  parameters:
+                    - name: topic
+                    - name: partition
+                    - name: offset
+                    - name: key
+                    - name: headers
+                    - name: value
+          parameters:
+            - {src: {dependencyName: orders, dataKey: topic}, dest: spec.arguments.parameters.0.value}
+            - {src: {dependencyName: orders, dataKey: partition}, dest: spec.arguments.parameters.1.value}
+            - {src: {dependencyName: orders, dataKey: offset}, dest: spec.arguments.parameters.2.value}
+            - {src: {dependencyName: orders, dataKey: key, value: ""}, dest: spec.arguments.parameters.3.value}
+            - {src: {dependencyName: orders, dataKey: headers, value: "{}"}, dest: spec.arguments.parameters.4.value}
+            - {src: {dependencyName: orders, dataKey: body, value: ""}, dest: spec.arguments.parameters.5.value}
+      retryStrategy:
+        steps: 3
+    - template:
+        name: triage-users
+        conditions: users
+        argoWorkflow:
+          operation: submit
+          source:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Workflow
+              metadata:
+                generateName: dead-letter-triage-
+              spec:
+                workflowTemplateRef:
+                  name: dead-letter-triage
+                arguments:
+                  parameters:
+                    - name: topic
+                    - name: partition
+                    - name: offset
+                    - name: key
+                    - name: headers
+                    - name: value
+          parameters:
+            - {src: {dependencyName: users, dataKey: topic}, dest: spec.arguments.parameters.0.value}
+            - {src: {dependencyName: users, dataKey: partition}, dest: spec.arguments.parameters.1.value}
+            - {src: {dependencyName: users, dataKey: offset}, dest: spec.arguments.parameters.2.value}
+            - {src: {dependencyName: users, dataKey: key, value: ""}, dest: spec.arguments.parameters.3.value}
+            - {src: {dependencyName: users, dataKey: headers, value: "{}"}, dest: spec.arguments.parameters.4.value}
+            - {src: {dependencyName: users, dataKey: body, value: ""}, dest: spec.arguments.parameters.5.value}
+      retryStrategy:
+        steps: 3
+---
+# What a person needs to act on a dead letter: where it is, why it failed
+# (the exception notification-service put in its headers), what it is (the
+# Avro schema id), and the runbook's replay. The record's content arrives
+# as an environment variable and is only decoded, never run.
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: dead-letter-triage
+spec:
+  entrypoint: triage
+  arguments:
+    parameters:
+      - name: topic
+      - name: partition
+      - name: offset
+      - name: key
+        value: ""
+      - name: headers
+        value: "{}"
+      # Base64, as Argo Events passes a record that isn't JSON.
+      - name: value
+        value: ""
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  templates:
+    - name: triage
+      script:
+        image: python:3.13.18-alpine3.23
+        command: [python3]
+        env:
+          - {name: TOPIC, value: "{{workflow.parameters.topic}}"}
+          - {name: PARTITION, value: "{{workflow.parameters.partition}}"}
+          - {name: OFFSET, value: "{{workflow.parameters.offset}}"}
+          - {name: RECORD_KEY, value: "{{workflow.parameters.key}}"}
+          - {name: HEADERS, value: "{{workflow.parameters.headers}}"}
+          - {name: VALUE, value: "{{workflow.parameters.value}}"}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        source: |
+          import base64, binascii, json, os
+
+          env = os.environ
+          try:
+              headers = json.loads(env.get("HEADERS") or "{}")
+          except ValueError:
+              headers = {}
+          try:
+              value = base64.b64decode(env.get("VALUE", ""), validate=True)
+          except (binascii.Error, ValueError):
+              value = env.get("VALUE", "").encode()
+
+          # Confluent wire format: a zero byte, then the schema's id (4 bytes).
+          schema_id = int.from_bytes(value[1:5], "big") if len(value) > 5 and value[0] == 0 else None
+
+          def header(name):
+              v = headers.get(name)
+              return v if isinstance(v, str) and v.isprintable() else None
+
+          print(json.dumps({
+              "dead_letter": {"topic": env["TOPIC"], "partition": env["PARTITION"], "offset": env["OFFSET"]},
+              "key": env.get("RECORD_KEY") or None,
+              "original_topic": header("kafka_dlt-original-topic"),
+              "exception": header("kafka_dlt-exception-fqcn"),
+              "message": header("kafka_dlt-exception-message"),
+              "value_bytes": len(value),
+              "avro_schema_id": schema_id,
+              "next": "docs/runbooks.md, KafkaDeadLetterRecords: fix the cause, then replay from this offset",
+          }, indent=2))

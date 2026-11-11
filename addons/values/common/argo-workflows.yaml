@@ -1,0 +1,55 @@
+# Argo Workflows (roadmap step 21, docs/WORKFLOWS.md). Workflows run in
+# namespace argo only, as ServiceAccount argo-workflow unless they name
+# another (the CI builder runs as ci-builder, automation/base).
+controller:
+  workflowNamespaces: [argo]
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  metricsConfig:
+    enabled: true
+  serviceMonitor:
+    enabled: true
+    additionalLabels:
+      release: kube-prometheus-stack
+  # What every workflow gets unless it says otherwise.
+  workflowDefaults:
+    spec:
+      serviceAccountName: argo-workflow
+      # A finished workflow (and its record) goes after a day, a failed one
+      # after a week, for someone to look at.
+      ttlStrategy:
+        secondsAfterSuccess: 86400
+        secondsAfterFailure: 604800
+      # A step's pod goes as soon as it succeeds; failed ones stay, with
+      # their logs, until the workflow does.
+      podGC:
+        strategy: OnPodSuccess
+
+workflow:
+  serviceAccount:
+    create: true
+    name: argo-workflow
+  rbac:
+    create: true
+    # The permissions a workflow pod needs to report on itself, for the
+    # other accounts workflows run as (automation/base/rbac.yaml).
+    serviceAccounts:
+      - name: ci-builder
+        namespace: argo
+
+server:
+  # The UI and API ask for a Kubernetes token and act with its
+  # permissions (kubectl create token, docs/WORKFLOWS.md): there's no
+  # server account of its own for anyone who reaches the port to borrow.
+  # Reached only with kubectl port-forward.
+  authModes: [client]
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 256Mi

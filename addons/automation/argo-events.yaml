@@ -1,0 +1,42 @@
+# Argo Events (roadmap step 21, docs/WORKFLOWS.md): event sources (Kafka,
+# SQS, ...) feeding an event bus, and sensors that start workflows when the
+# events they wait for arrive.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argo-events
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: cluster-addons
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - chart: argo-events
+      repoURL: https://argoproj.github.io/argo-helm
+      # Argo Events v1.9.11.
+      targetRevision: 2.4.27
+      helm:
+        # TIER and ENV are filled in by addons/select-env (see
+        # kustomization.yaml); missing files are skipped.
+        ignoreMissingValueFiles: true
+        valueFiles:
+          - $values/addons/values/common/argo-events.yaml
+          - $values/addons/values/TIER/argo-events.yaml
+          - $values/addons/values/ENV/argo-events.yaml
+    - repoURL: https://github.com/kumarisback/gitops.git
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argo-events
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # The EventSource and Sensor CRDs are too large for client-side
+      # apply's last-applied annotation.
+      - ServerSideApply=true

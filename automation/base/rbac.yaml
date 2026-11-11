@@ -1,0 +1,87 @@
+# Who the automation runs as (roadmap step 21). argo-workflow, the default
+# for workflows, comes from the argo-workflows chart.
+
+# The CI pipeline (ci-build.yaml). In the cloud it may push images to ECR
+# (its IRSA role, automation/dev); the chart gives it the rights every
+# workflow pod needs to report on itself (addons/values/common/argo-workflows.yaml).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ci-builder
+---
+# The event sources' pods talk to Kafka (or SQS), never to Kubernetes.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: event-source
+automountServiceAccountToken: false
+---
+# Sensors start workflows, and may do nothing else.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sensor
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sensor-submits-workflows
+rules:
+  - apiGroups: [argoproj.io]
+    resources: [workflows]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sensor-submits-workflows
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: sensor-submits-workflows
+subjects:
+  - kind: ServiceAccount
+    name: sensor
+    namespace: argo
+---
+# For a person using the Argo UI (docs/WORKFLOWS.md): the server asks for a
+# Kubernetes token and acts with its permissions. A short-lived one from
+# `kubectl create token workflow-operator -n argo` may see everything here,
+# and start, stop, retry and delete workflows; it can't change templates or
+# schedules. Starting a workflow means running pods as any account in this
+# namespace (ci-builder included): give it to people who may push images.
+# (The argo CLI uses your kubeconfig instead.)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: workflow-operator
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: workflow-operator
+rules:
+  - apiGroups: [argoproj.io]
+    resources: [workflows]
+    verbs: [get, list, watch, create, patch, delete]
+  - apiGroups: [argoproj.io]
+    resources: [workflowtemplates, cronworkflows, eventsources, sensors, eventbus]
+    verbs: [get, list, watch]
+  # Each step's log and events, as the UI shows them.
+  - apiGroups: [""]
+    resources: [pods, pods/log, events]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: workflow-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: workflow-operator
+subjects:
+  - kind: ServiceAccount
+    name: workflow-operator
+    namespace: argo

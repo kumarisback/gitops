@@ -1,0 +1,30 @@
+# Argo Workflows (roadmap step 21, docs/WORKFLOWS.md), where it runs (the
+# lab, dev). Without its controller nothing it starts runs: no nightly
+# report, no triage of dead letters, no archive checks, no CI builds. The
+# services themselves are unaffected, so a warning.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: automation-alerts
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: automation
+      rules:
+        - alert: ArgoWorkflowsControllerUnavailable
+          expr: |
+            (
+              max by (namespace, deployment) (kube_deployment_status_replicas_available{namespace="argo", deployment="argo-workflows-workflow-controller"}) == 0
+            )
+            and on (namespace, deployment)
+            (
+              max by (namespace, deployment) (kube_deployment_spec_replicas{namespace="argo", deployment="argo-workflows-workflow-controller"}) > 0
+            )
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Argo Workflows' controller is down"
+            description: "No workflow starts or progresses: the nightly report, dead-letter triage, archive checks and CI builds wait until it is back."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#argoworkflowscontrollerunavailable

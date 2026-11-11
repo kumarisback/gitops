@@ -1,0 +1,175 @@
+# An S3 upload starts a workflow (roadmap step 21, docs/WORKFLOWS.md): every
+# file Kafka Connect writes to the events archive (step 13) is announced on
+# SQS (tf 01-infra workflows.tf), and a workflow reads it back and checks
+# it. A backup nobody has read back isn't known to be one.
+#
+#   S3 events archive ─► SQS archive-uploads ─► EventSource ─► EventBus ─► Sensor ─► Workflow verify-archive-object
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: archive-uploads-reader
+  annotations:
+    # tf output irsa_role_arns["archive_uploads_reader"]: read and delete
+    # this queue's messages, nothing else.
+    eks.amazonaws.com/role-arn: arn:aws:iam::602367507570:role/microservices-dev-irsa-archive_uploads_reader
+automountServiceAccountToken: false
+---
+apiVersion: argoproj.io/v1alpha1
+kind: EventSource
+metadata:
+  name: archive-uploads
+spec:
+  template:
+    serviceAccountName: archive-uploads-reader
+    container:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 128Mi
+  sqs:
+    archive-uploads:
+      region: us-east-1
+      # tf output archive_uploads_queue. No keys: the pod's IRSA role.
+      queue: microservices-dev-archive-uploads
+      waitTimeSeconds: 20
+      jsonBody: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: archive-uploads
+spec:
+  template:
+    serviceAccountName: sensor
+    container:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 128Mi
+  dependencies:
+    - name: upload
+      eventSourceName: archive-uploads
+      eventName: archive-uploads
+      # S3 also sends a test message when the notification is set up; only
+      # created objects count.
+      filters:
+        data:
+          - path: body.Records.0.eventName
+            type: string
+            value: ["ObjectCreated:.*"]
+  triggers:
+    - template:
+        name: verify-archive-object
+        argoWorkflow:
+          operation: submit
+          source:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Workflow
+              metadata:
+                generateName: verify-archive-object-
+              spec:
+                workflowTemplateRef:
+                  name: verify-archive-object
+                arguments:
+                  parameters:
+                    - name: bucket
+                    - name: key
+          parameters:
+            - {src: {dependencyName: upload, dataKey: body.Records.0.s3.bucket.name}, dest: spec.arguments.parameters.0.value}
+            - {src: {dependencyName: upload, dataKey: body.Records.0.s3.object.key}, dest: spec.arguments.parameters.1.value}
+      retryStrategy:
+        steps: 3
+---
+# Reads one archive file back: gzip that opens, a JSON object per line with
+# the fields the connector writes, values that decode, offsets that only go
+# up and start where the file's name says. Fails, and so shows red in the
+# UI, if any of that isn't so. The file comes from S3 as an input artifact,
+# with the workflow's role (argo_workflow: read the archive, nothing more).
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: verify-archive-object
+spec:
+  entrypoint: verify
+  arguments:
+    parameters:
+      - name: bucket
+      # The object's key as S3 announces it. The connector's keys
+      # (topic/yyyy/MM/dd/topic-partition-offset.jsonl.gz) have nothing
+      # S3 would escape.
+      - name: key
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  templates:
+    - name: verify
+      inputs:
+        artifacts:
+          - name: object
+            path: /tmp/object.jsonl.gz
+            s3:
+              endpoint: s3.amazonaws.com
+              region: us-east-1
+              bucket: "{{workflow.parameters.bucket}}"
+              key: "{{workflow.parameters.key}}"
+              useSDKCreds: true
+      script:
+        image: python:3.13.18-alpine3.23
+        command: [python3]
+        env:
+          - {name: KEY, value: "{{workflow.parameters.key}}"}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        source: |
+          import base64, binascii, gzip, json, os, re, sys
+
+          key = os.environ["KEY"]
+          m = re.search(r"-(\d+)\.jsonl\.gz$", key)
+          start = int(m.group(1)) if m else None
+          problems, count, first, last, gaps = [], 0, None, None, 0
+
+          try:
+              with gzip.open("/tmp/object.jsonl.gz", "rt", encoding="utf-8") as f:
+                  for number, line in enumerate(f, 1):
+                      try:
+                          record = json.loads(line)
+                      except ValueError:
+                          problems.append(f"line {number}: not JSON")
+                          continue
+                      missing = [k for k in ("key", "value", "offset", "timestamp") if k not in record]
+                      if missing:
+                          problems.append(f"line {number}: missing {missing}")
+                          continue
+                      try:
+                          if record["value"] is not None:
+                              base64.b64decode(record["value"], validate=True)
+                      except (binascii.Error, ValueError):
+                          problems.append(f"line {number}: value isn't base64")
+                      offset = int(record["offset"])
+                      if last is not None and offset <= last:
+                          problems.append(f"line {number}: offset {offset} after {last}")
+                      if last is not None and offset > last + 1:
+                          gaps += 1  # transaction markers take offsets too: noted, not wrong
+                      first = offset if first is None else first
+                      last = offset
+                      count += 1
+          except (OSError, EOFError) as e:
+              problems.append(f"not a readable gzip file: {e}")
+
+          if count == 0:
+              problems.append("no records")
+          if start is not None and first is not None and first != start:
+              problems.append(f"first offset {first}, but the name says {start}")
+
+          print(json.dumps({"key": key, "records": count, "first_offset": first, "last_offset": last,
+                            "offset_gaps": gaps, "problems": problems}, indent=2))
+          sys.exit(1 if problems else 0)

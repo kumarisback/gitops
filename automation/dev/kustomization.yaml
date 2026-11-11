@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# dev (roadmap step 21, docs/WORKFLOWS.md): everything in base, plus the
+# check of each new events archive file (an S3 upload starts a workflow),
+# and the AWS roles from tf 01-infra workflows.tf (enable_argo_workflows):
+# tf output irsa_role_arns["ci_builder"] and ["archive_uploads_reader"].
+namespace: argo
+
+resources:
+  - ../base
+  - archive-check.yaml
+
+# The CI pipeline may push to ECR here (-p push=true).
+patches:
+  - target:
+      kind: ServiceAccount
+      name: ci-builder
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          eks.amazonaws.com/role-arn: arn:aws:iam::602367507570:role/microservices-dev-irsa-ci_builder

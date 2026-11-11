@@ -11,6 +11,8 @@ resources:
   - ../../../addons/applications
   # Kafka (roadmap step 12): Strimzi, the cluster, its topics and users.
   - ../../../addons/streaming
+  # Argo Workflows and Argo Events (roadmap step 21, docs/WORKFLOWS.md).
+  - ../../../addons/automation
 
 # Selects addons/values/local/ for every add-on (see addons/select-env).
 configMapGenerator:

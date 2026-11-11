@@ -1,0 +1,244 @@
+# The Jenkins pipeline of a Spring service (app/<service>/Jenkinsfile) as an
+# Argo workflow (roadmap step 21, docs/WORKFLOWS.md), with two steps Jenkins
+# lacks: the tests (Jenkins skips them, -x test) and an image scan before
+# anything is pushed.
+#
+#   argo submit -n argo --from workflowtemplate/ci-build \
+#     -p revision=<full commit SHA> [-p service=user-service] [-p push=true]
+#
+# checkout ─► test ─► build image ─► scan ─► (push=true) ECR login ─► push
+#
+# Each step is a pod; they share a volume made for the run and deleted with
+# it. Every value from a parameter reaches the steps as an environment
+# variable, never pasted into a script, so a parameter can't run commands.
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: ci-build
+spec:
+  serviceAccountName: ci-builder
+  entrypoint: pipeline
+  arguments:
+    parameters:
+      - name: repo
+        value: https://github.com/kumarisback/app.git
+      # A full commit SHA, as Jenkins tags images (ECR tags are immutable).
+      - name: revision
+      # Any of the Spring services: order-service, user-service,
+      # notification-service.
+      - name: service
+        value: order-service
+      - name: registry
+        value: 602367507570.dkr.ecr.us-east-1.amazonaws.com
+      # Push only where the workflow has a registry role (dev: IRSA,
+      # automation/dev); the lab builds and scans.
+      - name: push
+        value: "false"
+        enum: ["true", "false"]
+      # A fixable HIGH or CRITICAL vulnerability fails the run ("false":
+      # report only).
+      - name: failOnVulnerabilities
+        value: "true"
+        enum: ["true", "false"]
+  # Steps run as an ordinary user; the shared volume belongs to its group.
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  volumeClaimTemplates:
+    - metadata:
+        name: workspace
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 4Gi
+  volumeClaimGC:
+    strategy: OnWorkflowCompletion
+  # One run per commit and service at a time.
+  synchronization:
+    mutexes:
+      - name: ci-build-{{workflow.parameters.service}}-{{workflow.parameters.revision}}
+  activeDeadlineSeconds: 3600
+  templates:
+    - name: pipeline
+      steps:
+        - - name: checkout
+            template: checkout
+        - - name: test
+            template: test
+        - - name: build
+            template: build
+        - - name: scan
+            template: scan
+        - - name: ecr-login
+            template: ecr-login
+            when: "{{workflow.parameters.push}} == true"
+        - - name: push
+            template: push
+            when: "{{workflow.parameters.push}} == true"
+
+    - name: checkout
+      container:
+        image: alpine/git:v2.54.0
+        command: [sh, -c]
+        args:
+          - |
+            set -eu
+            case "$REVISION" in
+              *[!0-9a-f]*|"") echo "revision must be a full commit SHA, got '$REVISION'"; exit 1 ;;
+            esac
+            [ "${#REVISION}" -eq 40 ] || { echo "revision must be 40 characters, got '$REVISION'"; exit 1; }
+            git clone --quiet --filter=blob:none "$REPO" /workspace/src
+            git -C /workspace/src checkout --quiet "$REVISION"
+            [ -f "/workspace/src/$SERVICE/Dockerfile" ] || { echo "no service '$SERVICE' at $REVISION"; exit 1; }
+            git -C /workspace/src log -1 --format='%H %s'
+        env:
+          - {name: REPO, value: "{{workflow.parameters.repo}}"}
+          - {name: REVISION, value: "{{workflow.parameters.revision}}"}
+          - {name: SERVICE, value: "{{workflow.parameters.service}}"}
+          - {name: HOME, value: /tmp}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+
+    # The service's unit and integration tests, with Gradle's cache on the
+    # run's volume.
+    - name: test
+      container:
+        image: eclipse-temurin:21-jdk-jammy
+        command: [sh, -c]
+        args:
+          - cd "/workspace/src/$SERVICE" && ./gradlew test --no-daemon --console=plain
+        env:
+          - {name: SERVICE, value: "{{workflow.parameters.service}}"}
+          - {name: GRADLE_USER_HOME, value: /workspace/.gradle}
+          - {name: HOME, value: /tmp}
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            memory: 2Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+
+    # The image, from the service's own Dockerfile, written to the volume as
+    # a tarball: nothing leaves the cluster before the scan. BuildKit runs
+    # rootless, without privileges, but needs seccomp and AppArmor
+    # unconfined to create its user namespace (moby/buildkit,
+    # examples/kubernetes/job.rootless.yaml).
+    - name: build
+      container:
+        image: moby/buildkit:v0.34.2-rootless
+        command: [buildctl-daemonless.sh]
+        args:
+          - build
+          - --frontend=dockerfile.v0
+          - --local=context=/workspace/src/{{workflow.parameters.service}}
+          - --local=dockerfile=/workspace/src/{{workflow.parameters.service}}
+          - --output=type=docker,name={{workflow.parameters.registry}}/{{workflow.parameters.service}}:{{workflow.parameters.revision}},dest=/workspace/image.tar
+        env:
+          - {name: BUILDKITD_FLAGS, value: --oci-worker-no-process-sandbox}
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            memory: 3Gi
+        securityContext:
+          seccompProfile:
+            type: Unconfined
+          appArmorProfile:
+            type: Unconfined
+          runAsUser: 1000
+          runAsGroup: 1000
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+          - name: buildkit-state
+            mountPath: /home/user/.local/share/buildkit
+      volumes:
+        - name: buildkit-state
+          emptyDir: {}
+
+    # Known vulnerabilities with a fix available, HIGH and CRITICAL only:
+    # those are the ones a rebuild on a newer base image would remove.
+    - name: scan
+      container:
+        image: aquasec/trivy:0.76.2
+        command: [sh, -c]
+        args:
+          - |
+            set -eu
+            code=1; [ "$FAIL_ON_VULNERABILITIES" = true ] || code=0
+            trivy image --input /workspace/image.tar --cache-dir /workspace/.trivy \
+              --severity HIGH,CRITICAL --ignore-unfixed --no-progress --exit-code "$code"
+        env:
+          - {name: FAIL_ON_VULNERABILITIES, value: "{{workflow.parameters.failOnVulnerabilities}}"}
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            memory: 2Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+
+    # A registry login from the workflow's IRSA role, valid 12 hours, kept
+    # on the run's volume for the next step and deleted with it.
+    - name: ecr-login
+      container:
+        image: amazon/aws-cli:2.39.4
+        command: [bash, -c]
+        args:
+          - |
+            set -euo pipefail
+            mkdir -p /workspace/.docker
+            token="$(aws ecr get-login-password --region us-east-1)"
+            auth="$(printf 'AWS:%s' "$token" | base64 -w0)"
+            printf '{"auths":{"%s":{"auth":"%s"}}}' "$REGISTRY" "$auth" > /workspace/.docker/config.json
+        env:
+          - {name: REGISTRY, value: "{{workflow.parameters.registry}}"}
+          - {name: HOME, value: /tmp}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+
+    - name: push
+      container:
+        image: gcr.io/go-containerregistry/crane:v0.22.1
+        args:
+          - push
+          - /workspace/image.tar
+          - "{{workflow.parameters.registry}}/{{workflow.parameters.service}}:{{workflow.parameters.revision}}"
+        env:
+          - {name: DOCKER_CONFIG, value: /workspace/.docker}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace

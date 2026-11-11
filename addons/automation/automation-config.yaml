@@ -1,0 +1,38 @@
+# What Argo Workflows and Argo Events run (roadmap step 21,
+# docs/WORKFLOWS.md): the workflow templates, the nightly report, the event
+# bus, event sources and sensors, from automation/<env>.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: automation-config
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: automation-config
+    # Git-sourced: follows the root app's revision.
+    app.kubernetes.io/part-of: gitops-config
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/kumarisback/gitops.git
+    targetRevision: HEAD
+    path: automation/ENV
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argo
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    # The CRDs come from the argo-workflows and argo-events applications;
+    # retry until they exist instead of failing the first sync.
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      - CreateNamespace=true
+      - SkipDryRunOnMissingResource=true

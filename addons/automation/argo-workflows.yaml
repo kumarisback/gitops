@@ -1,0 +1,38 @@
+# Argo Workflows (roadmap step 21, docs/WORKFLOWS.md): pipelines whose steps
+# are containers, run as pods, described in Kubernetes objects.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argo-workflows
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: cluster-addons
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - chart: argo-workflows
+      repoURL: https://argoproj.github.io/argo-helm
+      # Argo Workflows v4.1.6.
+      targetRevision: 2.0.14
+      helm:
+        # TIER and ENV are filled in by addons/select-env (see
+        # kustomization.yaml); missing files are skipped.
+        ignoreMissingValueFiles: true
+        valueFiles:
+          - $values/addons/values/common/argo-workflows.yaml
+          - $values/addons/values/TIER/argo-workflows.yaml
+          - $values/addons/values/ENV/argo-workflows.yaml
+    - repoURL: https://github.com/kumarisback/gitops.git
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argo
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

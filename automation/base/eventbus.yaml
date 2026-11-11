@@ -1,0 +1,24 @@
+# The event bus between event sources and sensors (roadmap step 21):
+# NATS JetStream, three replicas (Argo Events' minimum), each with a small
+# volume. Events wait here, if no sensor is ready, for up to 72 hours.
+#
+# Kafka could be the bus instead (Argo Events supports it), reusing the
+# cluster this repo already runs, but it needs a topic, plus two per
+# sensor, created and granted by hand; docs/WORKFLOWS.md compares.
+apiVersion: argoproj.io/v1alpha1
+kind: EventBus
+metadata:
+  name: default
+spec:
+  jetstream:
+    version: 2.10.29
+    replicas: 3
+    persistence:
+      volumeSize: 1Gi
+    containerTemplate:
+      resources:
+        requests:
+          cpu: 20m
+          memory: 64Mi
+        limits:
+          memory: 256Mi

@@ -15,7 +15,8 @@ kind: Component
 # valueFiles[1] is $values/addons/values/TIER/<addon>.yaml and valueFiles[2]
 # is $values/addons/values/ENV/<addon>.yaml; path segment 3 is replaced.
 # observability-config's and streaming-config's source paths
-# (observability/ENV, streaming/ENV) get segment 1.
+# (observability/ENV, streaming/ENV) and automation-config's (automation/ENV)
+# get segment 1.
 replacements:
   - source:
       kind: ConfigMap
@@ -54,6 +55,14 @@ replacements:
       - select:
           kind: Application
           labelSelector: app.kubernetes.io/name=streaming-config
+        fieldPaths:
+          - spec.source.path
+        options:
+          delimiter: /
+          index: 1
+      - select:
+          kind: Application
+          labelSelector: app.kubernetes.io/name=automation-config
         fieldPaths:
           - spec.source.path
         options:

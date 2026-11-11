@@ -1,0 +1,34 @@
+# Namespace argo runs code from outside the cluster: the CI pipeline builds
+# whatever a commit contains. Not a default deny like the application's
+# (docs/NETWORK-POLICIES.md: its pods fetch dependencies, scanner databases
+# and images from the internet), but two limits (roadmap step 21).
+
+# No pod here reaches the instance metadata service and the node's AWS
+# credentials; everything else is allowed out. Workflows get AWS access
+# through their own roles (IRSA).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: no-instance-metadata
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.169.254/32
+---
+# Nothing connects to a workflow's pods: their steps report through the
+# Kubernetes API.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: workflow-pods-take-no-connections
+spec:
+  podSelector:
+    matchExpressions:
+      - key: workflows.argoproj.io/workflow
+        operator: Exists
+  policyTypes: [Ingress]
