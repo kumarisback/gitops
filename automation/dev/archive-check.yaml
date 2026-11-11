@@ -4,6 +4,17 @@
 # it. A backup nobody has read back isn't known to be one.
 #
 #   S3 events archive ─► SQS archive-uploads ─► EventSource ─► EventBus ─► Sensor ─► Workflow verify-archive-object
+
+# The check's own account: read the archive, keep its logs under its prefix
+# (tf output irsa_role_arns["archive_checker"]). Nothing else may read the
+# archive.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: archive-checker
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::602367507570:role/microservices-dev-irsa-archive_checker
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -89,12 +100,16 @@ spec:
 # the fields the connector writes, values that decode, offsets that only go
 # up and start where the file's name says. Fails, and so shows red in the
 # UI, if any of that isn't so. The file comes from S3 as an input artifact,
-# with the workflow's role (argo_workflow: read the archive, nothing more).
+# with the check's own role (archive_checker).
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: verify-archive-object
 spec:
+  serviceAccountName: archive-checker
+  artifactRepositoryRef:
+    configMap: artifact-repositories
+    key: archive-check
   entrypoint: verify
   arguments:
     parameters:

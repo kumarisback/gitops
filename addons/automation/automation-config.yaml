@@ -20,7 +20,7 @@ spec:
     path: automation/ENV
   destination:
     server: https://kubernetes.default.svc
-    namespace: argo
+    namespace: workflows
   syncPolicy:
     automated:
       prune: true

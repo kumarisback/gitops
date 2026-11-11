@@ -3,7 +3,7 @@
 # lacks: the tests (Jenkins skips them, -x test) and an image scan before
 # anything is pushed.
 #
-#   argo submit -n argo --from workflowtemplate/ci-build \
+#   argo submit -n workflows --from workflowtemplate/ci-build \
 #     -p revision=<full commit SHA> [-p service=user-service] [-p push=true]
 #
 # checkout ─► test ─► build image ─► scan ─► (push=true) ECR login ─► push
@@ -20,8 +20,11 @@ spec:
   entrypoint: pipeline
   arguments:
     parameters:
+      # This project's repository only: a build runs a commit's code with
+      # ci-builder's rights (in dev: pushing images).
       - name: repo
         value: https://github.com/kumarisback/app.git
+        enum: ["https://github.com/kumarisback/app.git"]
       # A full commit SHA, as Jenkins tags images (ECR tags are immutable).
       - name: revision
       # Any of the Spring services: order-service, user-service,

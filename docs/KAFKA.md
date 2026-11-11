@@ -183,7 +183,7 @@ After `scripts/sync-local-stack.rb` (Kafka takes a few minutes to start:
    notification-service logs `event_dead_lettered` and
    `KafkaDeadLetterRecords` fires; read it back as in the runbook. Since step
    21 a `dead-letter-triage` workflow has also started for it
-   (`argo list -n argo`, `docs/WORKFLOWS.md`).
+   (`argo list -n workflows`, `docs/WORKFLOWS.md`).
 
 4. **Retries, then the dead-letter topic.** Set
    `APP_NOTIFICATIONS_SIMULATEDFAILURERATE=1` (`app.notifications.simulated-failure-rate`) on notification-service

@@ -4,15 +4,27 @@ kind: Kustomization
 # dev (roadmap step 21, docs/WORKFLOWS.md): everything in base, plus the
 # check of each new events archive file (an S3 upload starts a workflow),
 # and the AWS roles from tf 01-infra workflows.tf (enable_argo_workflows):
-# tf output irsa_role_arns["ci_builder"] and ["archive_uploads_reader"].
-namespace: argo
+# tf output irsa_role_arns["ci_builder"], ["archive_checker"] and
+# ["archive_uploads_reader"].
+namespace: workflows
 
 resources:
   - ../base
+  - artifact-repositories.yaml
   - archive-check.yaml
 
-# The CI pipeline may push to ECR here (-p push=true).
+# The CI pipeline may push to ECR here (-p push=true), and keeps its logs
+# under its own prefix.
 patches:
+  - target:
+      kind: WorkflowTemplate
+      name: ci-build
+    patch: |-
+      - op: add
+        path: /spec/artifactRepositoryRef
+        value:
+          configMap: artifact-repositories
+          key: ci
   - target:
       kind: ServiceAccount
       name: ci-builder

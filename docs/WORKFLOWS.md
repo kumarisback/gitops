@@ -19,13 +19,13 @@ pieces of automation run on them here.
 
 | Piece | Where | What it does |
 |---|---|---|
-| Argo Workflows 4.1 | `addons/automation/argo-workflows.yaml`, `addons/values/*/argo-workflows.yaml` | The controller and the UI/API server (namespace `argo`); workflows run in `argo` |
+| Argo Workflows 4.1 | `addons/automation/argo-workflows.yaml`, `addons/values/*/argo-workflows.yaml` | The controller and the UI/API server (namespace `argo`); workflows, and only workflows' accounts, in `workflows` |
 | Argo Events 1.9 | `addons/automation/argo-events.yaml`, `addons/values/common/argo-events.yaml` | The controller that runs event sources, sensors and the event bus |
-| What runs | `automation/base` (every environment that has them), `automation/dev` | Templates, the cron workflow, the event bus, sources, sensors, accounts, network limits |
+| What runs | `automation/base` (every environment that has them), `automation/dev`; namespace `workflows` | Templates, the cron workflow, the event bus, sources, sensors, accounts, network limits |
 | CI pipeline | `automation/base/ci-build.yaml` | A Spring service's Jenkins pipeline, plus tests and an image scan |
 | Dead-letter triage | `automation/base/dead-letters.yaml` | A workflow per record parked in `orders-dlq` or `users-dlq`: what failed and why |
 | Archive check (dev) | `automation/dev/archive-check.yaml`; tf `01-infra/workflows.tf` | Each new events-archive file is read back and checked |
-| Nightly report | `automation/base/slo-report.yaml` | Yesterday's requests, errors and latency per API, against the SLOs |
+| Nightly report | `automation/base/slo-report.yaml` | A WorkflowTemplate and the CronWorkflow that starts it nightly: yesterday's requests, errors and latency per API, against the SLOs |
 | AWS (dev) | tf `01-infra/workflows.tf` (`enable_argo_workflows`) | Artifact bucket, the SQS queue, the workflows' IRSA roles |
 | Alert | `observability/base/automation-alerts.yaml` | `ArgoWorkflowsControllerUnavailable`, tested |
 
@@ -79,24 +79,34 @@ with its grants, kept in step with every sensor added. NATS JetStream is Argo Ev
 recommendation: three small pods (the minimum it accepts), events kept up to 72 hours if no
 sensor is ready.
 
-**Who may do what.** Workflows run as `argo-workflow` unless they name another; the CI
-pipeline as `ci-builder` (in dev: push to the services' ECR repositories, nothing else);
-event sources with no Kubernetes access; sensors may only create workflows. The UI and API
+**Who may do what.** A workflow runs its pods as a ServiceAccount of its namespace, whichever
+it names. So workflows run in a namespace of their own, `workflows`, which holds only the
+accounts made for them: Argo's controller and server live in `argo`, and their cluster-wide
+accounts are out of a workflow's reach. Workflows run as `argo-workflow` unless they name
+another; the CI pipeline as `ci-builder` (in dev: push to the services' ECR repositories,
+nothing else); the archive check as `archive-checker`, the only one that reads the archive;
+event sources with no Kubernetes access; sensors may only create workflows. And the
+controller runs only workflows that reference a WorkflowTemplate (`templateReferencing:
+Strict`): whoever may start one chooses among the templates in Git and their parameters,
+not what the pods run; the CI pipeline builds only this project's repository. The UI and API
 (`server`) take the caller's own Kubernetes token (`client` mode), so the server has no
 account of its own to lend to whoever reaches it, and it's reached only by port-forward.
 `workflow-operator` is an account for people: a short-lived token from it may see everything
-here and start, stop, retry and delete workflows, but not change templates. Starting a
-workflow means running pods as any account in the namespace, `ci-builder` included: give it
-only to people who may push images.
+in `workflows` and start, stop, retry and delete workflows, but not change templates.
+Starting the CI pipeline still means building and, in dev, pushing an image: give it to
+people who may do that.
 
-**The network.** Workflows build what a commit contains, so namespace `argo` gets two limits
+**The network.** Workflows build what a commit contains, so namespace `workflows` gets two limits
 (not the application's default deny: its pods fetch dependencies, scanner data and images from
 the internet): no pod reaches the instance metadata service, and nothing connects to a
-workflow's pods. Kafka's listener admits `argo` among its peers (step 19).
+workflow's pods. Kafka's listener admits `workflows` among its peers (step 19).
 
-**Artifacts.** In dev, workflows' logs and artifacts go to an S3 bucket (30 days), each
-workflow with its own role, no keys. The lab has no object store: workflows report through
-their results and their pods' logs, kept until the workflow is cleaned up.
+**Artifacts.** In dev, workflows' logs and artifacts go to an S3 bucket (30 days), no keys.
+Each account's workflows write under a prefix of their own (`default/`, `ci/`,
+`archive-check/`), and each role may read and write only its prefix and delete nothing: a CI
+build runs a commit's code, and must not read or overwrite what other workflows left. The lab
+has no object store: workflows report through their results and their pods' logs, kept until
+the workflow is cleaned up.
 
 ## Jenkins, Argo Workflows or GitHub Actions?
 
@@ -127,16 +137,16 @@ run one after another).
 Install the `argo` CLI (`brew install argo`), then `scripts/sync-local-stack.rb`.
 
 1. **The UI.** `kubectl -n argo port-forward svc/argo-workflows-server 2746:2746`, open
-   http://localhost:2746 and paste `Bearer $(kubectl create token workflow-operator -n argo)`.
-2. **The nightly report, now.** `argo submit -n argo --from cronwf/slo-report --watch`, then
-   `argo get -n argo @latest` shows the report.
+   http://localhost:2746 and paste `Bearer $(kubectl create token workflow-operator -n workflows)`.
+2. **The nightly report, now.** `argo submit -n workflows --from cronwf/slo-report --watch`, then
+   `argo get -n workflows @latest` shows the report.
 3. **A dead letter.** Send a poison record as in `docs/KAFKA.md` ("Try it", 3): in the admin
    pod, `echo 'not avro' | bin/kafka-console-producer.sh $ADMIN --topic orders`.
    notification-service parks it in `orders-dlq`, and a few seconds later
-   `argo list -n argo` shows a `dead-letter-triage` workflow; `argo get -n argo @latest` gives
+   `argo list -n workflows` shows a `dead-letter-triage` workflow; `argo get -n workflows @latest` gives
    the exception and where the record is.
 4. **The CI pipeline.** For a commit pushed to GitHub:
-   `argo submit -n argo --from workflowtemplate/ci-build -p revision=$(git -C ../app rev-parse HEAD) --watch`.
+   `argo submit -n workflows --from workflowtemplate/ci-build -p revision=$(git -C ../app rev-parse HEAD) --watch`.
    It checks out, tests, builds and scans order-service (about ten minutes the first time: no
    cache). A fixable HIGH or CRITICAL finding fails the scan step; `-p failOnVulnerabilities=false`
    reports instead.

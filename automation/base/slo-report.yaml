@@ -3,9 +3,54 @@
 # (observability/base/slo-rules.yaml): requests, the share without a server
 # error (objective 99.5%) and the share within 500 ms (objective 99%).
 #
-# The report is the workflow's result: `argo get -n argo @latest` or the UI
+# The report is the workflow's result: `argo get -n workflows @latest` or the UI
 # shows it, a week of them is kept, and in dev each step's log is archived
 # in S3 too. The alerts catch an SLO burning; this is the daily record.
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: slo-report
+spec:
+  entrypoint: report
+  # Keep a week of reports, longer than the default day.
+  ttlStrategy:
+    secondsAfterSuccess: 691200
+    secondsAfterFailure: 691200
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  templates:
+    - name: report
+      retryStrategy:
+        limit: 2
+      script:
+        # promtool, the Prometheus project's own query client.
+        image: prom/prometheus:v2.53.0
+        command: [sh]
+        env:
+          - name: PROMETHEUS
+            value: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        source: |
+          set -eu
+          sel='job=~"order-service|user-service", uri!~".*actuator.*"'
+          q() { echo "## $1"; /bin/promtool query instant "$PROMETHEUS" "$2"; echo; }
+          echo "# Service levels, the last 24 hours (to $(date -u +%Y-%m-%dT%H:%MZ))"
+          echo
+          q "Requests" \
+            "round(sum by (namespace, job) (increase(http_server_requests_seconds_count{$sel}[1d])))"
+          # No server errors at all is no 5xx series at all: count it as zero.
+          q "Share without a server error (objective 0.995)" \
+            "1 - (sum by (namespace, job) (increase(http_server_requests_seconds_count{$sel, status=~\"5..\"}[1d])) or 0 * sum by (namespace, job) (increase(http_server_requests_seconds_count{$sel}[1d]))) / sum by (namespace, job) (increase(http_server_requests_seconds_count{$sel}[1d]))"
+          q "Share within 500 ms (objective 0.99)" \
+            "sum by (namespace, job) (increase(http_server_requests_seconds_bucket{$sel, le=\"0.5\"}[1d])) / sum by (namespace, job) (increase(http_server_requests_seconds_count{$sel}[1d]))"
+---
 apiVersion: argoproj.io/v1alpha1
 kind: CronWorkflow
 metadata:
@@ -19,43 +64,7 @@ spec:
   startingDeadlineSeconds: 3600
   successfulJobsHistoryLimit: 7
   failedJobsHistoryLimit: 3
+  # The controller runs only WorkflowTemplates (Strict): the cron starts one.
   workflowSpec:
-    entrypoint: report
-    # Keep a week of reports, longer than the default day.
-    ttlStrategy:
-      secondsAfterSuccess: 691200
-      secondsAfterFailure: 691200
-    securityContext:
-      runAsNonRoot: true
-      runAsUser: 65534
-      seccompProfile:
-        type: RuntimeDefault
-    templates:
-      - name: report
-        retryStrategy:
-          limit: 2
-        script:
-          # promtool, the Prometheus project's own query client.
-          image: prom/prometheus:v2.53.0
-          command: [sh]
-          env:
-            - name: PROMETHEUS
-              value: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
-          source: |
-            set -eu
-            sel='job=~"order-service|user-service", uri!~".*actuator.*"'
-            q() { echo "## $1"; /bin/promtool query instant "$PROMETHEUS" "$2"; echo; }
-            echo "# Service levels, the last 24 hours (to $(date -u +%Y-%m-%dT%H:%MZ))"
-            echo
-            q "Requests" \
-              "round(sum by (namespace, job) (increase(http_server_requests_seconds_count{$sel}[1d])))"
-            # No server errors at all is no 5xx series at all: count it as zero.
-            q "Share without a server error (objective 0.995)" \
-              "1 - (sum by (namespace, job) (increase(http_server_requests_seconds_count{$sel, status=~\"5..\"}[1d])) or 0 * sum by (namespace, job) (increase(http_server_requests_seconds_count{$sel}[1d]))) / sum by (namespace, job) (increase(http_server_requests_seconds_count{$sel}[1d]))"
-            q "Share within 500 ms (objective 0.99)" \
-              "sum by (namespace, job) (increase(http_server_requests_seconds_bucket{$sel, le=\"0.5\"}[1d])) / sum by (namespace, job) (increase(http_server_requests_seconds_count{$sel}[1d]))"
+    workflowTemplateRef:
+      name: slo-report

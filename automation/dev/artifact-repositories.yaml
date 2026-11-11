@@ -1,0 +1,25 @@
+# Where workflows that name a repository keep their logs and artifacts
+# (roadmap step 21): the same bucket as the default (addons/values/dev/
+# argo-workflows.yaml), each under the prefix its role may use (tf
+# workflows.tf). Workflows find this ConfigMap in their own namespace.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: artifact-repositories
+data:
+  ci: |
+    archiveLogs: true
+    s3:
+      bucket: microservices-dev-workflow-artifacts-602367507570
+      endpoint: s3.amazonaws.com
+      region: us-east-1
+      useSDKCreds: true
+      keyFormat: "ci/{{workflow.name}}/{{pod.name}}"
+  archive-check: |
+    archiveLogs: true
+    s3:
+      bucket: microservices-dev-workflow-artifacts-602367507570
+      endpoint: s3.amazonaws.com
+      region: us-east-1
+      useSDKCreds: true
+      keyFormat: "archive-check/{{workflow.name}}/{{pod.name}}"

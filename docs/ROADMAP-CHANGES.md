@@ -130,6 +130,15 @@ to it.
 | 14 Amazon MSK | An optional **MSK Serverless** cluster in Terraform (`enable_msk`, off: about $0.75 an hour), with one IAM role per service allowed exactly what its Kafka user is allowed on Strimzi. The services switch to it by configuration only: the chart's `kafka.msk` setting and a matching piece for user-service; the one code change is AWS's sign-in library, with a test per service. A Job creates the topics on MSK. `docs/msk-vs-strimzi.md` gives the switch-over steps and the comparison with numbers: about $95 a month for Strimzi in dev against about $570 for MSK Serverless, and what the difference buys. First `terraform test` in the repo (mocked AWS, no cost). Notes: tf topic 14. | ✅ |
 | 15 KEDA | **KEDA** installed as an add-on in every environment. notification-service now scales on its Kafka backlog instead of CPU: none at all when there's nothing to do, up to one per partition when events pile up, and one as a safety net if KEDA can't read the backlog. order-service, in the lab and dev, scales on requests per second as well as CPU (staging and prod keep CPU only, to compare). The "service unavailable" alert no longer fires for a service at zero on purpose; two new alerts for KEDA itself. KEDA reads lag with its own Kafka user that can't read events, and may read Kubernetes Secrets only in its own namespace (a security review of the first version found it could read every Secret in the cluster). A setting that slows notification-service down on purpose, for the exercise that shows why CPU-based scaling misses a backlog. Guide: `docs/KEDA.md`; notes: tf topic 15. | ✅ |
 
+**Fixed along the way in step 21:**
+
+- **A review of the workflows found three loose ends**, all closed: whoever could start a
+  workflow could have run it with the workflow controller's own cluster-wide rights (workflows
+  now run in a namespace of their own and only from the templates in Git); every workflow
+  could read the events archive (now only the archive check); and a CI build could have read
+  or overwritten other workflows' logs (each kind of workflow now has its own corner of the
+  bucket).
+
 **Fixed along the way in step 19:**
 
 - **Kong's gateways sent usage reports to Kong Inc.**, as Kong does unless told otherwise.

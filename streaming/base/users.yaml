@@ -123,7 +123,7 @@ spec:
 # Argo Events (roadmap step 21, docs/WORKFLOWS.md): reads the dead-letter
 # topics, as its own consumer group, to start a triage workflow for each
 # record parked there. Nothing else: it can't read the event topics or
-# write anywhere. Delivered to namespace argo by a KafkaAccess
+# write anywhere. Delivered to namespace workflows by a KafkaAccess
 # (automation/base/kafka-access.yaml).
 apiVersion: kafka.strimzi.io/v1
 kind: KafkaUser

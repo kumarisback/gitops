@@ -13,6 +13,12 @@ artifactRepository:
     region: us-east-1
     # Credentials from the workflow pod's own role (IRSA), no keys.
     useSDKCreds: true
+    # Each account's workflows under their own prefix, and each role may
+    # touch only its own (tf workflows.tf): a CI build, which runs a
+    # commit's code, can't read or overwrite another workflow's output.
+    # This is the default (argo-workflow's); CI and the archive check name
+    # theirs (automation/dev/artifact-repositories.yaml).
+    keyFormat: "default/{{workflow.name}}/{{pod.name}}"
 
 workflow:
   serviceAccount:

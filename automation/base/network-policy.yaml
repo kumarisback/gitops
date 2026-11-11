@@ -1,4 +1,4 @@
-# Namespace argo runs code from outside the cluster: the CI pipeline builds
+# Namespace workflows runs code from outside the cluster: the CI pipeline builds
 # whatever a commit contains. Not a default deny like the application's
 # (docs/NETWORK-POLICIES.md: its pods fetch dependencies, scanner databases
 # and images from the internet), but two limits (roadmap step 21).

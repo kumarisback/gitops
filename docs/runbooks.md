@@ -396,7 +396,7 @@ notification nobody got.
 
 **Check:** in the lab and dev, each parked record has started a triage
 workflow (roadmap step 21, `docs/WORKFLOWS.md`) with the reason already
-decoded: `argo list -n argo --prefix dead-letter-triage` and `argo get -n argo
+decoded: `argo list -n workflows --prefix dead-letter-triage` and `argo get -n workflows
 <name>` show its topic, offset, exception and schema id. Without it, why they
 were parked is in their headers; read those in the admin pod (the values
 print as garbage, they're Avro):
@@ -647,14 +647,15 @@ pipeline, the nightly service-level report, the dead-letter triage and (dev) the
 check of each new events archive file. Their state:
 
 ```bash
-kubectl get pods -n argo                       # controller, server, event bus, sources, sensors
-argo list -n argo                              # recent workflows and how they ended
-argo cron list -n argo                         # the nightly report: last and next run
-kubectl get eventsources,sensors,eventbus -n argo
+kubectl get pods -n argo                       # the controller and the server
+kubectl get pods -n workflows                  # event bus, sources, sensors, workflow steps
+argo list -n workflows                              # recent workflows and how they ended
+argo cron list -n workflows                         # the nightly report: last and next run
+kubectl get eventsources,sensors,eventbus -n workflows
 ```
 
-A workflow that failed shows which step and why in `argo get -n argo <name>`; its
-logs are in `argo logs -n argo <name>` (and in dev, after its pods are gone, in the
+A workflow that failed shows which step and why in `argo get -n workflows <name>`; its
+logs are in `argo logs -n workflows <name>` (and in dev, after its pods are gone, in the
 artifact bucket).
 
 ### ArgoWorkflowsControllerUnavailable
@@ -671,7 +672,7 @@ and the pod's events and log.
 began with one). Workflows started before it stopped continue when it is back; a
 missed nightly report isn't caught up (`concurrencyPolicy: Forbid`,
 `startingDeadlineSeconds: 3600`): run one by hand with
-`argo submit -n argo --from cronwf/slo-report` if needed.
+`argo submit -n workflows --from cronwf/slo-report` if needed.
 
 ---
 

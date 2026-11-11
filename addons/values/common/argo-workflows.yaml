@@ -1,8 +1,14 @@
-# Argo Workflows (roadmap step 21, docs/WORKFLOWS.md). Workflows run in
-# namespace argo only, as ServiceAccount argo-workflow unless they name
-# another (the CI builder runs as ci-builder, automation/base).
+# Argo Workflows (roadmap step 21, docs/WORKFLOWS.md). The controller and
+# server run in namespace argo; workflows run in namespace workflows only,
+# so a workflow can never run as the controller's or the server's account,
+# only as one of the accounts made for workflows there (argo-workflow by
+# default; ci-builder, archive-checker; automation/).
 controller:
-  workflowNamespaces: [argo]
+  workflowNamespaces: [workflows]
+  # Only workflows that run a WorkflowTemplate: whoever may start one picks
+  # among the templates in Git (and their parameters), not arbitrary pods.
+  workflowRestrictions:
+    templateReferencing: Strict
   resources:
     requests:
       cpu: 50m
@@ -39,7 +45,9 @@ workflow:
     # other accounts workflows run as (automation/base/rbac.yaml).
     serviceAccounts:
       - name: ci-builder
-        namespace: argo
+        namespace: workflows
+      - name: archive-checker
+        namespace: workflows
 
 server:
   # The UI and API ask for a Kubernetes token and act with its

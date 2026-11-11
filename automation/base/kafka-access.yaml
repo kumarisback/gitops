@@ -1,6 +1,7 @@
 # Argo Events' Kafka identity (KafkaUser argo-events, streaming/base/users.yaml:
 # read the dead-letter topics, nothing else). The Strimzi Access Operator
-# keeps its certificate here, in Secret argo-events-kafka.
+# keeps its certificate here (namespace workflows), in Secret
+# argo-events-kafka.
 apiVersion: access.strimzi.io/v1alpha1
 kind: KafkaAccess
 metadata:

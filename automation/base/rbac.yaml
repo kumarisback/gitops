@@ -42,14 +42,15 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: sensor
-    namespace: argo
+    namespace: workflows
 ---
 # For a person using the Argo UI (docs/WORKFLOWS.md): the server asks for a
 # Kubernetes token and acts with its permissions. A short-lived one from
 # `kubectl create token workflow-operator -n argo` may see everything here,
 # and start, stop, retry and delete workflows; it can't change templates or
 # schedules. Starting a workflow means running pods as any account in this
-# namespace (ci-builder included): give it to people who may push images.
+# namespace (but only through a WorkflowTemplate: the controller is Strict),
+# ci-builder included: give it to people who may push images.
 # (The argo CLI uses your kubeconfig instead.)
 apiVersion: v1
 kind: ServiceAccount
@@ -84,4 +85,4 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: workflow-operator
-    namespace: argo
+    namespace: workflows
