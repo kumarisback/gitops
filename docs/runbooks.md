@@ -394,8 +394,12 @@ or fix what makes each record slow.
 them (malformed, or still failing after its retries). Each is a
 notification nobody got.
 
-**Check:** why they were parked is in their headers; read those in the
-admin pod (the values print as garbage, they're Avro):
+**Check:** in the lab and dev, each parked record has started a triage
+workflow (roadmap step 21, `docs/WORKFLOWS.md`) with the reason already
+decoded: `argo list -n argo --prefix dead-letter-triage` and `argo get -n argo
+<name>` show its topic, offset, exception and schema id. Without it, why they
+were parked is in their headers; read those in the admin pod (the values
+print as garbage, they're Avro):
 
 ```bash
 bin/kafka-console-consumer.sh $ADMIN --topic orders-dlq --from-beginning \
@@ -633,6 +637,41 @@ renewed.
 
 **Act:** restore it within hours, before certificates expire; roll back the `istiod`
 application's last change if it began with one.
+
+---
+
+## Automation (Argo Workflows and Events)
+
+Argo Workflows and Argo Events run in the lab and dev (`docs/WORKFLOWS.md`): the CI
+pipeline, the nightly service-level report, the dead-letter triage and (dev) the
+check of each new events archive file. Their state:
+
+```bash
+kubectl get pods -n argo                       # controller, server, event bus, sources, sensors
+argo list -n argo                              # recent workflows and how they ended
+argo cron list -n argo                         # the nightly report: last and next run
+kubectl get eventsources,sensors,eventbus -n argo
+```
+
+A workflow that failed shows which step and why in `argo get -n argo <name>`; its
+logs are in `argo logs -n argo <name>` (and in dev, after its pods are gone, in the
+artifact bucket).
+
+### ArgoWorkflowsControllerUnavailable
+
+**Meaning:** the workflow controller has had no ready pod for 10 minutes. Nothing
+that Argo Workflows runs starts or moves on: the nightly report is skipped, dead
+letters and archive files pile up untriaged (their events wait on the event bus,
+up to 72 hours), CI builds wait. The services are unaffected.
+
+**Check:** `kubectl get pods -n argo -l app.kubernetes.io/component=workflow-controller`
+and the pod's events and log.
+
+**Act:** restore it (roll back the `argo-workflows` application's last change if it
+began with one). Workflows started before it stopped continue when it is back; a
+missed nightly report isn't caught up (`concurrencyPolicy: Forbid`,
+`startingDeadlineSeconds: 3600`): run one by hand with
+`argo submit -n argo --from cronwf/slo-report` if needed.
 
 ---
 

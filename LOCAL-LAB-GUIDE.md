@@ -441,7 +441,7 @@ the alert to clear (about 4 minutes; works the same on EKS):
 | Step | Topic | Local KinD Execution |
 |---|---|---|
 | **20** | `20-argo-rollouts` | **Done** (`docs/ROLLOUTS.md`): Argo Rollouts in the lab (about 128 MiB) and the kubectl plugin. order-service is a canary (20% → 50% → 100% in the lab), weighted by the mesh's VirtualService and measured on its own errors and latency; frontend is blue/green with a preview and manual promotion. order-service's `APP_FAULT_ERROR_RATE` makes a bad version on demand. Once after the first sync: `kubectl delete deployment frontend -n development`. "Try it in the lab": a good canary, a bad one rolled back on its own, a blue/green promotion. |
-| **21** | `21-argo-workflows-events` | Deploy Argo Workflows. Build a DAG pipeline (build → test → scan). Set up MinIO in KinD for artifact storage. |
+| **21** | `21-argo-workflows-events` | **Done** (`docs/WORKFLOWS.md`): Argo Workflows and Argo Events in the lab (about 0.8 GiB idle) and the `argo` CLI. A CI pipeline for a Spring service (checkout, test, build with BuildKit rootless, scan with Trivy; push only in dev), a triage workflow for every dead-lettered Kafka record, a nightly SLO report. No object store in the lab (MinIO's community edition stopped shipping ready-made images in 2025): workflows report through their results and logs; dev uses S3. "Try it in the lab": the UI, the report on demand, a poison record triaged, a CI run. |
 | **22** | `22-feature-flags` | Deploy Unleash in KinD. Toggle features dynamically in `frontend` without redeployment. |
 
 ---

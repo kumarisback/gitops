@@ -50,6 +50,7 @@ gitops/
 │                            metrics-server, VPA (recommends container sizes), KEDA
 │                            (scales on events, KEDA.md), Kong (the API gateway, KONG.md),
 │                            Argo Rollouts (canary and blue/green releases, ROLLOUTS.md)
+│   ├── automation/            Argo Workflows and Events, only in the lab and dev (WORKFLOWS.md)
 │   ├── applications/          one ArgoCD app per tool
 │   ├── streaming/             Kafka: the Strimzi operators and the cluster's config app,
 │   │                            only in the environments that run Kafka (lab, dev)
@@ -62,6 +63,9 @@ gitops/
 │                            environment), components/ (the S3 events archive, dev),
 │                            keda/ (KEDA's Kafka credentials, in its own namespace),
 │                            and tools/ for the runbooks' admin and Avro pods; see KAFKA.md
+├── automation/  ★           what Argo Workflows and Argo Events run (base + local, dev):
+│                            the CI pipeline, the nightly SLO report, the dead-letter
+│                            triage and (dev) the archive check; see WORKFLOWS.md
 ├── charts/  ★               our own Helm charts: microservice (any of the services) and
 │                            common (a library of shared helpers); see HELM.md
 ├── bootstrap/               ArgoCD entry points, one per environment
