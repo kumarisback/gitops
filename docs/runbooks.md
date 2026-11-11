@@ -676,6 +676,34 @@ missed nightly report isn't caught up (`concurrencyPolicy: Forbid`,
 
 ---
 
+## Feature flags (Unleash)
+
+Unleash runs in the lab and dev (`docs/FEATURE-FLAGS.md`). The services keep their last
+answers while it's away; the kill switch `order-events-publishing` can't be flipped until
+it's back. Its state:
+
+```bash
+kubectl get pods -n feature-flags                              # unleash, postgres
+kubectl -n feature-flags port-forward svc/unleash 4242:4242    # UI at http://localhost:4242/flags
+```
+
+### FeatureFlagServiceUnavailable
+
+**Meaning:** Unleash has had no ready pod for 5 minutes. Services keep the flags they last
+saw (a pod started meanwhile uses the fallbacks: events keep going out, unreleased features
+stay hidden), and no flag can be changed, the kill switch included.
+
+**Check:** `kubectl describe pod -n feature-flags -l app.kubernetes.io/name=unleash` and
+its log; most often PostgreSQL is the cause (`kubectl get pods -n feature-flags`), or a wrong
+password in Secret `unleash` after the secret was regenerated.
+
+**Act:** bring PostgreSQL back first, then Unleash. The kill switch works only through
+Unleash (without it, order-service publishes: that's its fallback), so if events must stop
+now, restoring Unleash is the quickest way. A regenerated `unleash` secret needs
+PostgreSQL's password changed to match it (or, in dev, a fresh database).
+
+---
+
 ## Releases (Argo Rollouts)
 
 frontend and order-service are released with Argo Rollouts (`docs/ROLLOUTS.md`):

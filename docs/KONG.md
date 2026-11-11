@@ -22,7 +22,7 @@ Kong Ingress Controller: watches HTTPRoutes, the Gateway, plugins ─► pushes 
 | Gateway API CRDs v1.3.0 | `platform/gateway-api` (release file, pinned by checksum), Application `gateway-api` | `GatewayClass`, `Gateway`, `HTTPRoute`, `GRPCRoute`, `ReferenceGrant` |
 | Kong 3.9 + Kong Ingress Controller 3.5 | `addons/applications/kong.yaml`, `addons/values/{common,cloud,local}/kong.yaml` | The gateway (DB-less, open source) and the controller that configures it; in every environment |
 | The edge's Ingress | `addons/values/cloud/kong.yaml` (ALB), `addons/values/local/kong.yaml` (Traefik) | Everything from the edge to Kong; replaces the services' old `app-ingress` |
-| GatewayClass and Gateway | `platform/kong/gateway.yaml`, Application `kong-config` | What routes attach to: HTTP on port 80, from the application namespaces only |
+| GatewayClass and Gateway | `platform/kong/gateway.yaml`, Application `kong-config` | What routes attach to: HTTP on port 80, from the application namespaces, and from `feature-flags` for Unleash's frontend API (step 22) |
 | Routes | `apps/base/routes.yaml` | One `HTTPRoute` per service, owned next to the services |
 | Plugins | `platform/kong/plugins.yaml`, `apps/base/kong.yaml` | Metrics and security headers everywhere; sign-in limits, token checks, partner keys and tiers where routes name them (step 17) |
 | Rate-limit counters | `platform/kong/redis.yaml` | Valkey, shared by every gateway pod, reachable only from them |

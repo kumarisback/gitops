@@ -35,7 +35,7 @@ POST /api/auth/signup ► user-service ─UserRegistered─────► topic
 | KafkaAccess | `apps/components/kafka-clients` | "order-service needs a connection as KafkaUser order-service" |
 | notification-service | app repo; `apps/<env>/notification-service.values.yaml` | The consumer, deployed with our Helm chart |
 | Schema registry | `streaming/base/schema-registry.yaml` | Apicurio Registry, storing its data in Kafka: every event schema, versioned; refuses a change that isn't backward compatible |
-| Outbox | order-service `outbox/` | Saves each event with its order in one MongoDB transaction; a relay publishes it |
+| Outbox | order-service `outbox/` | Saves each event with its order in one MongoDB transaction; a relay publishes it, unless the kill switch `order-events-publishing` holds it (step 22, `docs/FEATURE-FLAGS.md`) |
 | Events archive | `streaming/components/events-archive`; app repo `kafka-connect/`; tf `01-infra/streaming.tf` | Kafka Connect with an S3 sink: every event into S3, kept a year (dev) |
 | Kafka UI | `addons/streaming/kafka-ui.yaml` | Read-only web UI: topics, messages decoded with the registry, consumer groups, schemas |
 | Tools | `streaming/tools/` | Admin pod (Kafka's CLI as a super user); Avro console pod (read and replay events as JSON) |

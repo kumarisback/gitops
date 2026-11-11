@@ -63,6 +63,7 @@ gitops/
 │                            environment), components/ (the S3 events archive, dev),
 │                            keda/ (KEDA's Kafka credentials, in its own namespace),
 │                            and tools/ for the runbooks' admin and Avro pods; see KAFKA.md
+├── feature-flags/  ★        Unleash and its PostgreSQL (base + local, dev); see FEATURE-FLAGS.md
 ├── automation/  ★           what Argo Workflows and Argo Events run (base + local, dev):
 │                            the CI pipeline, the nightly SLO report, the dead-letter
 │                            triage and (dev) the archive check; see WORKFLOWS.md

@@ -25,7 +25,8 @@ whatever no flow needs, and the mesh refuses wrong identities and paths among wh
 |---|---|---|
 | Enforcement | KinD's network plugin (lab, KinD 0.24 and later); tf `enable_network_policy` (the VPC CNI's policy agent, every environment) | Turns NetworkPolicy objects into dropped packets. Without it they are accepted and ignored |
 | Application namespace | `apps/base/network-policies.yaml`; `apps/components/kafka-clients`, `apps/components/kafka-msk`; `apps/local/mongodb.yaml` | Deny everything, then one policy per workload saying what it accepts and what it calls |
-| kong namespace | `platform/kong/network-policy.yaml`, `platform/kong/redis.yaml` | Deny everything; the gateways may reach only the waypoint and their rate-limit store |
+| kong namespace | `platform/kong/network-policy.yaml`, `platform/kong/redis.yaml` | Deny everything; the gateways may reach only the waypoint, their rate-limit store and (since step 22) Unleash's frontend API |
+| feature-flags namespace (step 22) | `feature-flags/base/network-policy.yaml` | Deny everything; Unleash takes Kong, order-service and Prometheus, its database only Unleash (`docs/FEATURE-FLAGS.md`) |
 | Kafka | `streaming/base/kafka.yaml` (`networkPolicyPeers`), `streaming/base/network-policies.yaml` | Who may connect to the brokers; Kafka UI and the registry (since step 13) |
 | Synthetic checks | `addons/values/common/blackbox-exporter.yaml` | The exporter fetches any URL it is given, so it may reach only DNS and the namespaces it checks |
 | AWS security groups | tf `modules/database`, `modules/msk` | Databases and MSK admit the cluster's security group, not an address range |
