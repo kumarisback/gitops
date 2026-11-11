@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Validation only (scripts/validate.sh renders and schema-checks it): dev's
+# Kafka with change data capture from Unleash's database on RDS (roadmap
+# step 23, docs/DATABASE.md). Never deployed.
+resources:
+  - ../../../streaming/dev
+  - flag-changes-rds.yaml
+
+components:
+  - ../../../streaming/components/flag-changes
+  - ../../../streaming/components/flag-changes-rds

@@ -1,0 +1,86 @@
+# Change data capture (roadmap step 23, docs/DATABASE.md): Debezium reads
+# PostgreSQL's write-ahead log through a logical replication slot and
+# publishes each committed change to a table as a Kafka record, in commit
+# order, without the application doing anything. Here: Unleash's table
+# events, its audit log, so every flag change (who, what, when, before and
+# after) reaches topic flags.public.events, and the events archive.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaConnector
+metadata:
+  name: flag-changes
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: events-connect
+spec:
+  class: io.debezium.connector.postgresql.PostgresConnector
+  # A replication slot is read by one task.
+  tasksMax: 1
+  autoRestart:
+    enabled: true
+  config:
+    # The in-cluster database; flag-changes-rds points this at RDS.
+    database.hostname: postgres.feature-flags.svc.cluster.local
+    database.port: 5432
+    database.dbname: unleash
+    database.sslmode: disable
+    # Unleash's own user, from Secret unleash-db (Strimzi's config provider,
+    # resolved when the connector starts; feature-flags/components/cdc lets
+    # Connect read it). It owns the table, which pgoutput's publication
+    # needs, and may replicate: superuser in the lab's PostgreSQL, the
+    # master user (rds_replication) on RDS. A dedicated role with only
+    # those rights is learning topic 23's exercise.
+    database.user: ${secrets:feature-flags/unleash-db:username}
+    database.password: ${secrets:feature-flags/unleash-db:password}
+    # PostgreSQL's built-in decoder, a slot of its own, and a publication of
+    # just this table (created by Debezium, as the table's owner).
+    plugin.name: pgoutput
+    slot.name: flag_changes
+    publication.name: flag_changes
+    publication.autocreate.mode: filtered
+    table.include.list: public.events
+    # Topics are <prefix>.<schema>.<table>: flags.public.events.
+    topic.prefix: flags
+    # The table's existing rows first, then changes as they happen.
+    snapshot.mode: initial
+    # Every minute, even with no change to events: Debezium tells PostgreSQL
+    # how far it has read, so the slot doesn't hold on to write-ahead log the
+    # rest of the database writes (on RDS the alarm replication_slot_lag
+    # watches exactly that).
+    heartbeat.interval.ms: 60000
+    heartbeat.topics.prefix: debezium-heartbeat
+    # JSON, without the schema in every record. The worker's own converters
+    # (connect.yaml) copy bytes for the archive.
+    key.converter: org.apache.kafka.connect.json.JsonConverter
+    key.converter.schemas.enable: false
+    value.converter: org.apache.kafka.connect.json.JsonConverter
+    value.converter.schemas.enable: false
+---
+# One partition: one table's changes, in order. A month here; a year in the
+# archive.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: flags.public.events
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: events
+spec:
+  partitions: 1
+  replicas: 3
+  config:
+    retention.ms: 2592000000
+    min.insync.replicas: 2
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: debezium-heartbeat.flags
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: events
+spec:
+  partitions: 1
+  replicas: 3
+  config:
+    retention.ms: 86400000
+    min.insync.replicas: 2

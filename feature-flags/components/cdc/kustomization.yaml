@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Change data capture from Unleash's database (roadmap step 23,
+# docs/DATABASE.md): this namespace's half. The other half, the Debezium
+# connector, is streaming/components/flag-changes; an environment includes
+# both or neither.
+resources:
+  - access.yaml

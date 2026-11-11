@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Validation only (scripts/validate.sh renders and schema-checks it): dev's
+# feature flags with their half of change data capture (roadmap step 23,
+# docs/DATABASE.md). Never deployed.
+resources:
+  - ../../../feature-flags/dev
+
+components:
+  - ../../../feature-flags/components/cdc

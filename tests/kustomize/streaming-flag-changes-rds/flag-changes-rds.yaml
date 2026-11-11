@@ -1,0 +1,11 @@
+# What streaming/<env>/flag-changes-rds.yaml looks like, with an example
+# value (tf output rds_address).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flag-changes-rds
+  namespace: kafka
+  annotations:
+    config.kubernetes.io/local-config: "true"
+data:
+  host: microservices-dev-rds.c1a2b3c4d5e6.us-east-1.rds.amazonaws.com

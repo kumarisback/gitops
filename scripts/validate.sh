@@ -176,7 +176,7 @@ blackbox_check() { extract configmap "$1" blackbox.yaml "$2" && blackbox_exporte
 echo "Render"
 # tests/kustomize/*: validation-only overlays for variants no environment
 # runs yet (apps-msk: the services on Amazon MSK).
-KUSTOMIZE_DIRS=(platform platform/karpenter/dev platform/gateway-api platform/kong platform/mesh streaming/keda tests/kustomize/apps-msk automation/local automation/dev feature-flags/local feature-flags/dev)
+KUSTOMIZE_DIRS=(platform platform/karpenter/dev platform/gateway-api platform/kong platform/mesh streaming/keda tests/kustomize/apps-msk automation/local automation/dev feature-flags/local feature-flags/dev tests/kustomize/feature-flags-rds tests/kustomize/feature-flags-cdc tests/kustomize/streaming-flag-changes tests/kustomize/streaming-flag-changes-rds)
 for env in "${ENVS[@]}"; do KUSTOMIZE_DIRS+=("apps/${env}" "observability/${env}" "streaming/${env}" "bootstrap/envs/${env}"); done
 for dir in "${KUSTOMIZE_DIRS[@]}"; do
   check "build ${dir}" render_kustomize "${dir}" "${OUT}/kustomize/$(echo "${dir}" | tr '/' '_').yaml"
@@ -234,6 +234,11 @@ echo "Network policies"
 for env in "${RESOLVED_ENVS[@]}"; do
   check "${env}: network policies" ruby tests/network-policies/check.rb "${OUT}" "${env}"
 done
+
+# The RDS certificate bundle is in two components (a Kustomization reads
+# only files below it); scripts/update-rds-ca.sh writes both.
+echo "Certificates"
+check "RDS CA bundles match" cmp -s feature-flags/components/rds/ca-bundle.pem streaming/components/flag-changes-rds/ca-bundle.pem
 
 # Manifests applied by hand when a runbook needs them (not by ArgoCD).
 echo "Operator tools"

@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Validation only (scripts/validate.sh renders and schema-checks it): dev's
+# Kafka with change data capture from Unleash's database (roadmap step 23,
+# docs/DATABASE.md), as dev will have it once its Connect image includes
+# Debezium. Never deployed.
+resources:
+  - ../../../streaming/dev
+
+components:
+  - ../../../streaming/components/flag-changes

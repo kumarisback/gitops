@@ -1,0 +1,70 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Change data capture with Unleash on RDS (roadmap step 23,
+# docs/DATABASE.md): include after ../flag-changes, where
+# feature-flags/components/rds is included too. Debezium connects to the
+# instance itself, never RDS Proxy (which doesn't carry replication), over
+# TLS with the server's certificate and name checked.
+#
+# The environment adds ConfigMap flag-changes-rds as a resource, marked
+# local-config:
+#   host   tf output rds_address (not rds_proxy_address)
+# tests/kustomize/streaming-flag-changes-rds shows it.
+#
+# ca-bundle.pem is the same file as feature-flags/components/rds's (a
+# Kustomization reads only files below it); scripts/update-rds-ca.sh writes
+# both and scripts/validate.sh checks they match.
+configMapGenerator:
+  # A fixed name: Kustomize can't follow a generated one into a
+  # KafkaConnect.
+  - name: rds-ca
+    namespace: kafka
+    files:
+      - ca-bundle.pem
+    options:
+      disableNameSuffixHash: true
+
+patches:
+  - target:
+      kind: KafkaConnector
+      name: flag-changes
+    patch: |-
+      - op: replace
+        path: /spec/config/database.sslmode
+        value: verify-full
+      - op: add
+        path: /spec/config/database.sslrootcert
+        value: /mnt/rds-ca/ca-bundle.pem
+  # The bundle, mounted into the workers. Strimzi doesn't restart them when
+  # the ConfigMap changes, and needn't: the PostgreSQL driver reads the file
+  # on every new connection, and the kubelet updates it in place.
+  - patch: |-
+      apiVersion: kafka.strimzi.io/v1
+      kind: KafkaConnect
+      metadata:
+        name: events-connect
+      spec:
+        template:
+          pod:
+            volumes:
+              - name: rds-ca
+                configMap:
+                  name: rds-ca
+          connectContainer:
+            volumeMounts:
+              - name: rds-ca
+                mountPath: /mnt/rds-ca
+                readOnly: true
+
+replacements:
+  - source:
+      kind: ConfigMap
+      name: flag-changes-rds
+      fieldPath: data.host
+    targets:
+      - select:
+          kind: KafkaConnector
+          name: flag-changes
+        fieldPaths:
+          - spec.config.[database.hostname]

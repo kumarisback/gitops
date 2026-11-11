@@ -1,0 +1,52 @@
+# What change data capture (roadmap step 23, docs/DATABASE.md) needs on
+# this side: Kafka Connect's workers (namespace kafka, ServiceAccount
+# events-connect-connect) read the database's credentials from Secret
+# unleash-db, that Secret only, through Strimzi's config provider; and
+# Debezium reaches the in-cluster database. (On RDS the database is outside
+# the cluster; RDS's security group admits the nodes.)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: flag-changes-credentials
+  namespace: feature-flags
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [unleash-db]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flag-changes-credentials
+  namespace: feature-flags
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: flag-changes-credentials
+subjects:
+  - kind: ServiceAccount
+    name: events-connect-connect
+    namespace: kafka
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-from-connect
+  namespace: feature-flags
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kafka
+          podSelector:
+            matchLabels:
+              strimzi.io/name: events-connect-connect
+      ports:
+        - port: postgres
+          protocol: TCP
