@@ -12,7 +12,8 @@ kind: Component
 #   host                    tf output rds_address (or rds_proxy_address)
 #   secret-arn              tf output rds_master_secret_arn
 #   secret-reader-role-arn  tf output irsa_role_arns["unleash_rds_secret"]
-#   vpc-cidr                tf output vpc_cidr_block
+#   data-subnet-0           tf output database_subnet_cidrs[0]
+#   data-subnet-1           tf output database_subnet_cidrs[1]
 # tests/kustomize/feature-flags-rds shows it.
 resources:
   - network-policy.yaml
@@ -133,13 +134,23 @@ replacements:
   - source:
       kind: ConfigMap
       name: unleash-rds
-      fieldPath: data.vpc-cidr
+      fieldPath: data.data-subnet-0
     targets:
       - select:
           kind: NetworkPolicy
           name: unleash-rds
         fieldPaths:
           - spec.egress.0.to.0.ipBlock.cidr
+  - source:
+      kind: ConfigMap
+      name: unleash-rds
+      fieldPath: data.data-subnet-1
+    targets:
+      - select:
+          kind: NetworkPolicy
+          name: unleash-rds
+        fieldPaths:
+          - spec.egress.0.to.1.ipBlock.cidr
   - source:
       kind: ConfigMap
       name: unleash-rds

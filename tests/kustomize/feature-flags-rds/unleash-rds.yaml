@@ -1,6 +1,6 @@
 # What feature-flags/<env>/unleash-rds.yaml looks like, with example values
 # (tf outputs rds_address, rds_master_secret_arn,
-# irsa_role_arns["unleash_rds_secret"], vpc_cidr_block).
+# irsa_role_arns["unleash_rds_secret"], database_subnet_cidrs).
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -12,4 +12,5 @@ data:
   host: microservices-dev-rds.c1a2b3c4d5e6.us-east-1.rds.amazonaws.com
   secret-arn: arn:aws:secretsmanager:us-east-1:602367507570:secret:rds!db-0b1c2d3e-4f5a-6b7c-8d9e-0f1a2b3c4d5e-AbCdEf
   secret-reader-role-arn: arn:aws:iam::602367507570:role/microservices-dev-irsa-unleash_rds_secret
-  vpc-cidr: 10.0.0.0/16
+  data-subnet-0: 10.10.21.0/24
+  data-subnet-1: 10.10.22.0/24

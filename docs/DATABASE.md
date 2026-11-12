@@ -149,7 +149,7 @@ local equivalent worth faking.
    `enable_rds = true`, `rds_deletion_protection = false` and a final snapshot name for an
    instance you'll destroy; `database_alarm_email` to get the alarms), then plan and apply
    01-infra. Confirm the SNS e-mail. Note the outputs `rds_address`,
-   `rds_master_secret_arn`, `irsa_role_arns["unleash_rds_secret"]`, `vpc_cidr_block` (and
+   `rds_master_secret_arn`, `irsa_role_arns["unleash_rds_secret"]`, `database_subnet_cidrs` (and
    `rds_proxy_address` with the proxy).
 2. **gitops, Unleash:** create `feature-flags/dev/unleash-rds.yaml` like
    `tests/kustomize/feature-flags-rds/unleash-rds.yaml` with those values (`host`: the
@@ -208,7 +208,7 @@ in-cluster database), then `enable_rds = false` and apply.
 | … `Hostname/IP does not match certificate's altnames` | `host` in `unleash-rds` isn't the RDS or proxy endpoint (a CNAME of your own fails verification) |
 | … `password authentication failed` | a rotation and Secret `unleash-db` not refreshed yet (force-sync) |
 | ExternalSecret `unleash-db` not synced: `AccessDenied` | `secret-reader-role-arn` in `unleash-rds` isn't tf's `irsa_role_arns["unleash_rds_secret"]`, or 01-infra wasn't applied after enabling RDS |
-| … timeouts | NetworkPolicy `unleash-rds`'s `vpc-cidr` wrong, or RDS's security group doesn't include the cluster's |
+| … timeouts | `data-subnet-0`/`-1` in `unleash-rds` aren't the data subnets (NetworkPolicy `unleash-rds`), or RDS's security group doesn't include the cluster's |
 | Unleash didn't restart after a rotation | Reloader not running, or the Deployment lacks its annotation (only `components/rds` adds it) |
 | connector `flag-changes` FAILED: `must be owner of table events` | Debezium signs in as a user that doesn't own the table and can't create the publication |
 | … `permission denied to start WAL sender` / replication | the user lacks `rds_replication` (RDS) or `REPLICATION` |

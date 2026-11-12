@@ -1,7 +1,13 @@
-# Unleash to its database on RDS (or RDS Proxy): outside the cluster, so an
-# address range rather than pods; the environment's ConfigMap unleash-rds
-# gives the VPC's (kustomization.yaml). RDS's security group admits the
-# cluster's nodes only, on this port only (tf modules/database).
+# Unleash to its database on RDS (or RDS Proxy): outside the cluster, so
+# addresses rather than pods. Only the private data subnets, where RDS and
+# the proxy live (one per availability zone; the environment's ConfigMap
+# unleash-rds gives them, kustomization.yaml). Not the VPC's whole range:
+# with the VPC CNI every pod has an address in it, and Unleash would reach
+# any of them on 5432. RDS's security group, in turn, admits the cluster's
+# nodes only, on this port only (tf modules/database).
+#
+# Every environment here has two zones; a third adds a third ipBlock and
+# replacement.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -15,7 +21,9 @@ spec:
   egress:
     - to:
         - ipBlock:
-            cidr: VPC_CIDR
+            cidr: DATA_SUBNET_0
+        - ipBlock:
+            cidr: DATA_SUBNET_1
       ports:
         - port: 5432
           protocol: TCP
