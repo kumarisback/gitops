@@ -718,6 +718,25 @@ then fix the cause. Rotation runs weekly: unfixed, it fails again next week.
 
 ---
 
+## Database migrations
+
+### DatabaseMigrationFailed
+
+**Meaning:** a migrations Job (`user-service-migrations`), which ArgoCD runs before each
+release of the service, failed. The sync stopped there: the running version is
+untouched, the new one isn't deployed, and every later sync stops at the same Job.
+
+**Check:** `kubectl -n <namespace> logs job/user-service-migrations`: which migration,
+and MongoDB's error. A migration that ran in a transaction changed nothing; one marked
+`[non-transactional]` may have done part of its work.
+
+**Act:** in a transaction: fix the migration in the app repo and release again. Outside
+one: undo or finish its half-done changes in the database, run the Job once with
+`args: [repair]`, then release again (`docs/MIGRATIONS.md`, when a migration fails).
+Never edit a migration that already ran somewhere: write the next one.
+
+---
+
 ## Releases (Argo Rollouts)
 
 frontend and order-service are released with Argo Rollouts (`docs/ROLLOUTS.md`):

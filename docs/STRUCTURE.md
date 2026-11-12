@@ -37,7 +37,9 @@ gitops/
 │   │                          chart (charts/, docs/HELM.md)
 │   ├── base/                  shared YAML for all environments, with who may call what
 │   │                            (mesh.yaml, MESH.md) and who may connect at all
-│   │                            (network-policies.yaml, NETWORK-POLICIES.md)
+│   │                            (network-policies.yaml, NETWORK-POLICIES.md); user-service's
+│   │                            database migrations Job (user-service/migrations.yaml,
+│   │                            MIGRATIONS.md)
 │   ├── components/  ★         shared settings used by all envs: tracing
 │   │                            (otel-instrumentation) and request payload
 │   │                            logging (request-logging), quotas and default
