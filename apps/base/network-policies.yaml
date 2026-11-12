@@ -288,6 +288,32 @@ spec:
         - port: 4242
           protocol: TCP
 ---
+# user-service's migrations Job (roadmap step 24, user-service/migrations.yaml):
+# nothing comes in; it reaches only MongoDB. Applied before the Job runs
+# (wave -2), so the namespace's default-deny doesn't cut it off.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: user-service-migrations
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  podSelector:
+    matchLabels:
+      app: user-service-migrations
+  policyTypes: [Ingress, Egress]
+  egress:
+    # MongoDB Atlas, as for the service. (The lab's own MongoDB:
+    # apps/local/mongodb.yaml.)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.169.254/32
+      ports:
+        - port: 27017
+          protocol: TCP
+---
 # notification-service (charts/microservice): no API, so nothing but
 # Prometheus comes in; its work comes from Kafka (kafka-clients component).
 apiVersion: networking.k8s.io/v1

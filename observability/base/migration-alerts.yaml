@@ -1,0 +1,23 @@
+# Database migrations (roadmap step 24, docs/MIGRATIONS.md): a migrations
+# Job (user-service-migrations, run by ArgoCD before each release) that
+# failed. The sync stopped there: the running version is untouched, the new
+# one isn't deployed, and every later sync stops at the same place until
+# someone looks. The failed Job stays until the next sync, and so does this.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: migration-alerts
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: migrations
+      rules:
+        - alert: DatabaseMigrationFailed
+          expr: max by (namespace, job_name) (kube_job_status_failed{job_name=~".+-migrations"}) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "Database migration {{ $labels.job_name }} failed in {{ $labels.namespace }}"
+            description: "The release that needed it is held back; the running version is unaffected. A migration that failed outside a transaction may have left half its changes."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#databasemigrationfailed

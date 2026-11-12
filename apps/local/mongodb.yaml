@@ -145,6 +145,8 @@ spec:
               - cluster.local/ns/development/sa/user-service
               - cluster.local/ns/development/sa/order-service
               - cluster.local/ns/development/sa/mongodb-init
+              # The migrations Job (roadmap step 24).
+              - cluster.local/ns/development/sa/user-service-migrations
 ---
 # NetworkPolicies (roadmap step 19, apps/base/network-policies.yaml): the
 # database takes connections only from its clients, through the mesh
@@ -164,7 +166,7 @@ spec:
             matchExpressions:
               - key: app
                 operator: In
-                values: [user-service, order-service]
+                values: [user-service, order-service, user-service-migrations]
         # The init Job's pod, by the label Kubernetes gives every Job's pods.
         - podSelector:
             matchLabels:
@@ -189,7 +191,7 @@ spec:
     matchExpressions:
       - key: app
         operator: In
-        values: [user-service, order-service]
+        values: [user-service, order-service, user-service-migrations]
   policyTypes: [Egress]
   egress:
     - to:

@@ -88,6 +88,14 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: IfNotPresent
+  # user-service's migrations Job (roadmap step 24) runs its image too.
+  - target:
+      kind: Job
+      name: user-service-migrations
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
   # frontend is an Argo Rollout (roadmap step 20), not a Deployment.
   - target:
       kind: Rollout

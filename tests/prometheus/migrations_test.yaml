@@ -1,0 +1,33 @@
+# Unit tests for observability/base/migration-alerts.yaml (validate.sh
+# extracts the rule file first; see slo_test.yaml).
+rule_files:
+  - ../../.validate/rules/observability/migration-alerts.yaml
+
+evaluation_interval: 30s
+
+tests:
+  # A release's migrations Job fails at 3m; a successful one elsewhere.
+  - interval: 1m
+    input_series:
+      - series: 'kube_job_status_failed{namespace="development",job_name="user-service-migrations",job="kube-state-metrics"}'
+        values: '0 0 0 1x10'
+      - series: 'kube_job_status_failed{namespace="staging",job_name="user-service-migrations",job="kube-state-metrics"}'
+        values: '0x13'
+      # Not a migrations Job.
+      - series: 'kube_job_status_failed{namespace="workflows",job_name="nightly-report-29384",job="kube-state-metrics"}'
+        values: '1x13'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: DatabaseMigrationFailed
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: DatabaseMigrationFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: development
+              job_name: user-service-migrations
+            exp_annotations:
+              summary: "Database migration user-service-migrations failed in development"
+              description: "The release that needed it is held back; the running version is unaffected. A migration that failed outside a transaction may have left half its changes."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#databasemigrationfailed

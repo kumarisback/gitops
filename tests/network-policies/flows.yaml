@@ -87,6 +87,8 @@ all:
     - APP/waypoint -> istio-system/istiod:15012
     - APP/user-service -> ip:203.0.113.10:27017                # MongoDB Atlas
     - APP/order-service -> ip:203.0.113.10:27017
+    - APP/user-service-migrations -> ip:203.0.113.10:27017     # the migrations Job (step 24)
+    - APP/user-service-migrations -> kube-system/coredns:53
     - APP/user-service -> monitoring/otel-collector-opentelemetry-collector:4318
     - APP/order-service -> monitoring/otel-collector-opentelemetry-collector:4318
     - kong/kong-gateway -> kong/kong-redis:6379
@@ -105,6 +107,7 @@ all:
     - APP/frontend -> ip:169.254.169.254:80
     - APP/user-service -> ip:169.254.169.254:80
     - APP/order-service -> ip:169.254.169.254:80
+    - APP/user-service-migrations -> ip:169.254.169.254:80
     - APP/waypoint -> ip:169.254.169.254:80
     - kong/kong-gateway -> ip:169.254.169.254:80
     - kong/kong-controller -> ip:169.254.169.254:80
@@ -113,6 +116,10 @@ all:
     # No internet for the services but their database's port.
     - APP/user-service -> ip:203.0.113.10:443
     - APP/order-service -> ip:203.0.113.10:80
+    - APP/user-service-migrations -> ip:203.0.113.10:443
+    # The migrations Job reaches its database, nothing in the cluster.
+    - APP/user-service-migrations -> APP/waypoint:15008
+    - APP/user-service-migrations -> APP/user-service:15008
     # The services reach each other only through the waypoint.
     - APP/user-service -> APP/order-service:15008
     - APP/order-service -> APP/user-service:8080
@@ -149,6 +156,7 @@ local:
     - APP/user-service -> APP/mongodb:15008
     - APP/order-service -> APP/mongodb:15008
     - APP/mongodb-replica-set-init -> APP/mongodb:15008
+    - APP/user-service-migrations -> APP/mongodb:15008
     - ip:169.254.7.127 -> APP/mongodb:27017
     # Kafka and its schema registry, outside the mesh.
     - APP/user-service -> kafka/events-broker:9093

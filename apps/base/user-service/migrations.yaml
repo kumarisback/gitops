@@ -1,0 +1,82 @@
+# user-service's database migrations (roadmap step 24, docs/MIGRATIONS.md):
+# Flyway, from the same image as the service (the migrations a version needs
+# ship with it), run once per sync, before the Deployment changes.
+#
+# A Sync hook in wave -1 rather than a PreSync hook: PreSync runs before
+# anything in this sync is applied, so the first time, its own
+# NetworkPolicy and ServiceAccount (wave -2) wouldn't exist yet and the
+# namespace's default-deny would cut it off from the database. In the Sync
+# phase ArgoCD applies wave -2, runs this Job and waits for it, then applies
+# wave 0: the new pods start only on a database their version can use. If
+# the Job fails, the sync stops there and the old version keeps running.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: user-service-migrations
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+automountServiceAccountToken: false
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: user-service-migrations
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "-1"
+    # Kept until the next sync, so its log can be read; then replaced.
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  # Never retried on its own: a migration that failed halfway must be looked
+  # at (docs/MIGRATIONS.md, recovering), and Flyway refuses to go on anyway.
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        app: user-service-migrations
+    spec:
+      serviceAccountName: user-service-migrations
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          # The service's image; each environment's tag applies here too.
+          image: 602367507570.dkr.ecr.us-east-1.amazonaws.com/user-service:latest
+          # The image's Migrate command (app user-service, migrations/),
+          # not the service: no Spring, no tracing agent.
+          command:
+            - java
+            - -Dloader.main=com.example.demo.migrations.Migrate
+            - -cp
+            - app.jar
+            - org.springframework.boot.loader.launch.PropertiesLauncher
+          args: [migrate]
+          env:
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MONGO_URI
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

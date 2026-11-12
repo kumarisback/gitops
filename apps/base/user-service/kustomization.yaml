@@ -9,3 +9,5 @@ resources:
   - hpa.yaml
   - vpa.yaml
   - servicemonitor.yaml
+  # Database migrations, run before each release (roadmap step 24).
+  - migrations.yaml
