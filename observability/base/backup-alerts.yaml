@@ -1,0 +1,46 @@
+# Backups (roadmap step 25, docs/BACKUP-DR.md). Velero's metrics exist only
+# where it runs (the lab, dev), so these stay quiet elsewhere.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: backup-alerts
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: backups
+      rules:
+        # The nightly backup hasn't succeeded for over a day: the next
+        # failure loses more than a day of data (RPO).
+        - alert: BackupTooOld
+          expr: time() - max by (schedule) (velero_backup_last_successful_timestamp{schedule!=""}) > 26 * 3600
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "No successful {{ $labels.schedule }} backup for over a day"
+            description: "The newest backup that would be restored is older than a day; a loss now loses more than the plan allows."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#backuptooold
+        # A backup ended failed or partly failed (a volume that couldn't be
+        # copied, a hook that failed).
+        - alert: BackupFailed
+          expr: sum by (schedule) (increase(velero_backup_failure_total{schedule!=""}[1h]) + increase(velero_backup_partial_failure_total{schedule!=""}[1h])) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "A {{ $labels.schedule }} backup failed"
+            description: "Velero couldn't back everything up; the schedule tries again next night."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#backupfailed
+        # The monthly drill's last run failed, or none succeeded for 40
+        # days (automation/base/restore-drill.yaml).
+        - alert: RestoreDrillFailing
+          expr: |
+            (max(argo_workflows_restore_drill_result{result!="Succeeded"}) > (max(argo_workflows_restore_drill_result{result="Succeeded"}) or vector(0)))
+            or
+            (time() - max(argo_workflows_restore_drill_result{result="Succeeded"}) > 40 * 86400)
+          labels:
+            severity: warning
+          annotations:
+            summary: "The monthly restore drill is failing"
+            description: "The newest backup couldn't be restored in the drill, or no drill has succeeded for 40 days: the backups may not be usable."
+            runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#restoredrillfailing

@@ -1,0 +1,94 @@
+# Unit tests for observability/base/backup-alerts.yaml (validate.sh
+# extracts the rule file first; see slo_test.yaml).
+rule_files:
+  - ../../.validate/rules/observability/backup-alerts.yaml
+
+evaluation_interval: 1m
+
+tests:
+  # The last success was at t=0 (Unix time 0 in promtool's clock); nothing
+  # since. Over 26 hours plus 15 minutes later, the alert.
+  - interval: 1m
+    input_series:
+      - series: 'velero_backup_last_successful_timestamp{schedule="velero-daily-apps",job="velero"}'
+        values: '0x1700'
+    alert_rule_test:
+      - eval_time: 26h
+        alertname: BackupTooOld
+        exp_alerts: []
+      - eval_time: 26h20m
+        alertname: BackupTooOld
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              schedule: velero-daily-apps
+            exp_annotations:
+              summary: "No successful velero-daily-apps backup for over a day"
+              description: "The newest backup that would be restored is older than a day; a loss now loses more than the plan allows."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#backuptooold
+
+  # One partly failed backup at 30m; a backup made by hand (no schedule)
+  # failing is someone's experiment, not the plan.
+  - interval: 5m
+    input_series:
+      - series: 'velero_backup_failure_total{schedule="velero-daily-apps",job="velero"}'
+        values: '0x20'
+      - series: 'velero_backup_partial_failure_total{schedule="velero-daily-apps",job="velero"}'
+        values: '0x5 1x15'
+      - series: 'velero_backup_failure_total{schedule="",job="velero"}'
+        values: '0 1x19'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: BackupFailed
+        exp_alerts: []
+      - eval_time: 40m
+        alertname: BackupFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              schedule: velero-daily-apps
+            exp_annotations:
+              summary: "A velero-daily-apps backup failed"
+              description: "Velero couldn't back everything up; the schedule tries again next night."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#backupfailed
+
+  # A drill succeeded (started at 1000), then the next one failed (started
+  # at 2000): failing.
+  - interval: 1m
+    input_series:
+      - series: 'argo_workflows_restore_drill_result{result="Succeeded",job="argo-workflows"}'
+        values: '1000x10'
+      - series: 'argo_workflows_restore_drill_result{result="Failed",job="argo-workflows"}'
+        values: '_x5 2000x5'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: RestoreDrillFailing
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: RestoreDrillFailing
+        exp_alerts:
+          - exp_annotations:
+              summary: "The monthly restore drill is failing"
+              description: "The newest backup couldn't be restored in the drill, or no drill has succeeded for 40 days: the backups may not be usable."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#restoredrillfailing
+            exp_labels:
+              severity: warning
+
+  # The last drill succeeded, but 40 days ago.
+  - interval: 1d
+    input_series:
+      - series: 'argo_workflows_restore_drill_result{result="Succeeded",job="argo-workflows"}'
+        values: '0x45'
+    alert_rule_test:
+      - eval_time: 39d
+        alertname: RestoreDrillFailing
+        exp_alerts: []
+      - eval_time: 41d
+        alertname: RestoreDrillFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "The monthly restore drill is failing"
+              description: "The newest backup couldn't be restored in the drill, or no drill has succeeded for 40 days: the backups may not be usable."
+              runbook_url: https://github.com/kumarisback/gitops/blob/main/docs/runbooks.md#restoredrillfailing

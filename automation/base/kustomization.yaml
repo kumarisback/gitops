@@ -18,3 +18,5 @@ resources:
   - ci-build.yaml
   - dead-letters.yaml
   - slo-report.yaml
+  # Needs Velero (addons/backup), which runs wherever this does.
+  - restore-drill.yaml

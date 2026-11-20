@@ -20,6 +20,7 @@ resources:
   - automation-alerts.yaml
   - feature-flag-alerts.yaml
   - migration-alerts.yaml
+  - backup-alerts.yaml
 
 # The Grafana sidecar loads every ConfigMap labelled grafana_dashboard from
 # the monitoring namespace. Stable names, so a dashboard keeps its URL.

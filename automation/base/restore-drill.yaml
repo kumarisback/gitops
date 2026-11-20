@@ -1,0 +1,201 @@
+# The monthly restore drill (roadmap step 25, docs/BACKUP-DR.md): restores
+# the newest nightly backup (Velero schedule velero-daily-apps) into two
+# scratch namespaces, restore-drill and restore-drill-flags, checks Velero
+# finished it without errors, records how long it took, and deletes them
+# again. An untested backup isn't a backup; this tests every month that the
+# latest one is there, readable and complete.
+#
+# Workloads come back with no replicas (backup/base/restore-drill.yaml),
+# and what would act outside the scratch namespaces is left out: routes Kong
+# would serve, KEDA scalers, Kong consumers, Kafka access requests, jobs,
+# pods. Volume data comes back where Velero can restore it without a
+# running pod (the cloud's CSI data mover); the full drill, data and
+# measured recovery time, is the runbook's (docs/runbooks/disaster-recovery.md).
+#
+# Runs where Velero does (the lab, dev). Its steps are Argo resource steps:
+# no image, only the rights below.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: restore-driller
+  namespace: workflows
+---
+# Restores, in Velero's namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: restore-driller
+  namespace: velero
+rules:
+  - apiGroups: [velero.io]
+    resources: [restores]
+    verbs: [create, get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: restore-driller
+  namespace: velero
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: restore-driller
+subjects:
+  - kind: ServiceAccount
+    name: restore-driller
+    namespace: workflows
+---
+# Deleting the two scratch namespaces, by name, and no other.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: restore-driller
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    resourceNames: [restore-drill, restore-drill-flags]
+    verbs: [get, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: restore-driller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: restore-driller
+subjects:
+  - kind: ServiceAccount
+    name: restore-driller
+    namespace: workflows
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: restore-drill
+  namespace: workflows
+spec:
+  serviceAccountName: restore-driller
+  entrypoint: drill
+  # Whatever happened, the scratch namespaces go.
+  onExit: clean-up
+  # Kept a month and more, to compare with the next drill.
+  ttlStrategy:
+    secondsAfterSuccess: 3456000
+    secondsAfterFailure: 3456000
+  # The result, for alert RestoreDrillFailing: a gauge per outcome holding
+  # when the last drill with that outcome started.
+  metrics:
+    prometheus:
+      - name: restore_drill_result
+        help: "When the last monthly restore drill with this result started (Unix time)"
+        labels:
+          - key: result
+            value: "{{workflow.status}}"
+        gauge:
+          # Set once, when the drill ends.
+          realtime: false
+          value: "{{workflow.creationTimestamp.s}}"
+  templates:
+    - name: drill
+      steps:
+        - - name: restore
+            template: restore
+    - name: restore
+      resource:
+        action: create
+        successCondition: status.phase == Completed
+        failureCondition: status.phase in (Failed,PartiallyFailed,FailedValidation)
+        manifest: |
+          apiVersion: velero.io/v1
+          kind: Restore
+          metadata:
+            generateName: restore-drill-
+            namespace: velero
+          spec:
+            # The schedule's newest completed backup.
+            scheduleName: velero-daily-apps
+            namespaceMapping:
+              development: restore-drill
+              feature-flags: restore-drill-flags
+            resourceModifier:
+              kind: ConfigMap
+              name: restore-drill-modifiers
+            excludedResources:
+              - pods
+              - replicasets.apps
+              - controllerrevisions.apps
+              - jobs.batch
+              - events
+              - events.events.k8s.io
+              - endpoints
+              - endpointslices.discovery.k8s.io
+              - httproutes.gateway.networking.k8s.io
+              - gateways.gateway.networking.k8s.io
+              - scaledobjects.keda.sh
+              - scaledjobs.keda.sh
+              - kongplugins.configuration.konghq.com
+              - kongconsumers.configuration.konghq.com
+              - kafkaaccesses.access.strimzi.io
+              - externalsecrets.external-secrets.io
+              - analysisruns.argoproj.io
+              - servicemonitors.monitoring.coreos.com
+              - podmonitors.monitoring.coreos.com
+              - probes.monitoring.coreos.com
+      outputs:
+        parameters:
+          - name: restore
+            valueFrom:
+              jsonPath: "{.metadata.name}"
+          - name: items-restored
+            valueFrom:
+              jsonPath: "{.status.progress.itemsRestored}"
+          - name: warnings
+            valueFrom:
+              jsonPath: "{.status.warnings}"
+          - name: started
+            valueFrom:
+              jsonPath: "{.status.startTimestamp}"
+          - name: finished
+            valueFrom:
+              jsonPath: "{.status.completionTimestamp}"
+    - name: clean-up
+      steps:
+        - - name: delete
+            template: delete-namespace
+            arguments:
+              parameters:
+                - name: namespace
+                  value: "{{item}}"
+            withItems: [restore-drill, restore-drill-flags]
+    - name: delete-namespace
+      inputs:
+        parameters:
+          - name: namespace
+      resource:
+        action: delete
+        # Gone already, or never made (the restore failed early): fine.
+        flags: [--ignore-not-found, --wait=false]
+        manifest: |
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: {{inputs.parameters.namespace}}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: restore-drill
+  namespace: workflows
+spec:
+  # The 1st of each month, three hours after that night's 02:00 backup.
+  schedules:
+    - "0 5 1 * *"
+  timezone: Asia/Kolkata
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 86400
+  successfulJobsHistoryLimit: 6
+  failedJobsHistoryLimit: 6
+  workflowSpec:
+    workflowTemplateRef:
+      name: restore-drill
