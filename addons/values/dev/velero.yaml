@@ -1,0 +1,15 @@
+# dev's bucket and role: tf 01-infra outputs velero_bucket_name and
+# irsa_role_arns["velero"] (enable_velero = true in dev.tfvars).
+serviceAccount:
+  server:
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::602367507570:role/microservices-dev-irsa-velero
+
+configuration:
+  backupStorageLocation:
+    - name: default
+      provider: aws
+      bucket: microservices-dev-velero-602367507570
+      default: true
+      config:
+        region: us-east-1

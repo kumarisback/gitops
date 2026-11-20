@@ -1,0 +1,33 @@
+# The monthly restore drill's changes to what it restores (roadmap step 25,
+# automation/base/restore-drill.yaml): every workload comes back with no
+# replicas. The drill restores the latest backup into scratch namespaces to
+# prove it is complete and readable; started, its copies would join the real
+# services' Kafka groups and databases. Velero applies these JSON patches to
+# each object it restores, when a Restore names this ConfigMap.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: restore-drill-modifiers
+  namespace: velero
+data:
+  modifiers.yaml: |
+    version: v1
+    resourceModifierRules:
+      - conditions:
+          groupResource: deployments.apps
+        patches:
+          - operation: replace
+            path: /spec/replicas
+            value: "0"
+      - conditions:
+          groupResource: statefulsets.apps
+        patches:
+          - operation: replace
+            path: /spec/replicas
+            value: "0"
+      - conditions:
+          groupResource: rollouts.argoproj.io
+        patches:
+          - operation: replace
+            path: /spec/replicas
+            value: "0"

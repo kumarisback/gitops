@@ -24,6 +24,8 @@ resources:
   - ../../../addons/automation
   # Unleash, the feature flag service (roadmap step 22, docs/FEATURE-FLAGS.md).
   - ../../../addons/feature-flags
+  # Velero, backups and restores (roadmap step 25, docs/BACKUP-DR.md).
+  - ../../../addons/backup
   - ../../projects/karpenter-dev.yaml
   - ../../projects/karpenter-nodepools-dev.yaml
 

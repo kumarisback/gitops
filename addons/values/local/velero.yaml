@@ -1,0 +1,26 @@
+# The lab (roadmap step 25): Velero writes to the in-cluster S3 store
+# (backup/local, SeaweedFS), with keys scripts/start-lab.sh generates into
+# Secret velero-credentials. KinD's volumes can't be snapshotted, so the
+# node agent copies their files (file-system backup).
+credentials:
+  useSecret: true
+  existingSecret: velero-credentials
+
+configuration:
+  backupStorageLocation:
+    - name: default
+      provider: aws
+      bucket: velero
+      default: true
+      config:
+        region: us-east-1
+        s3ForcePathStyle: "true"
+        s3Url: http://seaweedfs.backup-store.svc.cluster.local:8333
+        # SeaweedFS doesn't compute the AWS SDK's default checksums.
+        checksumAlgorithm: ""
+
+schedules:
+  daily-apps:
+    template:
+      # Every pod volume, by copying its files.
+      defaultVolumesToFsBackup: true

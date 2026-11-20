@@ -1,0 +1,30 @@
+# The backup store holds a copy of everything Velero backs up, Secrets
+# included: only Velero reaches it (the server, and the node agents that
+# copy volume data). Its own parts talk to each other inside the pod.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: backup-store
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: seaweedfs
+  namespace: backup-store
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: seaweedfs
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: velero
+      ports:
+        - port: s3
+          protocol: TCP

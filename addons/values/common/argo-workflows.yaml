@@ -2,7 +2,7 @@
 # server run in namespace argo; workflows run in namespace workflows only,
 # so a workflow can never run as the controller's or the server's account,
 # only as one of the accounts made for workflows there (argo-workflow by
-# default; ci-builder, archive-checker; automation/).
+# default; ci-builder, archive-checker, restore-driller; automation/).
 controller:
   workflowNamespaces: [workflows]
   # Only workflows that run a WorkflowTemplate, and a run whose stored copy of
@@ -50,6 +50,8 @@ workflow:
       - name: ci-builder
         namespace: workflows
       - name: archive-checker
+        namespace: workflows
+      - name: restore-driller
         namespace: workflows
 
 server:

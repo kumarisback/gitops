@@ -1,0 +1,80 @@
+# Velero (roadmap step 25, docs/BACKUP-DR.md). Where it writes and how it
+# copies volumes differ per tier (local/, cloud/); what it backs up, when
+# and for how long is here.
+
+# The AWS plugin talks S3: to AWS in the cloud, to the lab's own store
+# (SeaweedFS, backup/local) in KinD. v1.14 goes with Velero 1.18.
+initContainers:
+  - name: velero-plugin-for-aws
+    image: velero/velero-plugin-for-aws:v1.14.4
+    imagePullPolicy: IfNotPresent
+    volumeMounts:
+      - mountPath: /target
+        name: plugins
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 1Gi
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+# Kopia keeps its repository settings and cache under the user's home
+# (/home/cnb in Velero's image): a scratch volume there, the rest read-only.
+# Without it every volume backup fails ("mkdir /home/cnb/udmrepo:
+# read-only file system").
+extraVolumes:
+  - name: home
+    emptyDir: {}
+extraVolumeMounts:
+  - name: home
+    mountPath: /home/cnb
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    additionalLabels:
+      release: kube-prometheus-stack
+
+# The node agent copies volume data (the lab: the files themselves; the
+# cloud: a CSI snapshot's data) to the bucket, from each node.
+deployNodeAgent: true
+nodeAgent:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+# Volumes through CSI snapshots or the node agent, never Velero's own
+# provider snapshots: no VolumeSnapshotLocation.
+snapshotsEnabled: false
+
+configuration:
+  uploaderType: kopia
+  # A backup made by hand is kept a week unless it says otherwise.
+  defaultBackupTTL: 168h
+  # The restore drill's settings (backup/base) live in Velero's namespace.
+
+# Every night: the namespaces whose data has no other copy, kept a week.
+# Kafka (streaming) is left out: it keeps its own replicas, and files
+# copied from a running broker aren't a consistent Kafka. Configuration
+# comes back from Git (ArgoCD), not from here; the data is the point.
+schedules:
+  daily-apps:
+    schedule: "0 2 * * *"
+    useOwnerReferencesInBackup: false
+    template:
+      ttl: 168h
+      includedNamespaces:
+        - development
+        - feature-flags
+      storageLocation: default

@@ -48,6 +48,11 @@ kubectl config use-context "kind-${CLUSTER_NAME}"
 # 3. Ensure local gp3 StorageClass exists (maps AWS gp3 requests to local-path)
 echo "💾 Ensuring local gp3 StorageClass exists..."
 kubectl apply -f "${REPO_ROOT}/local-setup/gp3-storageclass.yaml" > /dev/null 2>&1
+#    KinD's own default class, standard, makes hostPath volumes, which Velero
+#    can't back up (roadmap step 25, docs/BACKUP-DR.md): new volumes become
+#    local volumes instead. An annotation, so it changes in place; volumes
+#    made before stay hostPath until recreated.
+kubectl annotate storageclass standard defaultVolumeType=local --overwrite > /dev/null
 
 # 4. Ensure ArgoCD is installed using server-side apply
 echo "🐙 Ensuring ArgoCD is installed..."
@@ -200,6 +205,35 @@ kubectl create secret generic unleash-backend-token \
 kubectl create secret generic frontend-runtime-config \
   --namespace development \
   --from-literal=runtime-config.json="{\"unleash\":{\"url\":\"/flags/api/frontend\",\"clientKey\":\"${FRONTEND_TOKEN}\"}}" \
+  --dry-run=client -o yaml | kubectl apply -f - > /dev/null
+
+#    Velero's secrets (roadmap step 25, docs/BACKUP-DR.md): the keys it
+#    signs in to the lab's backup store (backup/local, SeaweedFS) with, and
+#    the password it encrypts backed-up volume data with, generated once into
+#    a git-ignored file. Keep that file: backups made with one repository
+#    password can't be read with another.
+BACKUP_FILE="${REPO_ROOT}/apps/local/backup.env"
+if [ ! -f "${BACKUP_FILE}" ]; then
+  echo "🔑 Generating the lab's backup secrets (apps/local/backup.env)..."
+  (umask 077 && printf 'S3_ACCESS_KEY=%s\nS3_SECRET_KEY=%s\nREPOSITORY_PASSWORD=%s\n' \
+    "velero$(openssl rand -hex 6)" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" > "${BACKUP_FILE}")
+fi
+backup_value() { sed -n "s/^$1=//p" "${BACKUP_FILE}"; }
+for ns in velero backup-store; do
+  kubectl create namespace "${ns}" --dry-run=client -o yaml | kubectl apply -f - > /dev/null
+done
+# The store accepts these keys for bucket velero only.
+kubectl create secret generic seaweedfs-s3-config \
+  --namespace backup-store \
+  --from-literal=s3.json="{\"identities\":[{\"name\":\"velero\",\"credentials\":[{\"accessKey\":\"$(backup_value S3_ACCESS_KEY)\",\"secretKey\":\"$(backup_value S3_SECRET_KEY)\"}],\"actions\":[\"Read:velero\",\"Write:velero\",\"List:velero\",\"Tagging:velero\"]}]}" \
+  --dry-run=client -o yaml | kubectl apply -f - > /dev/null
+kubectl create secret generic velero-credentials \
+  --namespace velero \
+  --from-literal=cloud="$(printf '[default]\naws_access_key_id=%s\naws_secret_access_key=%s\n' "$(backup_value S3_ACCESS_KEY)" "$(backup_value S3_SECRET_KEY)")" \
+  --dry-run=client -o yaml | kubectl apply -f - > /dev/null
+kubectl create secret generic velero-repo-credentials \
+  --namespace velero \
+  --from-literal=repository-password="$(backup_value REPOSITORY_PASSWORD)" \
   --dry-run=client -o yaml | kubectl apply -f - > /dev/null
 
 # 8. Restore the local Argo app-of-apps. start-lab-podman.sh sets

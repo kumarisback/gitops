@@ -38,7 +38,7 @@ release_ns['traefik'] ||= 'traefik' # the lab's edge, rendered on its own
 sources = %W[apps_#{env} streaming_#{env} platform_kong].map { |n| [File.join(out_dir, 'kustomize', "#{n}.yaml"), nil] }
 # Argo Workflows and Events (roadmap step 21) and Unleash (step 22) run only
 # in some environments.
-%W[automation_#{env} feature-flags_#{env}].each do |n|
+%W[automation_#{env} feature-flags_#{env} backup_#{env}].each do |n|
   file = File.join(out_dir, 'kustomize', "#{n}.yaml")
   sources << [file, nil] if File.exist?(file)
 end

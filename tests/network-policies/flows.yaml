@@ -49,7 +49,7 @@ pods:
 
 # Every pod in these namespaces must be selected by an ingress and an egress
 # policy: nothing gets in or out unless a rule says so.
-isolated_namespaces: [APP, kong, feature-flags]
+isolated_namespaces: [APP, kong, feature-flags, backup-store]
 
 all:
   allowed:
@@ -166,7 +166,17 @@ local:
     - APP/notification-service -> kafka/schema-registry:8080
     - monitoring/prometheus -> APP/notification-service:15008
     - ip:169.254.7.127 -> APP/notification-service:8081
+    # The lab's backup store (roadmap step 25): Velero and its node agents.
+    - velero/velero -> backup-store/seaweedfs:8333
+    - velero/node-agent -> backup-store/seaweedfs:8333
   refused:
+    # The backup store holds copies of every Secret: nothing else reaches
+    # it, and it reaches nothing.
+    - APP/user-service -> backup-store/seaweedfs:8333
+    - workflows/workflow-step -> backup-store/seaweedfs:8333
+    - monitoring/prometheus -> backup-store/seaweedfs:8333
+    - backup-store/seaweedfs -> ip:203.0.113.10:443
+    - backup-store/seaweedfs -> ip:169.254.169.254:80
     # Unleash only through Kong from outside, and nothing else reaches it or
     # its database; it calls nothing outside (no telemetry).
     - ip:10.10.1.25 -> feature-flags/unleash:4242

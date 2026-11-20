@@ -32,6 +32,13 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: postgres
+      # Before Velero copies this volume (roadmap step 25, docs/BACKUP-DR.md):
+      # a consistent dump of Unleash's database into it, beside the data
+      # files, which a running server keeps changing while they're copied.
+      annotations:
+        pre.hook.backup.velero.io/container: postgres
+        pre.hook.backup.velero.io/command: '["/bin/sh", "-c", "pg_dump -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\" -Fc -f /var/lib/postgresql/data/velero-dump.pgdump"]'
+        pre.hook.backup.velero.io/timeout: 5m
     spec:
       automountServiceAccountToken: false
       # The image's postgres user.

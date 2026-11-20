@@ -1,0 +1,28 @@
+# What goes with Velero per environment (roadmap step 25): backup/<env>.
+# The lab's object store and the restore drill's settings.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: backup-config
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: backup-config
+    # Git-sourced: follows the root app's revision.
+    app.kubernetes.io/part-of: gitops-config
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/kumarisback/gitops.git
+    targetRevision: HEAD
+    path: backup/ENV
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: velero
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

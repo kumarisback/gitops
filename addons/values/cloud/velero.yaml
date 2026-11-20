@@ -1,0 +1,17 @@
+# EKS (roadmap step 25): volumes through CSI snapshots (the EBS CSI driver
+# and snapshot-controller add-ons, VolumeSnapshotClass ebs-snapshot), whose
+# data the node agent then moves to the bucket, so a backup survives the
+# cluster, its zone and its volumes. No keys: the IRSA role on Velero's
+# ServiceAccount (tf 01-infra backup.tf), set per environment with the
+# bucket.
+credentials:
+  useSecret: false
+
+configuration:
+  features: EnableCSI
+  defaultSnapshotMoveData: true
+
+schedules:
+  daily-apps:
+    template:
+      snapshotMoveData: true

@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# dev (roadmap step 25): Velero's bucket and role come from tf 01-infra
+# (enable_velero) and addons/values/dev/velero.yaml; the password its
+# backed-up volume data is encrypted with, from Secrets Manager.
+resources:
+  - ../base
+  - repository-password.yaml

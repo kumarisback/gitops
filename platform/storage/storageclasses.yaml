@@ -14,7 +14,9 @@
 #               namespace by mistake doesn't destroy the data. For data with
 #               no other copy, such as production metrics. A released volume
 #               isn't reused on its own: to restore, bind a new PVC to it.
-#               It's billed until you delete it by hand.
+#               It's billed until you delete it by hand. Its volumes carry
+#               the tag Backup=daily: AWS Backup copies them every night
+#               when tf enable_aws_backup is on (roadmap step 25).
 #
 # Both use gp3 volumes (cheaper than gp2, with 3000 IOPS at any size),
 # encrypted at rest, and can grow by editing the PVC. WaitForFirstConsumer
@@ -41,11 +43,17 @@ apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: gp3-retain
+  annotations:
+    # A class's parameters can't change in place (the tag below was added
+    # later): ArgoCD deletes and recreates it. Volumes already made keep
+    # existing, untouched; only new ones get the tag.
+    argocd.argoproj.io/sync-options: Force=true,Replace=true
 provisioner: ebs.csi.aws.com
 parameters:
   type: gp3
   encrypted: "true"
   csi.storage.k8s.io/fstype: ext4
+  tagSpecification_1: "Backup=daily"
 reclaimPolicy: Retain
 volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true

@@ -16,7 +16,8 @@ kind: Component
 # is $values/addons/values/ENV/<addon>.yaml; path segment 3 is replaced.
 # observability-config's and streaming-config's source paths
 # (observability/ENV, streaming/ENV), automation-config's (automation/ENV) and
-# feature-flags-config's (feature-flags/ENV) get segment 1.
+# feature-flags-config's (feature-flags/ENV) and backup-config's (backup/ENV) get
+# segment 1.
 replacements:
   - source:
       kind: ConfigMap
@@ -71,6 +72,14 @@ replacements:
       - select:
           kind: Application
           labelSelector: app.kubernetes.io/name=feature-flags-config
+        fieldPaths:
+          - spec.source.path
+        options:
+          delimiter: /
+          index: 1
+      - select:
+          kind: Application
+          labelSelector: app.kubernetes.io/name=backup-config
         fieldPaths:
           - spec.source.path
         options:

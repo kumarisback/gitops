@@ -4,12 +4,16 @@
 #
 # deletionPolicy Delete: the EBS snapshot is removed with its VolumeSnapshot
 # object, so practice snapshots don't pile up on the bill. Backups that must
-# outlive the cluster belong to a backup tool with its own retention
-# (roadmap step 25), not to this class.
+# outlive the cluster belong to a backup tool with its own retention: Velero
+# (roadmap step 25, docs/BACKUP-DR.md) uses this class, and moves each
+# snapshot's data to its bucket before the snapshot goes.
 apiVersion: snapshot.storage.k8s.io/v1
 kind: VolumeSnapshotClass
 metadata:
   name: ebs-snapshot
+  labels:
+    # Velero takes CSI snapshots of EBS volumes with this class.
+    velero.io/csi-volumesnapshot-class: "true"
   annotations:
     snapshot.storage.kubernetes.io/is-default-class: "true"
     # The kind exists once the snapshot-controller add-on has installed its

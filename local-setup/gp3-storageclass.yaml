@@ -1,7 +1,14 @@
+# The lab's stand-in for the cloud's gp3 class: KinD's local-path
+# provisioner. Its volumes are `local` volumes, not `hostPath` (the
+# provisioner's default): Velero's file-system backup copies local volumes
+# and silently skips hostPath ones, finishing "Completed" with a warning
+# and none of the data (roadmap step 25, docs/BACKUP-DR.md).
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: gp3
+  annotations:
+    defaultVolumeType: local
 provisioner: rancher.io/local-path
 volumeBindingMode: WaitForFirstConsumer
 reclaimPolicy: Delete

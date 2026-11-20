@@ -1,0 +1,41 @@
+# Velero (roadmap step 25, docs/BACKUP-DR.md): backs up Kubernetes objects
+# and volume data to object storage on a schedule, and restores them, into
+# the same cluster or another one.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: velero
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: cluster-addons
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - chart: velero
+      repoURL: https://vmware-tanzu.github.io/helm-charts
+      # Velero 1.18.2.
+      targetRevision: 12.2.5
+      helm:
+        # TIER and ENV are filled in by addons/select-env; missing files
+        # are skipped.
+        ignoreMissingValueFiles: true
+        valueFiles:
+          - $values/addons/values/common/velero.yaml
+          - $values/addons/values/TIER/velero.yaml
+          - $values/addons/values/ENV/velero.yaml
+    - repoURL: https://github.com/kumarisback/gitops.git
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: velero
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # Velero's CRDs are large; server-side apply has no annotation limit.
+      - ServerSideApply=true

@@ -37,6 +37,15 @@ spec:
     metadata:
       labels:
         app: mongodb
+      # Before Velero copies this volume (roadmap step 25, docs/BACKUP-DR.md):
+      # a dump of every database into it. Files copied from a running mongod
+      # may not be consistent with each other; the dump is. A dump rather
+      # than fsyncLock: a lock whose unlock never ran would leave the
+      # database refusing writes.
+      annotations:
+        pre.hook.backup.velero.io/container: mongodb
+        pre.hook.backup.velero.io/command: '["mongodump", "--quiet", "--gzip", "--archive=/data/db/velero-dump.archive.gz"]'
+        pre.hook.backup.velero.io/timeout: 5m
     spec:
       containers:
         - name: mongodb
