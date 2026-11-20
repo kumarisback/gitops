@@ -53,6 +53,7 @@ gitops/
 │                            (scales on events, KEDA.md), Kong (the API gateway, KONG.md),
 │                            Argo Rollouts (canary and blue/green releases, ROLLOUTS.md)
 │   ├── automation/            Argo Workflows and Events, only in the lab and dev (WORKFLOWS.md)
+│   ├── backup/                Velero and backup/<env>, only in the lab and dev (BACKUP-DR.md)
 │   ├── feature-flags/         Unleash's config app and Reloader (restarts Unleash when its
 │   │                            database password rotates), only in the lab and dev
 │   ├── applications/          one ArgoCD app per tool
@@ -72,6 +73,9 @@ gitops/
 ├── feature-flags/  ★        Unleash and its PostgreSQL (base + local, dev); see FEATURE-FLAGS.md;
 │                            components/: rds (Unleash on Amazon RDS) and cdc (change data
 │                            capture's access), see DATABASE.md
+├── backup/  ★               with Velero (base: the restore drill's settings; local: the lab's
+│                            S3 store, SeaweedFS; dev: the repository password); see
+│                            BACKUP-DR.md and runbooks/disaster-recovery.md
 ├── automation/  ★           what Argo Workflows and Argo Events run (base + local, dev):
 │                            the CI pipeline, the nightly SLO report, the dead-letter
 │                            triage and (dev) the archive check; see WORKFLOWS.md

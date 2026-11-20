@@ -737,6 +737,47 @@ Never edit a migration that already ran somewhere: write the next one.
 
 ---
 
+## Backups (Velero)
+
+The full procedures (restoring a namespace, a cluster, RDS, state) are in
+`docs/runbooks/disaster-recovery.md`.
+
+### BackupTooOld
+
+**Meaning:** schedule `velero-daily-apps` hasn't completed a backup for over a day. A loss
+now costs more than a day of data.
+
+**Check:** `velero backup get` (the last ones' phase), `velero backup logs <name>`, and
+`kubectl -n velero get backupstoragelocation default`: `Available`, or why not (the
+bucket, its keys or role, the lab's `backup-store`).
+
+**Act:** fix the cause, then `velero backup create --from-schedule velero-daily-apps --wait`
+and read its warnings.
+
+### BackupFailed
+
+**Meaning:** a scheduled backup ended `Failed` or `PartiallyFailed`: something wasn't
+backed up (a volume that couldn't be copied, a hook that failed).
+
+**Check:** `velero backup describe <name> --details` (errors and warnings per item);
+hook failures show the database's own error.
+
+**Act:** fix it and take a backup by hand. A backup *Completed* with warnings about
+skipped volumes is just as bad: read the warnings too (`docs/BACKUP-DR.md`).
+
+### RestoreDrillFailing
+
+**Meaning:** the monthly restore drill (`automation/base/restore-drill.yaml`) failed, or
+none has succeeded for 40 days. The newest backup may not be restorable.
+
+**Check:** `argo list -n workflows --prefix restore-drill`, `argo get -n workflows <name>`,
+and `velero restore describe <its restore>`.
+
+**Act:** fix it (a missing backup, a restore error, the drill's own rights), then run it:
+`argo submit -n workflows --from cronwf/restore-drill`.
+
+---
+
 ## Releases (Argo Rollouts)
 
 frontend and order-service are released with Argo Rollouts (`docs/ROLLOUTS.md`):
